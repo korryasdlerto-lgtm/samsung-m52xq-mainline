@@ -1,0 +1,18 @@
+# Reference: <https://postmarketos.org/deviceinfo>
+# Please use double quotes only. You can source this file in shell
+# scripts.
+
+deviceinfo_format_version="0"
+deviceinfo_name="Samsung Galaxy M52 5G"
+deviceinfo_manufacturer="Samsung"
+deviceinfo_codename="samsung-m52xq"
+deviceinfo_year="2021"
+deviceinfo_dtb="qcom/sm7325-samsung-m52xq"
+deviceinfo_arch="aarch64"
+deviceinfo_drm="true"
+
+# Device related
+deviceinfo_chassis="handset"
+
+# Bootloader related
+deviceinfo_flash_method="none"

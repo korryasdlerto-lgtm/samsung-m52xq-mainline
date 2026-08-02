@@ -1,0 +1,73 @@
+# Kernel config based on: arch/arm64/configs/fp5_defconfig
+maintainer=""
+pkgname=linux-samsung-m52xq
+pkgver=7.1.2
+pkgrel=0
+_commit=62d7700919fd2a8ae6b3dfec822d6388eb570916
+pkgdesc="Samsung Galaxy M52 5G kernel fork"
+arch="aarch64"
+url="https://kernel.org"
+license="GPL-2.0-only"
+makedepends="
+	bison
+	clang
+	findutils
+	flex
+	lld
+	llvm
+	openssl-dev
+	perl
+	postmarketos-installkernel
+	python3
+	zstd
+	"
+source="
+	$pkgname-$_commit.tar.gz::https://github.com/korryasdlerto-lgtm/sc7280-mainline-linux-m52xq/archive/$_commit.tar.gz
+	config-${pkgname#linux-}.$arch
+	"
+builddir="$srcdir/sc7280-mainline-linux-m52xq-$_commit"
+options="
+	!check
+	!strip
+	!tracedeps
+	pmb:cross-native
+	"
+
+_carch="arm64"
+
+# Used internally by pmbootstrap. Don't touch.
+# TODO: Remove once minimum default pmbootstrap version supports
+# kernel packages without '_flavor'.
+_flavor="${pkgname#linux-}"
+
+prepare() {
+	default_prepare
+	cp "$srcdir"/config-${pkgname#linux-}.$arch .config
+}
+
+build() {
+	unset LDFLAGS
+	make ARCH="$_carch" LLVM=1 \
+		KBUILD_BUILD_VERSION="$((pkgrel + 1 ))"-postmarketOS
+}
+
+package() {
+	mkdir -p "$pkgdir"/boot
+	make zinstall modules_install dtbs_install \
+		ARCH="$_carch" \
+		LLVM=1 \
+		INSTALL_MOD_STRIP=1 \
+		INSTALL_PATH="$pkgdir"/boot \
+		INSTALL_MOD_PATH="$pkgdir"/usr \
+		INSTALL_DTBS_PATH="$pkgdir"/boot/dtbs
+
+	rm -f "$pkgdir"/usr/lib/modules/*/build "$pkgdir"/usr/lib/modules/*/source
+
+	install -D "$builddir"/include/config/kernel.release \
+		"$pkgdir"/usr/share/kernel/"${pkgname#linux-}"/kernel.release
+}
+
+sha512sums="
+c32e66648ea43bdb50646a519b95d91401f564bba396423675cebe4a9cf86f9085e9b4374455952eac0647592eb115ccbc70528e628fae87ea27df9507920e86  linux-samsung-m52xq-62d7700919fd2a8ae6b3dfec822d6388eb570916.tar.gz
+b4a75cfbfbf03046cac61262278d9457f0dcc5d6016e6ba0af5c8e5d4dd8ce93ee295f7ea84722a47fb53d4e247f31e56b984c1fd1626603caff85c70d8191d3  config-samsung-m52xq.aarch64
+"
