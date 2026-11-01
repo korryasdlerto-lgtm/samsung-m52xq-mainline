@@ -37,7 +37,7 @@ calls, SMS and Telegram messages.
 | Battery, charging | works | own SM5714 fuel gauge, charger and Type-C drivers |
 | Cameras | partial | see below |
 | Suspend | works | wakes for calls, SMS and Telegram over Wi-Fi; drain see below |
-| NFC | not verified | driver brought up, not confirmed end to end |
+| NFC | works | Samsung sec-nfc on i2c (boot v241 + vendor_boot v238), quick-settings tile, off by default |
 | Fingerprint | no | |
 | Video out over USB-C | not tested | |
 
@@ -50,7 +50,7 @@ calls, SMS and Telegram messages.
   orientation, autofocus and tap-to-focus, pinch zoom, full-resolution and RAW
   photo, JPEG quality, video with the hardware encoder), Megapixels,
   libcamera (soft ISP fixes), libmegapixels, libdng.
-- Not every lens and mode works yet; details in `docs/RESEARCH-LOG-RU.md`.
+- Not every lens and mode works yet; details in the manual in `docs/` (section 21, appendix F).
 - Hardware video encoding / decoding (Venus, vpu-2.0): the Venus driver of the
   kernel repository (`drivers/media/platform/qcom/venus`, with `secure.c` for
   the secure non-pixel buffer the m52xq firmware needs), built as modules
@@ -125,15 +125,14 @@ Stock firmware can always be restored with Odin.
 |---|---|
 | `installer/` | `META-INF/.../update-binary` of the flashable zip (TWRP shell installer) |
 | `rootfs-overlay/` | files the installer puts on the rootfs: `m52xq-*` scripts and services, system-sleep hooks, udev rules, modem/sensor/audio configs, Plasma Mobile QML. Binaries, proprietary firmware and sensor configs are not here: see `rootfs-overlay/EXCLUDED-FILES.txt` |
-| `packages/` | pmaports recipes (APKBUILD + patches) of the packages we patched: spacebar, plasma-dialer, plasma-mobile, plasma-camera, megapixels, libcamera, libmegapixels, libdng, libssc, modemmanager, plasma-keyboard, kalk, qt6-qtvirtualkeyboard |
+| `packages/` | pmaports recipes (APKBUILD + patches) of the packages we patched: spacebar, plasma-dialer, plasma-mobile, plasma-camera, megapixels, libcamera, libmegapixels, libdng, libssc, modemmanager, plasma-keyboard, kalk, qt6-qtvirtualkeyboard; plasma-mobile patches 0001…0007 (+ NFC icon 0008, not built) and plasma-nm 0001 with the cut-down build files used for the phone (see their README) |
 | `pmaports-device/` | `device-samsung-m52xq` and `linux-samsung-m52xq` |
 | `device-tree/vendor_boot-m52xq-v148.dts` | the device tree in vendor_boot v238 (based on the stock board DTB, with the mainline fixes) |
 | `device-tree/sm7325-samsung-m52xq.dts` | early upstream-style draft, not used by the release |
 | `upstream/` | bugs found here that are not specific to this phone, with ready kernel patches (`upstream/README.md`) |
 | `camx/` | experimental CamX camera path: our patch to the Qualcomm GPL camera driver, the `m52xq-gdsc-reg` module, status |
-| `tools/` | `m52xq-gnss.py` (GPS), `audit_gcc_clock_ids.py` (finds downstream/mainline clock ID mix-ups in the DT), `boot_ramdisk_drop.py` (removes files from the boot.img ramdisk) |
-| `docs/RESEARCH-LOG-RU.md` | the full research and build log (Russian), every finding with commands and md5 |
-| `docs/CHANGELOG-v1-RU.txt`, `docs/CHANGELOG-v44-RU.txt` | what changed in unofficial v1 and in v44 (Russian) |
+| `tools/` | `repack_boot.py` (new kernel Image into boot.img, DTB tail kept), `vb_dtb.py` (new device tree into vendor_boot), `dtbo_list.py` (list/extract DTBO entries), `boot_ramdisk_append.py` / `boot_ramdisk_drop.py` (add/remove files in the boot.img ramdisk), `check-rootfs-files-paths.sh` (check before building a zip), `audit_gcc_clock_ids.py` (finds downstream/mainline clock ID mix-ups in the DT), `m52xq-gnss.py` (GPS) |
+| `docs/` | the porting manual, Russian and English (`M52-mainline-porting-manual-RU.docx`, `-EN.docx`): the process, the build from scratch with commands, the boot/vendor_boot/DTBO images, a digest of the log, services and scripts, sleep, the userspace patches |
 
 ## Building
 

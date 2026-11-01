@@ -1,0 +1,13 @@
+--- a/usr/lib/qt6/qml/org/kde/plasma/private/mobileshell/StatusBar.qml
++++ b/usr/lib/qt6/qml/org/kde/plasma/private/mobileshell/StatusBar.qml
+@@ -138,6 +138,10 @@
+                         implicitHeight: mainRow.rowHeight
+                         Layout.preferredWidth: visible ? height : 0
+                     }
++                    MobileShell.NfcIndicator {
++                        implicitHeight: mainRow.rowHeight
++                        Layout.preferredWidth: visible ? height : 0
++                    }
+                     MobileShell.LocationIndicator {
+                         implicitHeight: mainRow.rowHeight
+                         Layout.preferredWidth: visible ? height : 0

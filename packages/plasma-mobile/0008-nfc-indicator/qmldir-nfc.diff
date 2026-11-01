@@ -1,0 +1,10 @@
+--- a/usr/lib/qt6/qml/org/kde/plasma/private/mobileshell/qmldir
++++ b/usr/lib/qt6/qml/org/kde/plasma/private/mobileshell/qmldir
+@@ -58,6 +58,7 @@
+ BluetoothIndicator 254.0 BluetoothIndicator.qml
+ CameraIndicator 254.0 CameraIndicator.qml
+ LocationIndicator 254.0 LocationIndicator.qml
++NfcIndicator 254.0 NfcIndicator.qml
+ InternetIndicator 254.0 InternetIndicator.qml
+ SignalStrengthIndicator 254.0 SignalStrengthIndicator.qml
+ VolumeIndicator 254.0 VolumeIndicator.qml

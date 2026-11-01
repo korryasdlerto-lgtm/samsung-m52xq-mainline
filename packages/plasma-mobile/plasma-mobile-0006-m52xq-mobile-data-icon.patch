@@ -1,0 +1,58 @@
+--- a/components/mobileshell/qml/dataproviders/SignalStrengthInfo.qml	2026-10-23 19:06:05.674814051 +0300
++++ b/components/mobileshell/qml/dataproviders/SignalStrengthInfo.qml	2026-10-23 20:07:49.020171117 +0300
+@@ -58,5 +58,39 @@
+     // both operators, the data SIM marked with ⇅, e.g. "life:) ⇅ | KYIVSTAR"
+     readonly property string labels: dualSim ? label + (dataOnSim2 ? "" : " ⇅") + " | " + label2 + (dataOnSim2 ? " ⇅" : "") : label
+ 
++    // m52xq: the modem that carries the mobile data right now (data port + active NetworkManager connection) and its
++    // icon with the access technology, like plasma-nm's ConnectionIcon draws it when the mobile data is the primary
++    // connection; the status bar shows it next to the Wi-Fi icon while Wi-Fi is the primary connection
++    readonly property var _dataModem: {
++        const modems = _modemList.modems;
++        for (let i = 0; i < modems.length; i++) {
++            const m = modems[i];
++            // the NetworkManager active connection, or ModemManager's own state (activeConnectionUni is not
++            // re-read when the modem object comes back after a ModemManager restart while the data is connected)
++            const connected = m.activeConnectionUni !== "" || (m.details && m.details.state === "Connected");
++            if ((modems.length === 1 || _hasData(m)) && connected) return m;
++        }
++        return null;
++    }
++    function _techSuffix(modem) {
++        const t = modem && modem.details ? modem.details.accessTechnologies : [];
++        const has = (name) => t.indexOf(name) >= 0;
++        if (has("5GNR")) return "-5g";
++        if (has("LTE")) return "-lte";
++        if (has("HSPA+") || has("HSPA")) return "-hspa";
++        if (has("HSUPA")) return "-hsupa";
++        if (has("HSDPA")) return "-hsdpa";
++        if (has("UMTS")) return "-umts";
++        if (has("EDGE")) return "-edge";
++        if (has("GPRS")) return "-gprs";
++        return "";
++    }
++    readonly property string dataIcon: {
++        if (!_dataModem) return "";
++        const s = _dataModem.signalStrength;
++        const strength = s <= 0 ? "0" : s < 20 ? "20" : s < 40 ? "40" : s < 60 ? "60" : s < 80 ? "80" : "100";
++        return "network-mobile-" + strength + _techSuffix(_dataModem);
++    }
++
+     readonly property bool showIndicator: _modemList.modemAvailable
+ }
+--- a/components/mobileshell/qml/statusbar/StatusBar.qml	2026-10-23 19:06:05.674814051 +0300
++++ b/components/mobileshell/qml/statusbar/StatusBar.qml	2026-10-23 19:06:05.690814540 +0300
+@@ -151,6 +151,13 @@
+                         implicitHeight: mainRow.rowHeight
+                         Layout.preferredWidth: height
+                     }
++                    // m52xq: mobile data connected while Wi-Fi is the primary connection (the internet icon shows Wi-Fi)
++                    Kirigami.Icon {
++                        implicitHeight: mainRow.rowHeight
++                        Layout.preferredWidth: visible ? height : 0
++                        source: MobileShell.SignalStrengthInfo.dataIcon
++                        visible: MobileShell.SignalStrengthInfo.dataIcon !== "" && !internetIndicatorItem.icon.startsWith("network-mobile-")
++                    }
+                     MobileShell.VolumeIndicator {
+                         implicitHeight: mainRow.rowHeight
+                         Layout.preferredWidth: height

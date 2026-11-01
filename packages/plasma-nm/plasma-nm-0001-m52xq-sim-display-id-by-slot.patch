@@ -1,0 +1,26 @@
+--- a/libs/cellular/cellularsim.cpp	2026-09-08 13:56:44.000000000 +0300
++++ b/libs/cellular/cellularsim.cpp	2026-10-23 15:26:39.790706448 +0300
+@@ -8,6 +8,7 @@
+ #include "plasma_nm_cellular.h"
+ 
+ #include <KLocalizedString>
++#include <QDBusInterface>
+ #include <QDBusReply>
+ 
+ using namespace Qt::Literals::StringLiterals;
+@@ -154,6 +155,15 @@
+ 
+ QString CellularSim::displayId()
+ {
++    // m52xq dual SIM (one ModemManager modem object per SIM): number the SIM by the card slot of its modem
++    // (PrimarySimSlot 1/2) instead of the index in its D-Bus path, which grows with every ModemManager restart
++    if (m_mmModem && enabled()) {
++        QDBusInterface modem{u"org.freedesktop.ModemManager1"_s, m_mmModem->uni(), u"org.freedesktop.ModemManager1.Modem"_s, QDBusConnection::systemBus()};
++        const uint slot = modem.property("PrimarySimSlot").toUInt();
++        if (slot > 0) {
++            return QString::number(slot);
++        }
++    }
+     QStringList uniSplit = uni().split(u"/"_s);
+     return (uniSplit.count() == 0 || uni() == u"/"_s) ? i18n("(empty)") : QString(uniSplit[uniSplit.size() - 1]);
+ }

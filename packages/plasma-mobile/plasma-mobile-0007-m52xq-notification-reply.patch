@@ -1,0 +1,28 @@
+--- a/components/mobileshell/qml/widgets/notifications/BaseNotificationItem.qml
++++ b/components/mobileshell/qml/widgets/notifications/BaseNotificationItem.qml
+@@ -168,6 +168,25 @@
+         }
+     }
+ 
++    // m52xq: the reply of the inline reply field (Telegram "Reply") was never sent: nothing handled this signal. Send it to
++    // the application (NotificationReplied on org.freedesktop.Notifications) and close the notification, like an action
++    onReplied: (text) => {
++        let action = () => {
++            if (notificationsModelType === NotificationsModelType.WatchedNotificationsModel) {
++                notificationsModel.reply(notificationItem.model.notificationId, text, NotificationManager.Close);
++            } else if (notificationsModelType === NotificationsModelType.NotificationsModel) {
++                notificationsModel.reply(notificationsModel.index(modelIndex, 0), text, NotificationManager.Close);
++            }
++        }
++
++        if (notificationItem.requestToInvoke) {
++            pendingAction = action;
++            runActionRequested();
++        } else {
++            action();
++        }
++    }
++
+     onOpenUrl: {
+         let action = () => {
+             Qt.openUrlExternally(url);

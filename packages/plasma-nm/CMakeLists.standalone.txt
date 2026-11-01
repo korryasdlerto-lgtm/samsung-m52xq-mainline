@@ -1,0 +1,29 @@
+# m52xq: only libplasmanm_cellular.so of plasma-nm 6.7.5 (patch 0001-m52xq-sim-display-id-by-slot), against the
+# phone's exact versions (Qt 6.11.1, KF 6.30); libplasmanm_editor.so is the phone's own
+cmake_minimum_required(VERSION 3.16)
+project(plasma-nm VERSION 6.7.5)
+set(QT_MIN_VERSION "6.10.0")
+set(KF6_MIN_VERSION "6.26.0")
+find_package(ECM ${KF6_MIN_VERSION} REQUIRED NO_MODULE)
+set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
+include(KDEInstallDirs)
+include(KDECMakeSettings)
+include(KDECompilerSettings NO_POLICY_SCOPE)
+include(ECMQmlModule)
+include(ECMQtDeclareLoggingCategory)
+include(GenerateExportHeader)
+find_package(Qt6 ${QT_MIN_VERSION} CONFIG REQUIRED COMPONENTS Core DBus Network Qml Xml)
+find_package(KF6 ${KF6_MIN_VERSION} REQUIRED COMPONENTS CoreAddons I18n ModemManagerQt NetworkManagerQt)
+find_package(QCoro6 REQUIRED COMPONENTS Core DBus)
+qcoro_enable_coroutines()
+add_definitions(-DQT_NO_URL_CAST_FROM_STRING)
+remove_definitions(-DQT_NO_CAST_FROM_ASCII -DQT_NO_CAST_FROM_BYTEARRAY)
+add_definitions(-DTRANSLATION_DOMAIN=\"plasmanetworkmanagement-libs\")
+
+add_library(plasmanm_editor SHARED IMPORTED)
+set_target_properties(plasmanm_editor PROPERTIES
+    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/phone/libplasmanm_editor.so
+    IMPORTED_NO_SONAME FALSE
+    INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/src/libs/editor;${CMAKE_CURRENT_SOURCE_DIR}/editor-gen")
+
+add_subdirectory(src/libs/cellular)
