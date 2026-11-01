@@ -1,0 +1,8 @@
+module org.kde.plasma.private.mobileshell.raiselockscreenplugin
+linktarget raiselockscreenplugin
+optional plugin raiselockscreenplugin
+classname org_kde_plasma_private_mobileshell_raiselockscreenpluginPlugin
+typeinfo raiselockscreenplugin.qmltypes
+prefer :/org/kde/plasma/private/mobileshell/raiselockscreenplugin/
+depends QtQuick
+

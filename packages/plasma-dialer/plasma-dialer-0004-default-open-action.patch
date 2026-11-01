@@ -1,0 +1,27 @@
+--- a/kde-telephony-daemon/src/notification-manager.cpp
++++ b/kde-telephony-daemon/src/notification-manager.cpp
+@@ -124,6 +124,11 @@
+                 missedCallNotification->setComponentName(QStringLiteral("plasma-dialer"));
+                 missedCallNotification->setTitle(i18n("Missed call"));
+                 missedCallNotification->setText(i18n("Missed call from %1", callerDisplay));
++                // m52xq: tapping the notification (also from the shade history) opens the dialer
++                auto openAction = missedCallNotification->addDefaultAction(i18n("Open"));
++                connect(openAction, &KNotificationAction::activated, this, [] {
++                    launchPlasmaDialerDesktopFile();
++                });
+                 missedCallNotification->sendEvent();
+             }
+         }
+@@ -151,6 +156,12 @@
+     // with swipe decision.
+     m_ringingNotification->setHint(QStringLiteral("category"), QStringLiteral("x-kde.incoming-call"));
+ 
++    // m52xq: tapping the body of the incoming call notification opens the dialer
++    auto openAction = m_ringingNotification->addDefaultAction(i18n("Open"));
++    connect(openAction, &KNotificationAction::activated, this, [] {
++        launchPlasmaDialerDesktopFile();
++    });
++
+     auto acceptAction = m_ringingNotification->addAction(i18n("Accept"));
+     connect(acceptAction, &KNotificationAction::activated, this, [this, deviceUni, callUni] {
+         accept(deviceUni, callUni);

@@ -1,0 +1,3 @@
+# M52XQ: (re)apply the Samsung voice topology/calibration whenever q6core binds - at boot and after
+# every ADSP restart (SSR), which drops the topologies registered in the ADSP.
+ACTION=="bind", SUBSYSTEM=="aprbus", DRIVER=="qcom-q6core", RUN+="/usr/bin/systemctl --no-block restart m52xq-voice-ns.service"

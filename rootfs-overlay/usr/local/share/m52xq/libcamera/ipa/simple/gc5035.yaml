@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: CC0-1.0
+# m52xq: tuning for gc5035 (Galaxy M52 5G).
+# Copy of the plasma-camera tuning WITH Agc: used by the virtual camera bridge (m52xq-virtualcam) through
+# LIBCAMERA_IPA_CONFIG_PATH, because there is no SensorAe there.
+# blackLevel is on the 16 bit scale: sensor pedestal 64 of 1023 (10 bit) = 4096.
+%YAML 1.1
+---
+version: 1
+algorithms:
+  - BlackLevel:
+      blackLevel: 4096
+  - Awb:
+  - Adjust:
+  - Agc:
+...

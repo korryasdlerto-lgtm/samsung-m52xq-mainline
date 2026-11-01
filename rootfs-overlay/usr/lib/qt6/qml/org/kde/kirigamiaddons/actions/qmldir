@@ -1,0 +1,15 @@
+module org.kde.kirigamiaddons.actions
+linktarget KirigamiAddonsActionsQml
+optional plugin KirigamiAddonsActionsQml
+classname org_kde_kirigamiaddons_actionsPlugin
+typeinfo KirigamiAddonsActionsQml.qmltypes
+import org.kde.kirigamiaddons.statefulapp
+depends org.kde.kirigami
+depends org.kde.kirigamiaddons.components
+depends QtQuick
+prefer :/qt/qml/org/kde/kirigamiaddons/actions/
+StatefulWindow 1.0 StatefulWindow.qml
+ActionMenu 1.0 ActionMenu.qml
+ActionMenuPopup 1.0 ActionMenuPopup.qml
+ActionMenuBar 1.0 ActionMenuBar.qml
+

@@ -1,0 +1,11 @@
+[Unit]
+Description=Qualcomm remotefs service
+Before=NetworkManager.service
+
+[Service]
+ExecStart=/usr/bin/rmtfs -s -o /var/lib/rmtfs
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

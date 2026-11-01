@@ -1,0 +1,162 @@
+/*
+ * Copyright 2022 Devin Lin <devin@kde.org>
+ * SPDX-License-Identifier: LGPL-2.0-or-later
+ */
+
+pragma ComponentBehavior: Bound
+
+import QtQuick
+import QtQuick.Layouts
+
+import org.kde.kirigami as Kirigami
+
+import "private" as Private
+
+/*!
+   \qmltype FormCard
+   \inqmlmodule org.kde.kirigamiaddons.formcard
+   \brief A single card that follows a form style.
+
+   This is the entrypoint component for FormCard.
+
+   A FormCard consists of a container that can be used to create your
+   own Settings pages. It has a different color than the background.
+
+   Each FormCard can contain one or more Form delegates in its contentItem.
+   To add more than one Form delegate to a FormCard, use a
+   ColumnLayout to group them.
+
+   Multiple FormCards can be grouped with a ColumnLayout to
+   represent different Settings sections.
+
+   Each section is expected to contain a FormHeader as the first
+   delegate, which serves the role of a section title.
+
+   The height of the FormCard matches the implicit height of the
+   contentItem and does not need to be set, while the width is expected
+   to be given by the parent, for example, via a \l {Layout::fillWidth} {Layout.fillWidth}.
+
+   \since 0.11.0
+ */
+Item {
+    id: root
+
+    /*!
+       \brief The delegates inside the Form card.
+
+       This is where you should add new Form delegates.
+     */
+    default property alias delegates: internalColumn.data
+
+    /*!
+       \brief Whether to insert a FormDelegateSeparator between visible delegates.
+
+       This also works for delegates created by a Repeater. Do not add explicit
+       separators when this property is enabled.
+
+       \default false
+     */
+    property bool autoSeparators: false
+
+    readonly property list<Item> _visibleDelegates: internalColumn.visibleChildren.filter(child => child.height !== 0)
+
+    /*!
+       \brief The maximum width of the card.
+
+       This can be set to a specific value to force its delegates to wrap
+       instead of using the entire width of the parent.
+
+       \default Kirigami.Units.gridUnit * 30
+
+       \sa cardWidthRestricted
+     */
+    property real maximumWidth: Kirigami.Units.gridUnit * 30
+
+    /*!
+       \qmlproperty real padding
+       \qmlproperty real verticalPadding
+       \qmlproperty real horizontalPadding
+       \qmlproperty real topPadding
+       \qmlproperty real bottomPadding
+       \qmlproperty real leftPadding
+       \qmlproperty real rightPadding
+       \brief Padding property used around the content edges.
+       \default 0
+     */
+    property real padding: 0
+    property real verticalPadding: padding
+    property real horizontalPadding: padding
+    property real topPadding: verticalPadding
+    property real bottomPadding: verticalPadding
+    property real leftPadding: horizontalPadding
+    property real rightPadding: horizontalPadding
+
+    /*!
+       Whether the card's width is being restricted.
+     */
+    readonly property bool cardWidthRestricted: root.width > root.maximumWidth
+
+    Layout.fillWidth: true
+
+    implicitHeight: topPadding + bottomPadding + internalColumn.implicitHeight + rectangle.borderWidth * 2
+    implicitWidth: visible ? leftPadding + rightPadding + internalColumn.implicitWidth + rectangle.borderWidth * 2 : 0.0
+
+    Private.FormCardBackground {
+        id: rectangle
+
+        // Only have card radius if it isn't filling the entire width.
+        rounded: root.cardWidthRestricted
+
+        anchors {
+            top: parent.top
+            bottom: parent.bottom
+            left: parent.left
+            right: parent.right
+
+            leftMargin: root.cardWidthRestricted ? Math.round((root.width - root.maximumWidth) / 2) : -1
+            rightMargin: root.cardWidthRestricted ? Math.round((root.width - root.maximumWidth) / 2) : -1
+        }
+
+        ColumnLayout {
+            id: internalColumn
+
+            // Shared geometry for the delegate backgrounds in this card.
+            readonly property real _cornerRadius: root.cardWidthRestricted ? Kirigami.Units.cornerRadius : 0
+            readonly property list<Item> _visibleItems: visibleChildren.filter(child => child.height !== 0)
+            readonly property Item _firstVisibleItem: _visibleItems[0] ?? null
+            readonly property Item _lastVisibleItem: _visibleItems[_visibleItems.length - 1] ?? null
+
+            spacing: root.autoSeparators && separatorRepeater.count > 0 ? separatorRepeater.itemAt(0).implicitHeight : 0
+
+            // add 1 to margins to account for the border (so content doesn't overlap it)
+            anchors {
+                fill: parent
+                leftMargin: root.leftPadding + rectangle.borderWidth
+                rightMargin: root.rightPadding + rectangle.borderWidth
+                topMargin: root.topPadding + rectangle.borderWidth
+                bottomMargin: root.bottomPadding + rectangle.borderWidth
+            }
+        }
+
+        Repeater {
+            id: separatorRepeater
+
+            model: root.autoSeparators ? Math.max(0, root._visibleDelegates.length - 1) : 0
+
+            FormDelegateSeparator {
+                required property int index
+
+                objectName: "automaticSeparator"
+
+                above: root._visibleDelegates[index] ?? null
+                below: root._visibleDelegates[index + 1] ?? null
+                hMargins: Kirigami.Units.largeSpacing
+
+                x: internalColumn.x + hMargins
+                width: Math.max(0, internalColumn.width - 2 * hMargins)
+                height: implicitHeight
+                y: above ? internalColumn.y + above.y + above.height + (internalColumn.spacing - height) / 2 : 0
+            }
+        }
+    }
+}

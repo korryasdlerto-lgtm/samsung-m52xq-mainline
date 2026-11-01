@@ -1,0 +1,4 @@
+#!/bin/sh
+# M52XQ: start plasma-camera on a clean camera: Megapixels (and a stale copy of plasma-camera) are closed
+# completely first, see m52xq-camera-launch.
+exec /usr/local/bin/m52xq-camera-launch plasma-camera "$@"

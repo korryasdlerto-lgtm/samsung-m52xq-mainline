@@ -1,0 +1,136 @@
+diff -ruN a/src/CMakeLists.txt b/src/CMakeLists.txt
+--- a/src/CMakeLists.txt	2026-10-04 14:31:15.311668418 +0300
++++ b/src/CMakeLists.txt	2026-10-04 14:31:15.339668346 +0300
+@@ -2,11 +2,16 @@
+ # SPDX-FileCopyrightText: 2020 Han Young <hanyoung@protonmail.com>
+ # SPDX-License-Identifier: GPL-3.0-or-later
+ 
++find_package(PkgConfig REQUIRED)
++pkg_check_modules(Canberra REQUIRED IMPORTED_TARGET libcanberra)
++
+ add_library(kalklib STATIC
+     historymanager.cpp
+     historymanager.h
+     inputmanager.cpp
+     inputmanager.h
++    keysound.cpp
++    keysound.h
+     unitmodel.cpp
+     unitmodel.h
+     qalculateengine.cpp
+@@ -42,6 +47,7 @@
+     KF6::ConfigGui
+     KF6::UnitConversion
+     PkgConfig::QALCULATE
++    PkgConfig::Canberra
+ )
+ 
+ kconfig_target_kcfg_file(kalklib FILE kalkconfig.kcfg CLASS_NAME KalkConfig MUTATORS DEFAULT_VALUE_GETTERS GENERATE_PROPERTIES GENERATE_MOC PARENT_IN_CONSTRUCTOR SINGLETON QML_REGISTRATION)
+diff -ruN a/src/keysound.cpp b/src/keysound.cpp
+--- a/src/keysound.cpp	1970-01-01 02:00:00.000000000 +0200
++++ b/src/keysound.cpp	2026-10-04 14:31:15.327668378 +0300
+@@ -0,0 +1,51 @@
++// SPDX-FileCopyrightText: 2026 m52xq port
++// SPDX-License-Identifier: GPL-3.0-or-later
++
++#include "keysound.h"
++
++#include <QFile>
++#include <QStandardPaths>
++#include <canberra.h>
++
++static bool keySoundEnabled()
++{
++    // read on every press so that toggling the setting applies at once; default off, like the keyboard
++    QFile f(QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + QStringLiteral("/plasmakeyboardrc"));
++    if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
++        return false;
++    }
++    while (!f.atEnd()) {
++        const QByteArray line = f.readLine().trimmed();
++        if (line.startsWith("soundEnabled=")) {
++            return line.mid(13).trimmed().toLower() == "true";
++        }
++    }
++    return false;
++}
++
++KeySound::KeySound(QObject *parent)
++    : QObject(parent)
++{
++    if (ca_context_create(&m_context) == CA_SUCCESS) {
++        ca_context_change_props(m_context, CA_PROP_APPLICATION_NAME, "Calculator", CA_PROP_APPLICATION_ID, "org.kde.kalk", nullptr);
++        ca_context_open(m_context);
++    } else {
++        m_context = nullptr;
++    }
++}
++
++KeySound::~KeySound()
++{
++    if (m_context) {
++        ca_context_destroy(m_context);
++    }
++}
++
++void KeySound::click()
++{
++    if (!m_context || !keySoundEnabled()) {
++        return;
++    }
++    ca_context_cancel(m_context, 1);
++    ca_context_play(m_context, 1, CA_PROP_EVENT_ID, "button-pressed", CA_PROP_MEDIA_FILENAME, "/usr/share/sounds/ocean/stereo/button-pressed.oga", CA_PROP_CANBERRA_CACHE_CONTROL, "permanent", nullptr);
++}
+diff -ruN a/src/keysound.h b/src/keysound.h
+--- a/src/keysound.h	1970-01-01 02:00:00.000000000 +0200
++++ b/src/keysound.h	2026-10-04 14:31:15.319668398 +0300
+@@ -0,0 +1,28 @@
++// SPDX-FileCopyrightText: 2026 m52xq port
++// SPDX-License-Identifier: GPL-3.0-or-later
++
++#pragma once
++
++#include <QObject>
++#include <qqmlregistration.h>
++
++struct ca_context;
++
++// Calculator key click, played through libcanberra (PulseAudio) only while the
++// on-screen keyboard setting "Sound" (plasmakeyboardrc, [General] soundEnabled)
++// is on, so one switch controls the keyboard, the dialer and the calculator.
++class KeySound : public QObject
++{
++    Q_OBJECT
++    QML_ELEMENT
++    QML_SINGLETON
++
++public:
++    explicit KeySound(QObject *parent = nullptr);
++    ~KeySound() override;
++
++    Q_INVOKABLE void click();
++
++private:
++    ca_context *m_context = nullptr;
++};
+diff -ruN a/src/qml/NumberButton.qml b/src/qml/NumberButton.qml
+--- a/src/qml/NumberButton.qml	2026-10-04 14:31:15.311668418 +0300
++++ b/src/qml/NumberButton.qml	2026-10-04 14:31:15.339668346 +0300
+@@ -12,6 +12,7 @@
+ import QtQuick.Controls as Controls
+ 
+ import org.kde.kirigami as Kirigami
++import org.kde.kalk
+ 
+ Item {
+     id: root
+@@ -129,6 +130,9 @@
+             // }
+         // }
+ 
++        // m52xq: key click (follows the keyboard sound setting)
++        onPressedChanged: if (pressed) KeySound.click()
++
+         onClicked: root.clicked(root.text)
+         onPressAndHold: root.longClicked()
+ 

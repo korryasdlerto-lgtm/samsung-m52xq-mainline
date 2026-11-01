@@ -1,0 +1,13 @@
+[Unit]
+Description=M52XQ: Samsung two-mic voice topology (noise suppression in calls)
+After=local-fs.target
+Before=ModemManager.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=180
+ExecStart=/usr/local/bin/m52xq-voice-ns
+
+[Install]
+WantedBy=multi-user.target

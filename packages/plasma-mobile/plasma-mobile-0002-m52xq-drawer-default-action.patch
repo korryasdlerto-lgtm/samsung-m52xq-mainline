@@ -1,0 +1,14 @@
+--- a/components/mobileshell/qml/popups/notifications/NotificationPopupManager.qml	2026-10-22 01:41:14.771493193 +0300
++++ b/components/mobileshell/qml/popups/notifications/NotificationPopupManager.qml	2026-10-22 01:41:14.787497753 +0300
+@@ -233,7 +233,10 @@
+                     onDismissClicked: model.dismissed = true
+ 
+                     onExpired: {
+-                        if (model.resident) {
++                        // m52xq: a notification with a default action of an app that keeps it in the drawer (desktop
++                        // entry, e.g. Telegram) is treated like a resident one: expiring it told the app it was closed,
++                        // and a tap on it in the drawer did nothing any more (no ActionInvoked)
++                        if (model.resident || (model.hasDefaultAction && model.desktopEntry)) {
+                             // When resident, only mark it as expired so the popup disappears
+                             // but don't actually invalidate the notification
+                             model.expired = true;

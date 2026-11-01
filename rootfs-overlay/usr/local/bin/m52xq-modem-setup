@@ -1,0 +1,82 @@
+#!/bin/sh
+# M52XQ: one-shot modem setup after boot (rmtfs -s starts the modem; IPA is
+# already up from the initramfs firmware). Live findings 2026-10-02:
+#  - GNSS start fails with QMI GeneralError until engine lock = none and
+#    operation mode = standalone are set (also for ModemManager's gps-raw/nmea).
+#  - Do NOT use "qmicli --loc-inject-time": it leaves the engine at a bogus
+#    2028 GPS week (fake position, no satellites).
+#  - After a modem restart the SIM provisioning session can be missing
+#    ("Primary GW: session doesn't exist") -> ModemManager reports sim-missing.
+# 2026-10-12: calls must work within ~20 s of boot. The modem is "disabled" in ModemManager after boot:
+#  enable it at once, wait for the registration only for a few seconds and cycle it only when the packet
+#  service did not attach (a cycle drops calls, so it must happen early or not at all).
+Q="qmicli -d qrtr://0"
+# v40 dual SIM: ModemManager has a modem object per SIM ("-m any" is just the first one, and its index changes between
+# restarts) and shows "packet service state: detached" even when the data runs (NAS Get Serving System ignores the
+# subscription binding), so the "detached -> cycle the modem" step below must not run in the dual SIM modes
+DSDS=
+grep -qE "MM_QRTR_(DSDS|SIM_ONLY)" /etc/systemd/system/ModemManager.service.d/*.conf 2>/dev/null && DSDS=1
+mm_ids() { mmcli -L 2>/dev/null | grep -o "Modem/[0-9]*" | cut -d/ -f2; }
+# any modem in one of these states
+mm_any() { for m in $(mm_ids); do mmcli -m $m 2>/dev/null | grep -qE "$1" && return 0; done; return 1; }
+
+# wait (up to 3 min) for the modem's Location service on QRTR node 0
+i=0
+while [ $i -lt 180 ]; do
+	qrtr-lookup 2>/dev/null | awk '$1 == 16 && $4 == 0' | grep -q . && break
+	sleep 1
+	i=$((i + 1))
+done
+[ $i -ge 180 ] && { echo "m52xq-modem-setup: modem LOC service not found"; exit 0; }
+
+restart_mm=
+if timeout 20 $Q --uim-get-card-status 2>/dev/null | grep -q "Primary GW:.*session doesn't exist"; then
+	timeout 20 $Q --uim-change-provisioning-session="slot=1,activate=yes,session-type=primary-gw-provisioning" \
+		&& restart_mm=1
+fi
+timeout 20 $Q --loc-set-engine-lock=none
+timeout 20 $Q --loc-set-operation-mode=standalone
+if [ -n "$restart_mm" ]; then
+	echo "m52xq-modem-setup: SIM session activated, restarting ModemManager"
+	systemctl try-restart ModemManager.service
+fi
+
+# wait for the modem in ModemManager (up to 60 s) and enable it right away
+i=0
+while [ $i -lt 60 ]; do
+	mmcli -L 2>/dev/null | grep -q "/Modem/" && break
+	sleep 1
+	i=$((i + 1))
+done
+[ $i -ge 60 ] && { echo "m52xq-modem-setup: no modem in ModemManager"; exit 0; }
+for m in $(mm_ids); do
+	mmcli -m $m 2>/dev/null | grep -q "state: *disabled" && mmcli -m $m --enable
+done
+
+# registration: up to 30 s
+i=0
+while [ $i -lt 30 ]; do
+	mm_any "state: .*(registered|connected)" && break
+	sleep 1
+	i=$((i + 1))
+done
+[ $i -ge 30 ] && { echo "m52xq-modem-setup: modem not registered in ModemManager"; exit 0; }
+
+[ -n "$DSDS" ] && exit 0
+
+# Live 2026-10-02 (в33 first boot): registered CS-only, "packet service attach ...
+# Operation was cancelled" forever; one modem disable/enable in ModemManager made
+# it attach (then NetworkManager brings mobile data up by itself). Give PS 12 s, else cycle it once.
+i=0
+while [ $i -lt 12 ]; do
+	mmcli -m any 2>/dev/null | grep -q "packet service state: attached" && exit 0
+	sleep 1
+	i=$((i + 1))
+done
+echo "m52xq-modem-setup: packet service still detached, re-enabling the modem"
+mmcli -m any --disable && sleep 2 && mmcli -m any --enable
+# The modem power cycle drops the GNSS engine lock again.
+sleep 15
+timeout 20 $Q --loc-set-engine-lock=none
+timeout 20 $Q --loc-set-operation-mode=standalone
+exit 0

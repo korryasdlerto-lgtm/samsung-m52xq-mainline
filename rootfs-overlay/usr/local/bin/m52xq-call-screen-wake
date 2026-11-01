@@ -1,0 +1,30 @@
+#!/bin/sh
+# M52XQ: turn the screen on when Telegram Desktop starts a sound stream (an incoming call: Telegram plays the ringtone itself and
+# sends NO notification for the start of a call, so m52xq-notify-screen-wake never fired - 30.10). Needs no notification: listens
+# to PulseAudio "new sink-input" events and looks at the application of the stream. The names of ALL new streams go to the journal
+# (journalctl --user -u m52xq-call-screen-wake). Our own notification sounds (paplay) and other apps are ignored.
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
+RT="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+pactl subscribe 2>/dev/null | while read -r line; do
+	case "$line" in
+	*"'new' on sink-input #"*) ;;
+	*) continue ;;
+	esac
+	idx=${line##*#}
+	sleep 0.3
+	info=$(pactl list sink-inputs 2>/dev/null | awk -v want="Sink Input #$idx" '
+		$0 == want { f = 1; next }
+		/^Sink Input #/ { f = 0 }
+		f && (/application.name/ || /application.process.binary/) { gsub(/^[ \t]+/, ""); printf "%s; ", $0 }')
+	echo "new sound stream #$idx: $info"
+	case "$info" in
+	*Telegram*) ;;
+	*) continue ;;
+	esac
+	# the same hand-over to m52xq-wifi-dark as for a notification: this wake-up brought something for the user, stay awake
+	touch "$RT/m52xq-notify-woke"
+	if kscreen-doctor --dpms show 2>/dev/null | grep -q ': off'; then
+		kscreen-doctor --dpms on >/dev/null 2>&1
+		echo "Telegram sound: display on"
+	fi
+done

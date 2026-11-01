@@ -1,0 +1,12 @@
+[Unit]
+Description=M52XQ: modem SIM session and GNSS engine setup
+After=rmtfs.service tqftpserv.service ModemManager.service
+Wants=tqftpserv.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/m52xq-modem-setup
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,28 @@
+#!/bin/sh
+# M52XQ: NFC on/off for the "NFC" quick-settings tile and the status bar indicator.
+#   m52xq-nfc status|on|off|toggle
+# "on" = rfkill unblock + NFC device up + neard (ConstantPoll: reads tags when one is held to the back);
+# "off" = neard stopped, device down, rfkill blocked. Switching needs root: as the user it starts
+# m52xq-nfc@on|off.service (polkit: 50-m52xq-nfc.rules); the state survives a reboot (m52xq-nfc-boot.service).
+is_on() { nfctool -l 2>/dev/null | grep -q "Powered: Yes"; }
+
+case "$1" in
+status)
+	if is_on; then echo on; else echo off; fi
+	;;
+on | off)
+	if [ "$(id -u)" = 0 ]; then
+		/usr/local/sbin/m52xq-nfc-power "$1"
+	else
+		systemctl start "m52xq-nfc@$1.service"
+	fi
+	if is_on; then echo on; else echo off; fi
+	;;
+toggle)
+	if is_on; then "$0" off; else "$0" on; fi
+	;;
+*)
+	echo "usage: $0 status|on|off|toggle" >&2
+	exit 2
+	;;
+esac

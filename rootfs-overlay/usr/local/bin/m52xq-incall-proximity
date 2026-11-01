@@ -1,0 +1,340 @@
+#!/usr/bin/env python3
+# M52XQ: blank the screen while a call is up and the phone is at the ear.
+#
+# Calls: event driven -- ModemManager signals (Voice CallAdded/CallDeleted,
+# Call StateChanged) trigger a re-check, plus a slow safety re-check.
+# Sensor: libssc's report stream of the Samsung stk3a0x proximity sensor stops
+# after a few events, but every fresh open reports the current raw reading
+# (distance: ~540 open, ~1180 at the ear, ~6000 palm on the sensor; bigger =
+# closer).  While a call is up the sensor is therefore re-opened once a second
+# (`ssccli --sensor proximity`, ~0.25 s) and the first reading is compared with
+# a threshold with hysteresis.  Near: touchscreen inhibited and backlight 0 (the
+# panel stays on: the sensor does not report with the DSI panel off); far (or
+# call over, or power key): backlight and touch back.
+# v40: from boot v229 the panel driver turns brightness 0 into DCS display off
+# (panel powered, sensor still reporting): the screen is really dark now.
+# Messenger calls (Telegram & co.): a call is also an application of VOIP_APPS
+# recording from the microphone (PulseAudio source output), checked every
+# VOIP_POLL_S seconds.
+import glob
+import os
+import pty
+import re
+import select
+import signal
+import struct
+import subprocess
+import sys
+import threading
+import time
+
+import gi
+gi.require_version('GLibUnix', '2.0')
+from gi.repository import Gio, GLib, GLibUnix
+
+POLL_S = 1                  # sensor poll interval while a call is up
+SAFETY_S = 30               # call-state re-check without any signal
+NEAR_ABOVE = int(os.environ.get('M52XQ_PROX_NEAR', '850'))   # distance >= : near
+FAR_BELOW = int(os.environ.get('M52XQ_PROX_FAR', '700'))     # distance <  : far
+SSC_TIMEOUT = 1.5
+SSCCLI = ['ssccli', '--sensor', 'proximity']
+SSC_LIBDIR = '/usr/lib/m52xq'   # libssc that also prints the raw distance
+CALL_BLANK_STATES = {1, 2, 4}   # MMCallState: dialing, ringing-out, active
+TOUCH_NAME = 'Synaptics TCM Oncell Touchscreen'
+POWER_KEY_NAME = 'pmic_pwrkey'
+EV_KEY, KEY_POWER = 1, 116
+SESSION_USER = 'user'
+VOIP_POLL_S = 3
+VOIP_APPS = {'telegram', 'telegram-desktop', 'ayugram', 'kotatogram', '64gram', 'signal-desktop', 'signal',
+             'element-desktop', 'element', 'chromium', 'firefox', 'discord', 'linphone', 'jami', 'zoom',
+             'skypeforlinux', 'whatsapp', 'whatsdesk', 'zapzap', 'nheko', 'neochat', 'fractal', 'dino'}
+PULSE_ENV = {'XDG_RUNTIME_DIR': '/run/user/10000', 'PULSE_SERVER': 'unix:/run/user/10000/pulse/native',
+             'PULSE_COOKIE': '/home/user/.config/pulse/cookie'}
+
+MM = 'org.freedesktop.ModemManager1'
+
+
+def log(msg):
+    print('m52xq-incall-proximity: ' + msg, flush=True)
+
+
+def input_name_path(root, name, suffix):
+    for d in glob.glob(root):
+        try:
+            with open(d + suffix) as f:
+                if f.read().strip() == name:
+                    return d
+        except OSError:
+            pass
+    return None
+
+
+def set_touch(inhibited):
+    d = input_name_path('/sys/class/input/input*', TOUCH_NAME, '/name')
+    if not d:
+        log('touchscreen input not found')
+        return
+    try:
+        with open(d + '/inhibited', 'w') as f:
+            f.write('1' if inhibited else '0')
+    except OSError as e:
+        log('touch inhibit %s failed: %s' % (inhibited, e))
+
+
+BACKLIGHT = glob.glob('/sys/class/backlight/*')
+_saved_brightness = [None]
+
+
+def set_dark(on):
+    """Black screen without switching the panel off: the Samsung proximity
+    sensor stops reporting when the DSI panel is off, so "screen off" = backlight 0
+    (OLED: black, almost no power) while the panel stays on."""
+    if not BACKLIGHT:
+        log('no backlight device')
+        return
+    path = BACKLIGHT[0] + '/brightness'
+    try:
+        if on:
+            with open(path) as f:
+                cur = int(f.read().strip())
+            if cur > 0:
+                _saved_brightness[0] = cur
+            with open(path, 'w') as f:
+                f.write('0')
+        else:
+            val = _saved_brightness[0]
+            if not val:
+                with open(BACKLIGHT[0] + '/max_brightness') as f:
+                    val = max(1, int(f.read().strip()) // 2)
+            with open(path, 'w') as f:
+                f.write(str(val))
+    except (OSError, ValueError) as e:
+        log('backlight %s failed: %s' % ('off' if on else 'restore', e))
+
+
+def read_sensor():
+    """Open the SSC proximity sensor once; return (distance or None, near flag or None)."""
+    env = dict(os.environ)
+    if os.path.isdir(SSC_LIBDIR):
+        env['LD_LIBRARY_PATH'] = SSC_LIBDIR
+    master, slave = pty.openpty()          # a pty keeps ssccli's stdout line buffered
+    try:
+        p = subprocess.Popen(SSCCLI, stdin=subprocess.DEVNULL, stdout=slave,
+                             stderr=slave, env=env, start_new_session=True)
+    except OSError as e:
+        os.close(master)
+        os.close(slave)
+        log('ssccli failed: %s' % e)
+        return None, None
+    os.close(slave)
+    buf = b''
+    t0 = time.time()
+    dist = near = None
+    try:
+        while time.time() - t0 < SSC_TIMEOUT:
+            r, _, _ = select.select([master], [], [], 0.1)
+            if not r:
+                continue
+            try:
+                chunk = os.read(master, 4096)
+            except OSError:
+                break
+            if not chunk:
+                break
+            buf += chunk
+            m = re.search(rb'distance=(\d+)', buf)
+            if m and dist is None:
+                dist = int(m.group(1))
+            if b'measurement: NEAR' in buf:
+                near = True
+            elif b'measurement: FAR' in buf:
+                near = False
+            # the first report is enough; a covered sensor follows it with NEAR
+            if dist is not None and time.time() - t0 > 0.15:
+                break
+            if dist is None and near is not None:
+                break
+    finally:
+        try:
+            os.killpg(p.pid, signal.SIGTERM)
+        except OSError:
+            pass
+        try:
+            p.wait(timeout=2)
+        except subprocess.SubprocessError:
+            try:
+                os.killpg(p.pid, signal.SIGKILL)
+            except OSError:
+                pass
+        os.close(master)
+    return dist, near
+
+
+class PowerKeyWatcher(threading.Thread):
+    """Safety net: a power key press while the screen is blanked by us gives
+    the touchscreen back at once (KWin switches the screen on by itself)."""
+
+    def __init__(self):
+        super().__init__(daemon=True)
+        self.pressed = threading.Event()
+
+    def run(self):
+        d = input_name_path('/sys/class/input/event*', POWER_KEY_NAME, '/device/name')
+        if not d:
+            log('power key input not found')
+            return
+        path = '/dev/input/' + os.path.basename(d)
+        fmt = 'llHHi'
+        size = struct.calcsize(fmt)
+        try:
+            with open(path, 'rb', buffering=0) as f:
+                while True:
+                    data = f.read(size)
+                    if len(data) < size:
+                        continue
+                    _, _, etype, code, value = struct.unpack(fmt, data)
+                    if etype == EV_KEY and code == KEY_POWER and value == 1:
+                        self.pressed.set()
+        except OSError as e:
+            log('power key watcher stopped: %s' % e)
+
+
+class InCall:
+    def __init__(self):
+        self.bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+        self.loop = GLib.MainLoop()
+        self.in_call = False
+        self.blanked = False
+        self.near = False          # last decided state (with hysteresis)
+        self.override = False      # power key: no blanking until far again
+        self.poll_id = 0
+        self.power = PowerKeyWatcher()
+        self.power.start()
+
+    # --- calls -------------------------------------------------------
+    def call_needs_blank(self):
+        try:
+            res = self.bus.call_sync(MM, '/org/freedesktop/ModemManager1',
+                                     'org.freedesktop.DBus.ObjectManager', 'GetManagedObjects',
+                                     None, GLib.VariantType('(a{oa{sa{sv}}})'),
+                                     Gio.DBusCallFlags.NONE, 2000, None)
+        except GLib.Error:
+            return False
+        # Call objects are not exported through the ObjectManager: take each
+        # modem's Modem.Voice "Calls" list and read every call's State.
+        for ifaces in res.unpack()[0].values():
+            voice = ifaces.get(MM + '.Modem.Voice')
+            if not voice:
+                continue
+            for path in voice.get('Calls', []):
+                try:
+                    st = self.bus.call_sync(MM, path, 'org.freedesktop.DBus.Properties', 'Get',
+                                            GLib.Variant('(ss)', (MM + '.Call', 'State')),
+                                            GLib.VariantType('(v)'), Gio.DBusCallFlags.NONE, 2000, None)
+                except GLib.Error:
+                    continue
+                if st.unpack()[0] in CALL_BLANK_STATES:
+                    return True
+        return False
+
+    def voip_call(self):
+        """An application of VOIP_APPS is recording from the microphone (messenger call)."""
+        try:
+            out = subprocess.run(['pactl', 'list', 'source-outputs'], env=dict(os.environ, **PULSE_ENV),
+                                 capture_output=True, text=True, timeout=3).stdout
+        except (OSError, subprocess.SubprocessError):
+            return False
+        for m in re.finditer(r'application\.process\.binary = "([^"]*)"', out):
+            if m.group(1).lower() in VOIP_APPS:
+                return True
+        return False
+
+    def recheck(self):
+        in_call = self.call_needs_blank() or self.voip_call()
+        if in_call and not self.in_call:
+            log('call up, polling the proximity sensor every %d s' % POLL_S)
+            self.in_call = True
+            self.near = False
+            self.override = False
+            self.power.pressed.clear()
+            if not self.poll_id:
+                self.poll_id = GLib.timeout_add_seconds(POLL_S, self.poll)
+        elif not in_call and self.in_call:
+            self.in_call = False
+            self.unblank()
+            log('call over')
+
+    def recheck_once(self):          # idle callback: run once
+        self.recheck()
+        return GLib.SOURCE_REMOVE
+
+    def recheck_timer(self):         # safety timer: keep running
+        self.recheck()
+        return GLib.SOURCE_CONTINUE
+
+    # --- sensor ------------------------------------------------------
+    def unblank(self):
+        if self.blanked:
+            set_dark(False)
+            set_touch(False)
+            self.blanked = False
+            log('screen on')
+
+    def poll(self):
+        if not self.in_call:
+            self.poll_id = 0
+            return GLib.SOURCE_REMOVE
+        dist, flag = read_sensor()
+        if self.power.pressed.is_set():
+            self.power.pressed.clear()
+            self.override = True
+            if self.blanked:
+                self.unblank()
+                log('power key: touch back on, blanking paused until far')
+        if dist is not None:
+            if dist >= NEAR_ABOVE:
+                self.near = True
+            elif dist < FAR_BELOW:
+                self.near = False
+            if flag is True and dist < FAR_BELOW:
+                self.near = True      # sensor says near although the count is low
+        elif flag is not None:
+            self.near = flag
+        else:
+            return GLib.SOURCE_CONTINUE          # no reading: keep the state
+        if not self.near:
+            self.override = False
+        if self.near and not self.override and not self.blanked:
+            set_touch(True)
+            set_dark(True)
+            self.blanked = True
+            log('near (distance=%s): backlight 0, touch inhibited' % dist)
+        elif (not self.near) and self.blanked:
+            log('far (distance=%s)' % dist)
+            self.unblank()
+        return GLib.SOURCE_CONTINUE
+
+    # --- plumbing ----------------------------------------------------
+    def run(self):
+        for iface, member in (('org.freedesktop.ModemManager1.Modem.Voice', 'CallAdded'),
+                              ('org.freedesktop.ModemManager1.Modem.Voice', 'CallDeleted'),
+                              ('org.freedesktop.ModemManager1.Call', 'StateChanged')):
+            self.bus.signal_subscribe(MM, iface, member, None, None, Gio.DBusSignalFlags.NONE,
+                                      lambda *a: GLib.idle_add(self.recheck_once), None)
+        GLib.timeout_add_seconds(SAFETY_S, self.recheck_timer)
+        GLib.timeout_add_seconds(VOIP_POLL_S, self.recheck_timer)  # v40: messenger calls have no D-Bus signal here
+        GLibUnix.signal_add(GLib.PRIORITY_HIGH, signal.SIGTERM, self.stop)
+        GLibUnix.signal_add(GLib.PRIORITY_HIGH, signal.SIGINT, self.stop)
+        GLib.idle_add(self.recheck_once)
+        try:
+            self.loop.run()
+        finally:
+            self.unblank()
+
+    def stop(self):
+        self.loop.quit()
+        return GLib.SOURCE_REMOVE
+
+
+if __name__ == '__main__':
+    InCall().run()

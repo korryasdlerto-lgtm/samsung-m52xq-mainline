@@ -1,0 +1,11 @@
+[Unit]
+Description=M52XQ: blank screen and lock touch at the ear during calls (proximity)
+After=ModemManager.service iio-sensor-proxy.service
+
+[Service]
+ExecStart=/usr/bin/python3 -u /usr/local/bin/m52xq-incall-proximity
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

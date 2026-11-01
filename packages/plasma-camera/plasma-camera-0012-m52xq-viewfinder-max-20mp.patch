@@ -1,0 +1,23 @@
+diff -ruN a/src/plasmacamera/worker.cpp b/src/plasmacamera/worker.cpp
+--- a/src/plasmacamera/worker.cpp	2026-10-17 17:25:12.538573414 +0300
++++ b/src/plasmacamera/worker.cpp	2026-10-19 01:57:55.211425172 +0300
+@@ -483,6 +483,19 @@
+     // TODO: allow user to override config
+     //  - https://git.libcamera.org/libcamera/libcamera.git/tree/src/apps/qcam/main_window.cpp#n399
+ 
++    // m52xq r31: since kernel v220/v221 the sensors also offer their full frames (main 9248x6936 raw 4-cell, front
++    // 6528x4896) and libcamera proposes the largest one for the viewfinder: 9240x6936 RGBA buffers cannot be allocated
++    // ("Failed to create dma buf", "The configuration is not valid") and no camera started. Keep the viewfinder at the
++    // largest size up to 20 MP (main 4624x3468, front 3264x2448).
++    if ((qint64)streamConfig.size.width * streamConfig.size.height > 20000000LL) {
++        // r32: exactly half the full frame, so libcamera picks the binned sensor mode (4624x3468 / 3264x2448); the largest
++        // listed size up to 20 MP was 5120x2880, which only the full mode covers (grey raw 4-cell picture)
++        libcamera::Size best(streamConfig.size.width / 2 & ~7u, streamConfig.size.height / 2 & ~1u);
++        qInfo() << "m52xq: viewfinder" << QString::fromStdString(streamConfig.size.toString()) << "->"
++                << QString::fromStdString(best.toString());
++        streamConfig.size = best;
++    }
++
+     qDebug() << "Viewfinder configuration is: " << streamConfig.toString();
+ 
+     // Validate config

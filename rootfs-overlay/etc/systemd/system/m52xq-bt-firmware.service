@@ -1,0 +1,15 @@
+[Unit]
+Description=M52XQ: reload Bluetooth firmware once /lib/firmware on rootfs is available (only when Bluetooth is switched on), set BD address
+Documentation=file:///README-PORTIROVANIE-M52-MAINLINE.md
+After=local-fs.target
+DefaultDependencies=no
+Before=bluetooth.service
+ConditionPathExists=/lib/firmware/qca/msbtfw11.mbn
+
+[Service]
+# simple, not oneshot: the script waits (no CPU) until Bluetooth is switched on
+Type=simple
+ExecStart=/usr/local/bin/m52xq-bt-firmware
+
+[Install]
+WantedBy=multi-user.target

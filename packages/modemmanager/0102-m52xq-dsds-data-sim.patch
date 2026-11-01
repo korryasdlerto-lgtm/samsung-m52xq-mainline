@@ -1,0 +1,226 @@
+diff --git a/src/kerneldevice/mm-kernel-device-qrtr.c b/src/kerneldevice/mm-kernel-device-qrtr.c
+index e75f6e6..5eaecba 100644
+--- a/src/kerneldevice/mm-kernel-device-qrtr.c
++++ b/src/kerneldevice/mm-kernel-device-qrtr.c
+@@ -37,7 +37,8 @@ struct _MMKernelDeviceQrtrPrivate {
+     gchar    *name;
+     gchar    *physdev_uid;
+     guint     subscription; /* m52xq DSDS: 0 = SIM1 (primary), 1 = SIM2 */
+-    gboolean  own_physdev;  /* both SIMs active: SIM2 is a modem of its own, without the data port */
++    gboolean  own_physdev;  /* both SIMs active: SIM2 is a modem of its own (physdev qcom-soc-sim2) */
++    gboolean  no_data;      /* r7: its modem object has no data port (the other SIM has the mobile data) */
+ };
+ 
+ /*****************************************************************************/
+@@ -155,13 +156,15 @@ mm_kernel_device_qrtr_new (QrtrNode *qrtr_node)
+ MMKernelDevice *
+ mm_kernel_device_qrtr_new_for_subscription (QrtrNode *qrtr_node,
+                                             guint     subscription,
+-                                            gboolean  own_physdev)
++                                            gboolean  own_physdev,
++                                            gboolean  no_data)
+ {
+     MMKernelDeviceQrtr *self;
+ 
+     self = MM_KERNEL_DEVICE_QRTR (mm_kernel_device_qrtr_new (qrtr_node));
+     self->priv->subscription = subscription;
+     self->priv->own_physdev = own_physdev;
++    self->priv->no_data = no_data;
+     g_object_set_data_full (G_OBJECT (self), ID_MM_QMI_SUBSCRIPTION,
+                             g_strdup_printf ("%u", subscription), g_free);
+     return MM_KERNEL_DEVICE (self);
+@@ -173,6 +176,12 @@ mm_kernel_device_qrtr_get_subscription (MMKernelDeviceQrtr *self)
+     return self->priv->subscription;
+ }
+ 
++gboolean
++mm_kernel_device_qrtr_get_no_data (MMKernelDeviceQrtr *self)
++{
++    return self->priv->no_data;
++}
++
+ /*****************************************************************************/
+ 
+ static void
+diff --git a/src/kerneldevice/mm-kernel-device-qrtr.h b/src/kerneldevice/mm-kernel-device-qrtr.h
+index 3d66247..14f9ed7 100644
+--- a/src/kerneldevice/mm-kernel-device-qrtr.h
++++ b/src/kerneldevice/mm-kernel-device-qrtr.h
+@@ -69,7 +69,9 @@ MMKernelDevice *mm_kernel_device_qrtr_new      (QrtrNode *qrtr_node);
+ #define ID_MM_QMI_SUBSCRIPTION "ID_MM_QMI_SUBSCRIPTION"
+ MMKernelDevice *mm_kernel_device_qrtr_new_for_subscription (QrtrNode *qrtr_node,
+                                                             guint     subscription,
+-                                                            gboolean  own_physdev);
++                                                            gboolean  own_physdev,
++                                                            gboolean  no_data);
+ guint           mm_kernel_device_qrtr_get_subscription     (MMKernelDeviceQrtr *self);
++gboolean        mm_kernel_device_qrtr_get_no_data          (MMKernelDeviceQrtr *self);
+ 
+ #endif /* MM_KERNEL_DEVICE_QRTR_H */
+diff --git a/src/mm-base-manager.c b/src/mm-base-manager.c
+index d433553..5540e7a 100644
+--- a/src/mm-base-manager.c
++++ b/src/mm-base-manager.c
+@@ -503,6 +503,32 @@ additional_port (MMBaseManager  *self,
+                             g_object_ref (self));
+ }
+ 
++/* m52xq DSDS: both SIMs active, and (r7) which SIM modem object owns the data port */
++static gboolean
++m52xq_dual_sim (void)
++{
++    return g_getenv ("MM_QRTR_DSDS") && !g_getenv ("MM_QRTR_SIM_ONLY");
++}
++
++static gboolean
++m52xq_data_sim2 (void)
++{
++    return m52xq_dual_sim () && !g_strcmp0 (g_getenv ("MM_QRTR_DATA_SIM"), "2");
++}
++
++/* The physical device of a port; with the mobile data on SIM2 the SoC net port (physdev qcom-soc) goes to the
++ * SIM2 device qcom-soc-sim2 instead, so that the SIM names stay the same (qcom-soc = SIM1, -sim2 = SIM2) */
++static const gchar *
++m52xq_port_physdev_uid (MMKernelDevice *port)
++{
++    const gchar *uid = mm_kernel_device_get_physdev_uid (port);
++
++    if (m52xq_data_sim2 () && !g_strcmp0 (uid, "qcom-soc") &&
++        !g_strcmp0 (mm_kernel_device_get_subsystem (port), "net"))
++        return "qcom-soc-sim2";
++    return uid;
++}
++
+ static void
+ first_port (MMBaseManager  *self,
+             MMKernelDevice *port,
+@@ -514,7 +540,7 @@ first_port (MMBaseManager  *self,
+     const gchar         *physdev;
+ 
+     name = mm_kernel_device_get_name (port);
+-    uid = mm_kernel_device_get_physdev_uid (port);
++    uid = m52xq_port_physdev_uid (port);
+ 
+     mm_obj_dbg (self, "port %s is first in device '%s'", name, uid);
+ 
+@@ -571,7 +597,7 @@ device_added (MMBaseManager  *self,
+ 
+     /* Get the port's physical device's uid. All ports of the same physical
+      * device will share the same uid. */
+-    uid = mm_kernel_device_get_physdev_uid (port);
++    uid = m52xq_port_physdev_uid (port);
+     g_assert (uid);
+ 
+     /* If the device is inhibited, do nothing else */
+@@ -620,17 +646,21 @@ handle_qrtr_device_added (MMBaseManager    *self,
+     /* m52xq DSDS (m52xq-sim-mode): MM_QRTR_SIM_ONLY=2 -> the only modem object is SIM2 (QMI clients
+      * bound to subscription 1, with the data port); otherwise SIM1, and with MM_QRTR_DSDS (both SIMs
+      * active, the modem keeps both registered) SIM2 gets a second modem object of its own */
++    /* r7: with both SIMs active MM_QRTR_DATA_SIM=2 gives the data port (rmnet) to the SIM2 modem object (see
++     * m52xq_port_physdev_uid()); the modem's own data subscription (DDS) is switched by m52xq-sim-mode */
+     if (!g_strcmp0 (g_getenv ("MM_QRTR_SIM_ONLY"), "2"))
+-        kernel_device = mm_kernel_device_qrtr_new_for_subscription (node, 1, FALSE);
++        kernel_device = mm_kernel_device_qrtr_new_for_subscription (node, 1, FALSE, FALSE);
++    else if (m52xq_data_sim2 ())
++        kernel_device = mm_kernel_device_qrtr_new_for_subscription (node, 0, FALSE, TRUE);
+     else
+         kernel_device = mm_kernel_device_qrtr_new (node);
+ 
+     device_added (self, kernel_device, TRUE, FALSE);
+ 
+-    if (g_getenv ("MM_QRTR_DSDS") && !g_getenv ("MM_QRTR_SIM_ONLY")) {
++    if (m52xq_dual_sim ()) {
+         g_autoptr(MMKernelDevice) sim2_device = NULL;
+ 
+-        sim2_device = mm_kernel_device_qrtr_new_for_subscription (node, 1, TRUE);
++        sim2_device = mm_kernel_device_qrtr_new_for_subscription (node, 1, TRUE, !m52xq_data_sim2 ());
+         device_added (self, sim2_device, TRUE, FALSE);
+     }
+ }
+diff --git a/src/mm-base-modem.c b/src/mm-base-modem.c
+index 09f2a0a..7dffbb6 100644
+--- a/src/mm-base-modem.c
++++ b/src/mm-base-modem.c
+@@ -317,6 +317,7 @@ base_modem_create_qrtr_port (MMBaseModem    *self,
+         node = mm_kernel_device_qrtr_get_node (MM_KERNEL_DEVICE_QRTR (kernel_device));
+         port = mm_port_qmi_new_from_node (name, node);
+         mm_port_qmi_set_subscription (port, mm_kernel_device_qrtr_get_subscription (MM_KERNEL_DEVICE_QRTR (kernel_device)));
++        mm_port_qmi_set_no_data (port, mm_kernel_device_qrtr_get_no_data (MM_KERNEL_DEVICE_QRTR (kernel_device)));
+         return MM_PORT (port);
+     }
+     return NULL;
+@@ -1688,7 +1689,7 @@ mm_base_modem_organize_ports (MMBaseModem *self,
+ #if defined WITH_QMI
+     /* On QMI-based modems, we need to have at least a net port; m52xq DSDS: the SIM2 modem
+      * object (QMI clients bound to subscription 1) has no data port of its own */
+-    if (qmi && !data_net && !mm_port_qmi_get_subscription (MM_PORT_QMI (qmi->data))) {
++    if (qmi && !data_net && !mm_port_qmi_get_no_data (MM_PORT_QMI (qmi->data))) {
+         g_set_error_literal (error,
+                              MM_CORE_ERROR,
+                              MM_CORE_ERROR_FAILED,
+@@ -1792,7 +1793,7 @@ mm_base_modem_organize_ports (MMBaseModem *self,
+     /* Fail if we haven't added any single data port; this is probably a plugin
+      * misconfiguration (m52xq DSDS: except the SIM2 modem object, which has none) */
+     if (!self->priv->data &&
+-        !(qmi && mm_port_qmi_get_subscription (MM_PORT_QMI (qmi->data)))) {
++        !(qmi && mm_port_qmi_get_no_data (MM_PORT_QMI (qmi->data)))) {
+         g_set_error_literal (error, MM_CORE_ERROR, MM_CORE_ERROR_FAILED,
+                              "Failed to find a data port in the modem");
+         return FALSE;
+diff --git a/src/mm-port-qmi.c b/src/mm-port-qmi.c
+index 2771ce9..b00d31b 100644
+--- a/src/mm-port-qmi.c
++++ b/src/mm-port-qmi.c
+@@ -66,6 +66,8 @@ struct _MMPortQmiPrivate {
+ #endif
+     /* m52xq DSDS: QMI subscription the clients of this port are bound to (0 = SIM1) */
+     guint      subscription;
++    /* m52xq DSDS r7: the modem object of this port has no data port (the other SIM has the mobile data) */
++    gboolean   no_data;
+ 
+     /* port monitoring */
+     gulong timeout_monitoring_id;
+@@ -2805,7 +2807,7 @@ mm_port_qmi_open (MMPortQmi           *self,
+     ctx = g_slice_new0 (PortOpenContext);
+     ctx->step = PORT_OPEN_STEP_FIRST;
+     /* m52xq DSDS: the SIM2 modem object has no net port, so there is no data format to set up */
+-    ctx->set_data_format = set_data_format && !(self->priv->subscription && !self->priv->net_driver);
++    ctx->set_data_format = set_data_format && !(self->priv->no_data && !self->priv->net_driver);
+     ctx->kernel_data_modes = MM_PORT_QMI_KERNEL_DATA_MODE_NONE;
+ 
+     task = g_task_new (self, cancellable, callback, user_data);
+@@ -2973,6 +2975,19 @@ mm_port_qmi_new (const gchar  *name,
+                                       NULL));
+ }
+ 
++void
++mm_port_qmi_set_no_data (MMPortQmi *self,
++                         gboolean   no_data)
++{
++    self->priv->no_data = no_data;
++}
++
++gboolean
++mm_port_qmi_get_no_data (MMPortQmi *self)
++{
++    return self->priv->no_data;
++}
++
+ void
+ mm_port_qmi_set_subscription (MMPortQmi *self,
+                               guint      subscription)
+diff --git a/src/mm-port-qmi.h b/src/mm-port-qmi.h
+index d6af812..260d408 100644
+--- a/src/mm-port-qmi.h
++++ b/src/mm-port-qmi.h
+@@ -115,6 +115,10 @@ void     mm_port_qmi_release_client         (MMPortQmi    *self,
+ void  mm_port_qmi_set_subscription (MMPortQmi *self,
+                                     guint      subscription);
+ guint mm_port_qmi_get_subscription (MMPortQmi *self);
++/* m52xq DSDS r7: the modem object of the port has no data port of its own */
++void     mm_port_qmi_set_no_data (MMPortQmi *self,
++                                  gboolean   no_data);
++gboolean mm_port_qmi_get_no_data (MMPortQmi *self);
+ 
+ QmiClient *mm_port_qmi_peek_client (MMPortQmi  *self,
+                                     QmiService  service,

@@ -1,0 +1,4 @@
+# m52xq: Megapixels saves only the developed JPEG: the DNG beside it showed up as a second, undeveloped (dark) photo
+# in the album (Koko) and cost 20-40 MB per photo (user choice 2026-10-17). Needs glib-compile-schemas.
+[me.gapixels.Megapixels]
+save-raw=false

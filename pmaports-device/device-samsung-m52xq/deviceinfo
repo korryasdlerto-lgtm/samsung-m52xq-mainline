@@ -9,10 +9,15 @@ deviceinfo_codename="samsung-m52xq"
 deviceinfo_year="2021"
 deviceinfo_dtb="qcom/sm7325-samsung-m52xq"
 deviceinfo_arch="aarch64"
-deviceinfo_drm="true"
 
 # Device related
 deviceinfo_chassis="handset"
 
 # Bootloader related
 deviceinfo_flash_method="none"
+
+# UFS storage on this device uses 4096-byte physical sectors, not the
+# 512-byte default losetup assumes -- without this, init_functions.sh's
+# mount_subpartitions() (losetup -P) computes wrong sub-partition offsets
+# on real hardware, causing it to expose the wrong data as pmOS_root.
+deviceinfo_rootfs_image_sector_size="4096"

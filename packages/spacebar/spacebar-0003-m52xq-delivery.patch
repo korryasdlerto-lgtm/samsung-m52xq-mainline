@@ -1,0 +1,111 @@
+--- a/daemon/channellogger.cpp	2026-10-30 05:55:40.247642415 +0200
++++ b/daemon/channellogger.cpp	2026-10-30 05:56:06.539871675 +0200
+@@ -524,6 +524,16 @@
+         // This is only applicable if the PDU type is MM_SMS_PDU_TYPE_STATUS_REPORT
+         // TODO handle and store message delivery report state
+         qDebug() << "deliverystate changed" << state;
++        // m52xq: 3GPP TS 23.040 status: 0x00-0x02 delivered (received / forwarded unconfirmed / replaced by the SMSC), 0x20-0x3f temporary error
++        // (the SMSC keeps trying), 0x40 and above (and 0x60 temporary fatal) = not delivered; 0x100 unknown
++        const int ds = static_cast<int>(state);
++        if (ds >= 0 && ds <= 0x02) {
++            m_database.updateMessageDeliveryState(message.id, MessageState::Delivered);
++            updateMessage(message);
++        } else if (ds >= 0x40 && ds < 0x100) {
++            m_database.updateMessageDeliveryState(message.id, MessageState::Failed);
++            updateMessage(message);
++        }
+     });
+ 
+     QDBusReply<void> sendResult = co_await mmMessage->send();
+--- a/lib/database/database.h	2026-09-08 14:00:46.000000000 +0300
++++ b/lib/database/database.h	2026-10-30 05:56:06.539871675 +0200
+@@ -22,6 +22,7 @@
+     Pending,
+     Failed,
+     Received,
++    Delivered, // m52xq: the network confirmed the delivery (SMS status report)
+ };
+ Q_DECLARE_METATYPE(MessageState)
+ 
+--- a/lib/telephonySupport/modemcontroller.cpp	2026-10-30 05:55:40.247642415 +0200
++++ b/lib/telephonySupport/modemcontroller.cpp	2026-10-30 05:56:06.539871675 +0200
+@@ -4,6 +4,8 @@
+ 
+ #include "modemcontroller.h"
+ 
++#include <QDBusConnection>
++#include <QDBusMessage>
+ #include <ModemManagerQt/Manager>
+ 
+ #include <QFile>
+@@ -49,6 +51,20 @@
+     const int di = m_msgManagers.indexOf(mgr);
+     m_lastCreatedSim = di >= 0 ? (m_msgDevices.value(di).endsWith(QLatin1String("sim2")) ? 2 : 1) : 0;
+ 
++    // m52xq: ask the network for a status report ("delivery-report-request") so that a delivered SMS can be shown as delivered;
++    // ModemManagerQt's Message has no such field, so Create is called directly (text SMS only)
++    if (m.data.isEmpty()) {
++        QDBusMessage call = QDBusMessage::createMethodCall(QStringLiteral("org.freedesktop.ModemManager1"),
++                                                           mgr->uni(),
++                                                           QStringLiteral("org.freedesktop.ModemManager1.Modem.Messaging"),
++                                                           QStringLiteral("Create"));
++        QVariantMap props;
++        props.insert(QStringLiteral("number"), m.number);
++        props.insert(QStringLiteral("text"), m.text);
++        props.insert(QStringLiteral("delivery-report-request"), true);
++        call << props;
++        return QDBusPendingReply<QDBusObjectPath>(QDBusConnection::systemBus().asyncCall(call));
++    }
+     return mgr->createMessage(m);
+ }
+ 
+--- a/src/contents/ui/MessagesPage.qml	2026-10-30 05:55:40.251642451 +0200
++++ b/src/contents/ui/MessagesPage.qml	2026-10-30 05:56:06.543871711 +0200
+@@ -30,6 +30,21 @@
+     property var tapbackKeys: ["♥️", "👍" , "👎", "😂", "‼️", "❓"]
+     property real lastHeight: applicationWindow().height
+ 
++    // m52xq: delivery state of a sent message (text next to the time and the SIM)
++    function deliveryText(state) {
++        const ru = Qt.locale().name.startsWith("ru")
++        switch (state) {
++        case MessageModel.Delivered:
++            return ru ? "доставлено" : "delivered"
++        case MessageModel.Sent:
++            return ru ? "отправлено" : "sent"
++        case MessageModel.Failed:
++            return ru ? "не доставлено" : "not delivered"
++        default:
++            return ru ? "отправляется…" : "sending…"
++        }
++    }
++
+     // m52xq: dual SIM, called from the SIM prompt of the compose area
+     function doSend(sim) {
+         messageModel.setSendSim(sim)
+@@ -639,8 +654,12 @@
+                     padding: Kirigami.Units.smallSpacing
+                     bottomPadding: 0
+                     text: Qt.formatTime(model.time, Qt.DefaultLocaleShortDate) + (model.sim > 0 ? "  ·  SIM " + model.sim : "")
++                          + (model.sentByMe ? "  ·  " + msgPage.deliveryText(model.deliveryState) : "")
+                     font: Kirigami.Theme.smallFont
+-                    color: Kirigami.Theme.disabledTextColor
++                    color: !model.sentByMe ? Kirigami.Theme.disabledTextColor
++                         : model.deliveryState == MessageModel.Failed ? Kirigami.Theme.negativeTextColor
++                         : model.deliveryState == MessageModel.Delivered ? Kirigami.Theme.positiveTextColor
++                         : Kirigami.Theme.disabledTextColor
+ 
+                     Kirigami.Icon {
+                         anchors.right: parent.left
+--- a/src/messagemodel.h	2026-10-30 05:55:40.247642415 +0200
++++ b/src/messagemodel.h	2026-10-30 05:56:06.539871675 +0200
+@@ -71,7 +71,8 @@
+         Pending = MessageState::Pending,
+         Sent = MessageState::Sent,
+         Failed = MessageState::Failed,
+-        Received = MessageState::Received
++        Received = MessageState::Received,
++        Delivered = MessageState::Delivered
+     };
+     Q_ENUM(DeliveryState)
+ 

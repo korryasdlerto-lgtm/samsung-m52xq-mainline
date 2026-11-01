@@ -1,0 +1,54 @@
+#!/usr/bin/python3
+# m52xq: per-sleep-cycle current from /var/log/m52xq-sleep.log (4500 mAh battery: 1 % = 45 mAh)
+# + (since 2026-10-18) the share of the sleep each remote processor spent asleep and the modem network at sleep entry
+import sys, time
+CAP_MAH = 4500.0
+L = sys.argv[1] if len(sys.argv) > 1 else "/var/log/m52xq-sleep.log"
+min_s = float(sys.argv[2]) if len(sys.argv) > 2 else 120.0
+pre = None
+sub = {}
+def parse_sub(p):
+    r = {}
+    for x in p[1:]:
+        if "=" in x and x.endswith("ms") and "/" in x:
+            n, v = x.split("=", 1)
+            try:
+                r[n] = int(v.split("/")[1][:-2])
+            except ValueError:
+                pass
+        elif x.startswith("mm="):
+            r["mm"] = x[3:]
+    return r
+print("%-8s %8s %9s %8s %8s  %-30s %s" % ("start", "dur,s", "dSOC cnt", "mAh", "avg mA", "asleep: modem/adsp/wpss", "variant"))
+for line in open(L, errors="ignore"):
+    p = line.split()
+    if not p:
+        continue
+    if p[0] in ("pre-subsys", "post-subsys"):
+        sub[p[0][:-7]] = parse_sub(p)
+        continue
+    if len(p) < 6 or p[0] not in ("pre", "post"):
+        continue
+    try:
+        t = int(p[1]); soc = int(p[2])
+    except ValueError:
+        continue
+    var = [x for x in p if x.startswith("variant=")]
+    var = var[0][8:] if var else ""
+    if p[0] == "pre":
+        pre = (t, soc, var, sub.get("pre"))
+        sub = {}
+    elif pre:
+        dt = t - pre[0]
+        d = pre[1] - soc
+        mah = d / 256.0 * CAP_MAH / 100.0
+        a, b = pre[3], sub.get("post")
+        if a and b and dt > 0:
+            ss = "/".join("%d%%" % (100.0 * (b.get(n, 0) - a.get(n, 0)) / 1000.0 / dt) for n in ("modem", "adsp", "wpss"))
+            ss += " " + a.get("mm", "")
+        else:
+            ss = "-"
+        if dt >= min_s:
+            print("%-8s %8d %9d %8.1f %8.1f  %-30s %s" % (time.strftime("%H:%M", time.localtime(pre[0])), dt, d, mah, mah * 3600.0 / dt, ss, pre[2]))
+        pre = None
+        sub = {}

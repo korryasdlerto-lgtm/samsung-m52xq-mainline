@@ -1,0 +1,1005 @@
+diff -ruN a/src/contents/ui/main.qml b/src/contents/ui/main.qml
+--- a/src/contents/ui/main.qml	2025-12-05 16:55:48.000000000 +0200
++++ b/src/contents/ui/main.qml	2026-10-10 01:29:26.723135438 +0300
+@@ -34,11 +34,8 @@
+         id: mainCamera
+ 
+         Component.onCompleted: {
+-            // Restore selected camera from settings
+-            const cameraId = findSettingsCameraDevice();
+-            if (cameraId.length > 0) {
+-                cameraDevice = cameraId;
+-            }
++            // m52xq r17: the camera is not restored from the settings: the application always opens on the main camera
++            // (last time it was the macro sensor, dark and confusing, or the ultrawide one that hangs the camera)
+             // Start camera
+             mainCamera.startCamera();
+         }
+@@ -64,9 +61,18 @@
+                 }
+             }
+         }
++        // m52xq r19: in the logical mode the real camera is the main (or the ultrawide) one, but the selection in the
++        // list is "m52xq-logical": writing the real id here moved the marker of the list back to the main camera
++        // the first time the logical camera was picked
++        function selectedCameraId(): string {
++            return mainCamera.logicalMode ? "m52xq-logical" : mainCamera.cameraDevice;
++        }
+         onCameraDeviceChanged: {
+             // Bind settings to what the camera device is
+-            CameraSettings.cameraDeviceId = mainCamera.cameraDevice;
++            CameraSettings.cameraDeviceId = mainCamera.selectedCameraId();
++        }
++        onLogicalModeChanged: {
++            CameraSettings.cameraDeviceId = mainCamera.selectedCameraId();
+         }
+ 
+         onErrorOccurred: {
+diff -ruN a/src/lensautofocus.cpp b/src/lensautofocus.cpp
+--- a/src/lensautofocus.cpp	2026-10-10 01:06:32.845162855 +0300
++++ b/src/lensautofocus.cpp	2026-10-10 01:41:24.429125795 +0300
+@@ -18,11 +18,18 @@
+ constexpr int kInfinity = 335;
+ constexpr int kMacro = 621;
+ // Frames to wait after moving the lens (VCM settling + pipeline latency).
+-constexpr int kSettleFrames = 4;
++constexpr int kSettleFrames = 3;
++// default code of the fp5529 VCM: the peak for 1-3 m scenes lies right there (start of the search)
++constexpr int kStart = 345;
++constexpr int kCoarseStep = 50;
++constexpr int kFineStep = 15;
++constexpr int kFineSpan = 40;
+ // Re-run the search when the sharpness fell below this fraction of the reference for kLowFramesToRetrigger frames.
+-constexpr double kLowRatio = 0.6;
+-constexpr int kLowFramesToRetrigger = 6;
+-constexpr double kMeanChange = 0.35;
++// m52xq r18: restart only after a big change that lasts about 5 s (like the Pixel camera): the lens must not hunt
++constexpr double kLowRatio = 0.4;
++constexpr int kLowFramesToRetrigger = 45;
++constexpr double kMeanChange = 0.6;
++constexpr int kHoldFramesAfterCapture = 90;
+ }
+ 
+ LensAutofocus::~LensAutofocus()
+@@ -135,16 +142,101 @@
+     }
+ }
+ 
++void LensAutofocus::captureStarted()
++{
++    if (!m_available || m_manual) {
++        return;
++    }
++    if (m_state == State::Settling || m_state == State::Scanning) {
++        // in the middle of the search: while the sharpness was still rising the peak lies ahead, keep the position the
++        // search has just moved to; otherwise go back to the best position found so far
++        const int target = (m_bestScore > 0.0 && m_bestPosition >= 0) ? m_bestPosition : m_pos;
++        finishSearch(target);
++    }
++    m_hold = kHoldFramesAfterCapture;
++}
++
++void LensAutofocus::moveTo(int position)
++{
++    setPosition(std::clamp(position, kInfinity, kMacro));
++    m_settleFrames = kSettleFrames;
++    m_state = State::Settling;
++}
++
+ void LensAutofocus::startScan()
+ {
+-    m_positions = {kInfinity, kInfinity + 15, kInfinity + 35, kInfinity + 60, kInfinity + 95, kInfinity + 140, kInfinity + 200, kMacro};
++    // m52xq r21: start where the last search ended (or at the default position of the lens), not at an end of the range
+     m_fine = false;
+-    m_index = 0;
+-    m_scores.assign(m_positions.size(), 0.0);
++    m_stage = 0;
++    m_falling = 0;
++    m_dir = 1;
++    m_bestScore = 0.0;
++    m_bestPosition = m_lastLocked >= 0 ? m_lastLocked : kStart;
++    m_pos = m_bestPosition;
+     m_lowFrames = 0;
+-    setPosition(m_positions[0]);
++    moveTo(m_pos);
++}
++
++void LensAutofocus::finishSearch(int position)
++{
++    m_bestPosition = std::clamp(position, kInfinity, kMacro);
++    m_lastLocked = m_bestPosition;
++    setPosition(m_bestPosition);
++    m_reference = 0.0;
+     m_settleFrames = kSettleFrames;
+-    m_state = State::Settling;
++    m_state = State::Holding;
++    qInfo() << "Autofocus: locked at" << m_bestPosition;
++}
++
++void LensAutofocus::evaluate(double score)
++{
++    if (!m_fine) {
++        if (score > m_bestScore) {
++            m_bestScore = score;
++            m_bestPosition = m_pos;
++            m_falling = 0;
++        } else if (score < m_bestScore * 0.85) {
++            ++m_falling;
++        }
++        ++m_stage;
++        // the first step away from the start decides the direction: clearly worse means the peak is on the other side
++        if (m_stage == 2 && m_dir > 0 && score < m_bestScore * 0.95) {
++            m_dir = -1;
++            m_falling = 0;
++            m_pos = m_bestPosition - kCoarseStep;
++            if (m_pos < kInfinity) {
++                m_pos = kInfinity;
++            }
++            moveTo(m_pos);
++            return;
++        }
++        const int next = m_pos + kCoarseStep * m_dir;
++        if (m_falling >= 2 || next > kMacro || next < kInfinity) {
++            // behind the peak (or at the end of the range): fine scan around the best position
++            m_fine = true;
++            m_fineFrom = std::max(kInfinity, m_bestPosition - kFineSpan);
++            m_fineTo = std::min(kMacro, m_bestPosition + kFineSpan);
++            m_bestScore = 0.0;
++            m_pos = m_fineFrom;
++            moveTo(m_pos);
++            return;
++        }
++        m_pos = next;
++        moveTo(m_pos);
++        return;
++    }
++
++    // fine scan
++    if (score > m_bestScore) {
++        m_bestScore = score;
++        m_bestPosition = m_pos;
++    }
++    if (m_pos >= m_fineTo) {
++        finishSearch(m_bestPosition);
++        return;
++    }
++    m_pos = std::min(m_pos + kFineStep, m_fineTo);
++    moveTo(m_pos);
+ }
+ 
+ double LensAutofocus::sharpness(const QImage &image, double *mean) const
+@@ -192,50 +284,15 @@
+     return energy / (static_cast<double>(bw) * bh) / std::max(m * m, 1.0) * 1000.0;
+ }
+ 
+-void LensAutofocus::nextStep()
+-{
+-    ++m_index;
+-    if (m_index < m_positions.size()) {
+-        setPosition(m_positions[m_index]);
+-        m_settleFrames = kSettleFrames;
+-        m_state = State::Settling;
+-        return;
+-    }
+-
+-    // Search finished: pick the best position.
+-    const auto best = std::max_element(m_scores.begin(), m_scores.end());
+-    m_bestPosition = m_positions[static_cast<size_t>(best - m_scores.begin())];
+-
+-    if (!m_fine) {
+-        // Refine around the coarse maximum.
+-        m_fine = true;
+-        m_positions.clear();
+-        for (int delta = -24; delta <= 24; delta += 8) {
+-            const int p = m_bestPosition + delta;
+-            if (p >= kInfinity - 10 && p <= kMacro) {
+-                m_positions.push_back(p);
+-            }
+-        }
+-        m_index = 0;
+-        m_scores.assign(m_positions.size(), 0.0);
+-        setPosition(m_positions[0]);
+-        m_settleFrames = kSettleFrames;
+-        m_state = State::Settling;
+-        return;
+-    }
+-
+-    setPosition(m_bestPosition);
+-    m_reference = 0.0;
+-    m_settleFrames = kSettleFrames;
+-    m_state = State::Holding;
+-    qInfo() << "Autofocus: locked at" << m_bestPosition;
+-}
+-
+ void LensAutofocus::processFrame(const QImage &image)
+ {
+     if (m_state == State::Disabled || image.isNull()) {
+         return;
+     }
++    if (m_hold > 0) {
++        --m_hold;
++        return;
++    }
+ 
+     if (m_settleFrames > 0 && m_state != State::Scanning) {
+         --m_settleFrames;
+@@ -252,8 +309,7 @@
+ 
+     switch (m_state) {
+     case State::Scanning:
+-        m_scores[m_index] = score;
+-        nextStep();
++        evaluate(score);
+         break;
+     case State::Holding:
+         if (m_reference <= 0.0) {
+diff -ruN a/src/lensautofocus.h b/src/lensautofocus.h
+--- a/src/lensautofocus.h	2026-10-10 01:06:32.849163154 +0300
++++ b/src/lensautofocus.h	2026-10-10 01:41:14.741002971 +0300
+@@ -19,6 +19,8 @@
+     void processFrame(const QImage &image);
+     // Restart the focus search.
+     void trigger();
++    // m52xq r18: a photo is taken or a video starts: finish the search at the best position found so far and leave the lens alone
++    void captureStarted();
+ 
+     // m52xq: manual focus (the lens belongs to the rear main camera only)
+     bool available() const { return m_available; }
+@@ -42,7 +44,9 @@
+     bool setPosition(int position);
+     double sharpness(const QImage &image, double *mean) const;
+     void startScan();
+-    void nextStep();
++    void evaluate(double score); // a sharpness value of the present lens position has arrived
++    void moveTo(int position);
++    void finishSearch(int position);
+ 
+     State m_state = State::Disabled;
+     bool m_available = false;
+@@ -50,14 +54,21 @@
+     QString m_cameraId;
+     int m_fd = -1;
+ 
+-    std::vector<int> m_positions;
+-    size_t m_index = 0;
+-    std::vector<double> m_scores;
++    // m52xq r21: the search of the Pixel camera: a coarse hill-climb from the start position that stops behind the peak,
++    // then a short fine scan around it
+     bool m_fine = false;
++    int m_pos = 0;
++    int m_dir = 1;
++    int m_stage = 0;
++    int m_falling = 0;
++    double m_bestScore = 0.0;
++    int m_fineFrom = 0, m_fineTo = 0;
++    int m_lastLocked = -1; // remembered between searches
+     int m_bestPosition = 0;
+     int m_settleFrames = 0;
+     double m_reference = 0.0;
+     double m_referenceMean = 0.0;
+     int m_lowFrames = 0;
+     int m_current = -1;
++    int m_hold = 0; // frames to leave the lens alone after a capture / at the start of a video
+ };
+diff -ruN a/src/plasmacamera.cpp b/src/plasmacamera.cpp
+--- a/src/plasmacamera.cpp	2026-10-10 01:06:32.849163154 +0300
++++ b/src/plasmacamera.cpp	2026-10-10 02:03:55.770772479 +0300
+@@ -128,33 +128,51 @@
+         return false;
+     }
+ 
+-    // cyclic increment over the real cameras and the 5th, logical one (it sits on the main camera)
+-    if (m_logical) {
+-        setCameraDevice(QString::fromStdString(cameras.front()->id()));
+-        return true;
+-    }
+-    const bool onMain = m_cameraId.contains(QLatin1String("camera@2d"));
+-    ++match;
+-    if (onMain) {
+-        setCameraDevice(QStringLiteral("m52xq-logical")); // after the main camera comes the logical one
+-        return true;
++    // m52xq r17: Rear 64 MP (camera@2d) -> Front (camera@1a) -> Logical (software, automatic main / ultrawide) -> Macro
++    // (camera@3f) -> Ultrawide (camera@10) -> Rear
++    static const char *const order[] = {"camera@2d", "camera@1a", "LOGICAL", "camera@3f", "camera@10"};
++    const int count = 5;
++    int current = 0;
++    for (int i = 0; i < count; ++i) {
++        const QString token = QString::fromLatin1(order[i]);
++        if (token == QLatin1String("LOGICAL") ? m_logical : (!m_logical && m_cameraId.contains(token))) {
++            current = i;
++        }
+     }
+-    if (match == cameras.end()) {
+-        match = cameras.begin();
++    for (int step = 1; step <= count; ++step) {
++        const QString token = QString::fromLatin1(order[(current + step) % count]);
++        if (token == QLatin1String("LOGICAL")) {
++            setCameraDevice(QStringLiteral("m52xq-logical"));
++            return true;
++        }
++        for (const auto &camera : cameras) {
++            if (QString::fromStdString(camera->id()).contains(token)) {
++                setCameraDevice(QString::fromStdString(camera->id()));
++                return true;
++            }
++        }
+     }
+-
+-    setCameraDevice( QString::fromStdString((*match)->id()) );
+-    return true;
++    return false;
+ }
+ 
++// m52xq r17: the same order as the switch button: Rear 64 MP, Front, Logical, Macro, Ultrawide
++static const char *const kM52xqOrder[] = {"camera@2d", "camera@1a", "LOGICAL", "camera@3f", "camera@10"};
++
+ QList<QString> PlasmaCamera::cameraDeviceIds() const
+ {
+     // camera ids are unique strings to identify the camera devices
+     QList<QString> devices;
+-    for (const auto &camera : m_cameraManager->cameras()) {
+-        devices.push_back( QString::fromStdString(camera->id()) );
++    for (const char *token : kM52xqOrder) {
++        if (QLatin1String(token) == QLatin1String("LOGICAL")) {
++            devices.push_back(QStringLiteral("m52xq-logical"));
++            continue;
++        }
++        for (const auto &camera : m_cameraManager->cameras()) {
++            if (QString::fromStdString(camera->id()).contains(QLatin1String(token))) {
++                devices.push_back(QString::fromStdString(camera->id()));
++            }
++        }
+     }
+-    devices.push_back(QStringLiteral("m52xq-logical"));
+ 
+     return devices;
+ }
+@@ -163,10 +181,22 @@
+ {
+     // camera names are more human-readable strings
+     QList<QString> devices;
+-    for (const auto &camera : m_cameraManager->cameras()) {
+-        devices.push_back(QString::fromStdString(std::string(*camera->properties().get(libcamera::properties::Model))));
++    for (const char *token : kM52xqOrder) {
++        if (QLatin1String(token) == QLatin1String("LOGICAL")) {
++            devices.push_back(QStringLiteral("Logical 0.5x-8x (auto)"));
++            continue;
++        }
++        for (const auto &camera : m_cameraManager->cameras()) {
++            if (QString::fromStdString(camera->id()).contains(QLatin1String(token))) {
++                const QString model = QString::fromStdString(std::string(*camera->properties().get(libcamera::properties::Model)));
++                const QString label = QLatin1String(token) == QLatin1String("camera@2d") ? QStringLiteral("Rear 64 MP")
++                    : QLatin1String(token) == QLatin1String("camera@1a") ? QStringLiteral("Front")
++                    : QLatin1String(token) == QLatin1String("camera@3f") ? QStringLiteral("Macro")
++                    : QStringLiteral("Ultrawide");
++                devices.push_back(QStringLiteral("%1 (%2)").arg(label, model));
++            }
++        }
+     }
+-    devices.push_back(QStringLiteral("Logical 0.5x-8x"));
+ 
+     return devices;
+ }
+@@ -560,6 +590,15 @@
+         }
+ 
+         m_cameraId = QString::fromStdString(cameras[0]->id());
++        // m52xq r17: start on the main camera, not on whatever libcamera lists first (the macro sensor); M52XQ_START_CAMERA
++        // (for example camera@10) picks another one for tests
++        const QString wanted = qEnvironmentVariableIsSet("M52XQ_START_CAMERA") ? qEnvironmentVariable("M52XQ_START_CAMERA") : QStringLiteral("camera@2d");
++        for (const auto &camera : cameras) {
++            if (QString::fromStdString(camera->id()).contains(wanted)) {
++                m_cameraId = QString::fromStdString(camera->id());
++                break;
++            }
++        }
+     }
+ 
+     // We may call startCameraInternal() multiple times on the same camera, add a check
+diff -ruN a/src/plasmacameramanager.cpp b/src/plasmacameramanager.cpp
+--- a/src/plasmacameramanager.cpp	2026-10-10 01:06:32.849163154 +0300
++++ b/src/plasmacameramanager.cpp	2026-10-10 02:03:55.770772479 +0300
+@@ -9,6 +9,8 @@
+ #include "plasmacamera/path.h"
+ #include "plasmacameramanager.h"
+ 
++#include <cmath>
++
+ #include <QFile>
+ #include <QFileInfo>
+ #include <QTimer>
+@@ -173,6 +175,7 @@
+     if (!m_recorder) {
+         return;
+     }
++    m_autofocus.captureStarted(); // m52xq r18: the lens stays where it is during the video
+ 
+     m_droppedFrames = false; // reset
+ 
+@@ -547,7 +550,9 @@
+             }
+         }
+     }
+-    m_autofocus.processFrame(image);
++    if (!isRecordingVideo()) {
++        m_autofocus.processFrame(image);
++    }
+     m_ae.processFrame(image);
+     // update the displayed ISO / exposure time a few times a second
+     if (m_ae.available() != m_lastAeAvailable || (m_ae.available() && ++m_aeNotifyCounter % 6 == 0)) {
+@@ -758,6 +763,7 @@
+ 
+ int PlasmaCameraManager::captureImageInternal()
+ {
++    m_autofocus.captureStarted();
+     const int newImageCaptureId = m_imageCaptureNum + 1;
+ 
+     if (!isReadyForCapture()) {
+@@ -978,17 +984,49 @@
+ }
+ 
+ // m52xq: digital zoom (pinch in the viewfinder): the centre 1/zoom of the frame, used for the viewfinder, photos and video.
++// m52xq r17: digital gain for dark scenes (the sensor is at its exposure and analogue gain limits): a multiplication of the
++// gamma coded colour channels, equal to gain^(1/2.2) in linear light. Used for the viewfinder, photos and video.
++static QImage applyDigitalGain(const QImage &image, double gain, double wb0 = 1.0, double wb2 = 1.0)
++{
++    if (image.isNull() || image.depth() != 32 || (gain < 1.02 && std::abs(wb0 - 1.0) < 0.03 && std::abs(wb2 - 1.0) < 0.03)) {
++        return image;
++    }
++    QImage out = image; // implicit sharing: detach (copy) before writing
++    out.detach();
++    const double k = std::pow(std::max(gain, 1.0), 1.0 / 2.2);
++    quint8 lut0[256], lut1[256], lut2[256];
++    for (int i = 0; i < 256; ++i) {
++        lut0[i] = quint8(qMin(255.0, i * k * wb0 + 0.5));
++        lut1[i] = quint8(qMin(255.0, i * k + 0.5));
++        lut2[i] = quint8(qMin(255.0, i * k * wb2 + 0.5));
++    }
++    const int w = out.width(), h = out.height();
++    for (int y = 0; y < h; ++y) {
++        uchar *p = out.scanLine(y);
++        for (int x = 0; x < w; ++x, p += 4) {
++            p[0] = lut0[p[0]];
++            p[1] = lut1[p[1]];
++            p[2] = lut2[p[2]];
++        }
++    }
++    return out;
++}
++
+ QImage PlasmaCameraManager::applyZoom(const QImage &image) const
+ {
+     const qreal zoom = effectiveZoom();
+-    if (image.isNull() || zoom <= 1.001) {
++    const double digital = m_ae.digitalGain();
++    if (image.isNull()) {
+         return image;
+     }
++    if (zoom <= 1.001) {
++        return applyDigitalGain(image, digital, m_ae.wbGain0(), m_ae.wbGain2());
++    }
+     const int w = qMax(16, static_cast<int>(image.width() / zoom) & ~1);
+     const int h = qMax(16, static_cast<int>(image.height() / zoom) & ~1);
+     const int x = ((image.width() - w) / 2) & ~1;
+     const int y = ((image.height() - h) / 2) & ~1;
+-    return image.copy(x, y, w, h);
++    return applyDigitalGain(image.copy(x, y, w, h), digital, m_ae.wbGain0(), m_ae.wbGain2());
+ }
+ 
+ float PlasmaCameraManager::outputOrientationDegrees() const
+diff -ruN a/src/sensorae.cpp b/src/sensorae.cpp
+--- a/src/sensorae.cpp	2026-10-10 01:06:32.849163154 +0300
++++ b/src/sensorae.cpp	2026-10-10 02:04:10.717070714 +0300
+@@ -4,9 +4,11 @@
+ 
+ #include <QDebug>
+ #include <QDir>
++#include <QStandardPaths>
+ #include <QFile>
+ #include <algorithm>
+ #include <cmath>
++#include <cstdio>
+ #include <fcntl.h>
+ #include <linux/v4l2-subdev.h>
+ #include <linux/videodev2.h>
+@@ -20,13 +22,18 @@
+     const char *name; // sub-device name prefix
+     int unity; // raw analogue gain value of 1x (linear sensors)
+     bool imx258;
++    double maxDigital; // m52xq r17: largest digital gain the application may add in a dark scene
++    double lineScale; // real line time / nominal line time, only for the displayed exposure time
++    bool extendable; // m52xq r22: may lengthen the frame in the dark
+ };
+ 
++// m52xq r21: every camera uses the settings of the main camera of the Pixel (Megapixels): the same target brightness (100),
++// the same limit of the digital gain (x8) and the same behaviour of the exposure; only the register units differ
+ const SensorInfo kSensors[] = {
+-    {"camera@2d", "s5kgw3", 64, false},
+-    {"camera@1a", "imx616", 72, false},
+-    {"camera@10", "imx258", 0, true},
+-    {"camera@3f", "gc5035", 64, false},
++    {"camera@2d", "s5kgw3", 64, false, 8.0, 1.0, false}, // r25: register byte order fixed in the driver, 30 fps like the sensor tables
++    {"camera@1a", "imx616", 72, false, 8.0, 2.0, false}, // ~15 fps
++    {"camera@10", "imx258", 0, true, 8.0, 1.0, true},
++    {"camera@3f", "gc5035", 64, false, 8.0, 1.0, true},
+ };
+ 
+ // Frames to wait after a change (sensor latency + pipeline latency).
+@@ -34,10 +41,12 @@
+ // Longest automatic exposure (30 fps preview): beyond that the gain is raised instead.
+ constexpr double kMaxAutoExposureUs = 33000.0;
+ // Mean luma target of the automatic exposure (0..255), lowered when highlights clip.
+-constexpr double kTargetMean = 104.0;
++constexpr double kTargetMean = 100.0; // the main camera of the Pixel (Lineage reference: mean luma ~100)
+ constexpr double kClipLuma = 246.0;
+ constexpr double kClipFractionLimit = 0.02;
+ constexpr double kMaxAutoMultiplier = 16.0;
++// Longest frame of a lengthened frame (microseconds of exposure)
++constexpr double kMaxExtendedExposureUs = 130000.0;
+ }
+ 
+ SensorAe::~SensorAe()
+@@ -98,6 +107,19 @@
+         }
+         m_gainMin = q.minimum;
+         m_gainMax = q.maximum;
++        if (m_extendable) {
++            q = {};
++            q.id = V4L2_CID_VBLANK;
++            if (::ioctl(m_fd, VIDIOC_QUERYCTRL, &q) == 0) {
++                m_vblankMin = q.minimum;
++                m_vblankMax = q.maximum;
++                m_vblankDefault = q.default_value;
++                getCtrl(V4L2_CID_VBLANK, &m_vblank);
++                m_expMaxDefault = m_expMax;
++            } else {
++                m_extendable = false;
++            }
++        }
+ 
+         // line time = (active width + horizontal blanking) / pixel rate
+         int hblank = 0;
+@@ -124,6 +146,9 @@
+                 << m_lineUs << "us";
+         getCtrl(V4L2_CID_EXPOSURE, &m_expRaw);
+         getCtrl(V4L2_CID_ANALOGUE_GAIN, &m_gainRaw);
++        m_saved = false;
++        m_stable = 0;
++        restoreMemory();
+         return true;
+     }
+     return false;
+@@ -136,10 +161,32 @@
+     }
+     m_cameraId = cameraId;
+     close();
++    // m52xq r23: libcamera has a sensor helper for the imx258 and its soft ISP writes exposure and gain to that sensor
++    // itself (a few ms after every write of ours: 834 lines and gain code 0 again). The ultrawide camera is therefore
++    // exposed by libcamera (Agc is enabled in imx258.yaml) and not by this class.
++    m_digital = m_digitalShown = 1.0;
++    m_digitalOnly = false;
++    m_wb0 = m_wb2 = 1.0;
++    if (cameraId.contains(QLatin1String("camera@10"))) {
++        // r24: libcamera exposes the sensor; here only a digital gain (the picture is very dark) and a gray world white balance
++        // (libcamera's white balance goes green in the dark)
++        m_maxDigital = 30.0;
++        m_extendable = false;
++        m_digitalOnly = true;
++        return;
++    }
+     for (const SensorInfo &s : kSensors) {
+         if (cameraId.contains(QLatin1String(s.camera))) {
+             m_model = s.imx258 ? GainModel::Imx258 : GainModel::Linear;
+             m_unity = s.unity;
++            m_maxDigital = s.maxDigital;
++            m_extendable = s.extendable;
++            m_maxAutoExpUs = kMaxAutoExposureUs;
++            m_lineScale = s.lineScale;
++            m_digital = 1.0;
++            m_digitalShown = 1.0;
++            m_expCapUs = 1e9;
++            m_raisedExposure = false;
+             if (open(QLatin1String(s.name))) {
+                 m_wait = kWaitFrames;
+                 m_frame = 0;
+@@ -149,6 +196,93 @@
+     }
+ }
+ 
++// m52xq r18: the last converged exposure, gain and digital gain of every camera: the next start (or camera switch)
++// begins there instead of in the dark with the sensor defaults and the stairs of a search from scratch
++QString SensorAe::memoryPath() const
++{
++    QString token = m_cameraId;
++    const int at = token.lastIndexOf(QLatin1Char('@'));
++    token = at >= 0 ? token.mid(at + 1) : QStringLiteral("camera");
++    QString base = qEnvironmentVariable("XDG_CACHE_HOME");
++    if (base.isEmpty()) {
++        base = QDir::homePath() + QStringLiteral("/.cache");
++    }
++    return base + QStringLiteral("/plasma-camera-3a-") + token;
++}
++
++void SensorAe::saveMemory()
++{
++    QFile f(memoryPath());
++    if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
++        f.write(QStringLiteral("exp=%1 gain=%2 dg=%3 cap=%4\n").arg(m_expRaw).arg(m_gainRaw).arg(m_digital, 0, 'f', 4).arg(m_expCapUs < 1e8 ? m_expCapUs : 0.0, 0, 'f', 1).toUtf8());
++    }
++    m_saved = true;
++}
++
++void SensorAe::restoreMemory()
++{
++    QFile f(memoryPath());
++    if (!f.open(QIODevice::ReadOnly)) {
++        return;
++    }
++    int exp = 0, gain = 0;
++    double dg = 1.0, cap = 0.0;
++    const int fields = std::sscanf(f.readAll().constData(), "exp=%d gain=%d dg=%lf cap=%lf", &exp, &gain, &dg, &cap);
++    if (fields < 3) {
++        return;
++    }
++    if (fields == 4 && cap > 0.0) {
++        m_expCapUs = cap;
++    }
++    exp = std::clamp(exp, m_expMin, m_expMax);
++    gain = std::clamp(gain, m_gainMin, m_gainMax);
++    if (setCtrl(V4L2_CID_EXPOSURE, exp)) {
++        m_expRaw = exp;
++    }
++    if (setCtrl(V4L2_CID_ANALOGUE_GAIN, gain)) {
++        m_gainRaw = gain;
++    }
++    m_digital = m_digitalShown = std::clamp(dg, 1.0, m_maxDigital);
++    m_wait = kWaitFrames + 1;
++    qInfo() << "SensorAe: restored exposure" << m_expRaw << "gain" << m_gainRaw << "digital" << m_digital;
++}
++
++void SensorAe::requeryExposureRange()
++{
++    v4l2_queryctrl q{};
++    q.id = V4L2_CID_EXPOSURE;
++    if (::ioctl(m_fd, VIDIOC_QUERYCTRL, &q) == 0) {
++        m_expMax = q.maximum;
++    }
++}
++
++// m52xq r22: lengthen (or shorten) the frame of a dim camera. Returns true when the frame length was changed.
++bool SensorAe::extendFrame(bool longer)
++{
++    if (!m_extendable || m_fd < 0) {
++        return false;
++    }
++    int target = m_vblank;
++    if (longer) {
++        // the longest frame whose exposure range does not exceed kMaxExtendedExposureUs
++        const int limit = std::min(m_vblankMax, m_vblankDefault + int(kMaxExtendedExposureUs / lineUs()) - m_expMaxDefault);
++        target = std::min(limit, std::max(m_vblank + 8, int(m_vblank * 1.35)));
++    } else {
++        target = std::max(m_vblankDefault, int(m_vblank / 1.35));
++    }
++    target = std::clamp(target, m_vblankMin, m_vblankMax);
++    if (target == m_vblank || !setCtrl(V4L2_CID_VBLANK, target)) {
++        return false;
++    }
++    m_vblank = target;
++    requeryExposureRange(); // the exposure maximum follows the frame length
++    m_maxAutoExpUs = std::min(m_expMax * lineUs(), m_vblank > m_vblankDefault ? kMaxExtendedExposureUs : kMaxAutoExposureUs);
++    qInfo() << "SensorAe: frame lengthened, vblank" << m_vblank << "exposure maximum" << m_expMax << "lines";
++    m_wait = kWaitFrames + 2;
++    m_sinceApply = 0;
++    return true;
++}
++
+ double SensorAe::rawToGain(int raw) const
+ {
+     if (m_model == GainModel::Imx258) {
+@@ -175,7 +309,7 @@
+ 
+ int SensorAe::iso() const
+ {
+-    return int(std::lround(rawToGain(m_gainRaw) * 100.0));
++    return int(std::lround(rawToGain(m_gainRaw) * m_digital * 100.0));
+ }
+ 
+ int SensorAe::minIso() const
+@@ -190,30 +324,43 @@
+ 
+ int SensorAe::exposureTime() const
+ {
+-    return int(std::lround(m_expRaw * lineUs()));
++    return int(std::lround(m_expRaw * displayLineUs()));
+ }
+ 
+ int SensorAe::minExposureTime() const
+ {
+-    return int(std::lround(m_expMin * lineUs()));
++    return int(std::lround(m_expMin * displayLineUs()));
+ }
+ 
+ int SensorAe::maxExposureTime() const
+ {
+-    return int(std::lround(m_expMax * lineUs()));
++    return int(std::lround(m_expMax * displayLineUs()));
+ }
+ 
+ void SensorAe::apply(double exposureUs, double multiplier)
+ {
+     const int expRaw = std::clamp(int(std::lround(exposureUs / lineUs())), m_expMin, m_expMax);
+     const int gainRaw = gainToRaw(multiplier);
++    const double beforeUs = m_expRaw * lineUs();
++    bool changed = false;
+     if (expRaw != m_expRaw && setCtrl(V4L2_CID_EXPOSURE, expRaw)) {
+         m_expRaw = expRaw;
++        changed = true;
+     }
+     if (gainRaw != m_gainRaw && setCtrl(V4L2_CID_ANALOGUE_GAIN, gainRaw)) {
+         m_gainRaw = gainRaw;
++        changed = true;
+     }
++    if (!changed) {
++        return; // nothing was written: the pictures do not change, do not wait for them (and do not reset the counters)
++    }
++    // for the cap learning: was the exposure raised, and how bright was the picture before
++    m_expBeforeUs = beforeUs;
++    m_meanBefore = m_lastMean;
++    m_raisedExposure = m_expRaw * lineUs() >= beforeUs * 1.15;
+     m_wait = kWaitFrames;
++    m_sinceApply = 0;
++    m_settleTries = 0;
+ }
+ 
+ void SensorAe::setIso(int iso)
+@@ -222,6 +369,7 @@
+         return;
+     }
+     m_isoManual = true;
++    m_digital = m_digitalShown = 1.0;
+     const int raw = gainToRaw(iso / 100.0);
+     if (setCtrl(V4L2_CID_ANALOGUE_GAIN, raw)) {
+         m_gainRaw = raw;
+@@ -240,7 +388,8 @@
+         return;
+     }
+     m_expManual = true;
+-    const int raw = std::clamp(int(std::lround(us / lineUs())), m_expMin, m_expMax);
++    m_digital = m_digitalShown = 1.0;
++    const int raw = std::clamp(int(std::lround(us / displayLineUs())), m_expMin, m_expMax);
+     if (setCtrl(V4L2_CID_EXPOSURE, raw)) {
+         m_expRaw = raw;
+     }
+@@ -252,11 +401,65 @@
+     m_expManual = false;
+ }
+ 
++void SensorAe::processDigitalOnly(const QImage &image)
++{
++    if (image.isNull() || image.depth() != 32 || image.width() < 32 || image.height() < 32) {
++        return;
++    }
++    if (++m_frame % 2) {
++        return;
++    }
++    const int w = image.width(), h = image.height();
++    const int stepX = std::max(8, w / 160), stepY = std::max(8, h / 120);
++    quint64 s0 = 0, s1 = 0, s2 = 0, count = 0;
++    for (int y = stepY / 2; y < h; y += stepY) {
++        const uchar *row = image.constScanLine(y);
++        for (int x = stepX / 2; x < w; x += stepX) {
++            const uchar *p = row + x * 4;
++            s0 += p[0];
++            s1 += p[1];
++            s2 += p[2];
++            ++count;
++        }
++    }
++    if (!count) {
++        return;
++    }
++    const double m0 = std::max(1.0, double(s0) / count), m1 = std::max(1.0, double(s1) / count), m2 = std::max(1.0, double(s2) / count);
++    const double mean = (m0 + 2.0 * m1 + m2) / 4.0;
++    // gray world: bring the channel means together (limits keep a coloured scene from being neutralised completely)
++    const double w0 = std::clamp(m1 / m0, 0.5, 3.0), w2 = std::clamp(m1 / m2, 0.5, 3.0);
++    m_wb0 += (w0 - m_wb0) * 0.12;
++    m_wb2 += (w2 - m_wb2) * 0.12;
++    // digital gain: the picture is measured without it, the encoded values are multiplied by gain^(1/2.2)
++    const double meanWb = std::max(1.0, (m0 * m_wb0 + 2.0 * m1 + m2 * m_wb2) / 4.0);
++    const double wanted = std::clamp(std::pow(kTargetMean / meanWb, 2.2), 1.0, m_maxDigital);
++    if (std::abs(wanted - m_digital) > 0.05 * m_digital) {
++        m_digital += (wanted - m_digital) * 0.3;
++    }
++    if (++m_logCount % 6 == 0) {
++        qInfo().nospace() << "SensorAe: libcamera-driven camera: mean " << mean << " target " << kTargetMean << " digital " << m_digital
++                          << " wb0 " << m_wb0 << " wb2 " << m_wb2;
++    }
++}
++
+ void SensorAe::processFrame(const QImage &image)
+ {
++    // the displayed digital gain approaches the wanted one every frame (about 0.3 s at 15 fps): no visible steps
++    if (std::abs(m_digitalShown - m_digital) > 0.002) {
++        const double ratio = m_digital / m_digitalShown;
++        m_digitalShown = (ratio > 0.99 && ratio < 1.01) ? m_digital : m_digitalShown * std::pow(ratio, 0.2);
++    }
++    if (m_digitalOnly) {
++        processDigitalOnly(image);
++        return;
++    }
+     if (m_fd < 0 || image.isNull() || (m_isoManual && m_expManual)) {
+         return;
+     }
++    if (m_sinceApply < 1000) {
++        ++m_sinceApply;
++    }
+     if (m_wait > 0) {
+         --m_wait;
+         return;
+@@ -288,18 +491,87 @@
+     const double mean = std::max(1.0, double(sum) / count);
+     const double clipFraction = double(clipped) / count;
+ 
+-    // lower the target when highlights clip (no blown-out skies), never raise it above the base target
+-    double target = kTargetMean;
+-    if (clipFraction > kClipFractionLimit) {
+-        target *= std::max(0.55, 1.0 - (clipFraction - kClipFractionLimit) * 5.0);
++    // m52xq r19: a change of exposure or gain reaches the pictures a few frames later. Judge again only when the
++    // brightness has stopped changing (or after a time-out): judging the old picture again and again made the exposure
++    // overshoot and swing around the target (the viewfinder pulsed lighter and darker).
++    if (m_sinceApply < 40 && m_lastMean > 0.0 && std::abs(mean - m_lastMean) > 0.05 * m_lastMean && m_settleTries < 6) {
++        m_lastMean = mean;
++        ++m_settleTries;
++        return;
++    }
++    m_lastMean = mean;
++    m_settleTries = 0;
++
++    // m52xq r20: the exposure was raised by 15 % or more, the picture is steady and still not brighter than before:
++    // the sensor does not expose longer than this. Keep the exposure there, the rest comes from gain.
++    if (m_raisedExposure && m_meanBefore > 0.0) {
++        if (mean < kTargetMean * 0.9 && mean < m_meanBefore * 1.04 && m_sinceApply >= 4) {
++            m_expCapUs = std::max(m_expMin * lineUs(), m_expBeforeUs);
++            qInfo() << "SensorAe: exposure above" << m_expCapUs / displayLineUs() * lineUs() << "us has no effect, using gain";
++        }
++        m_raisedExposure = false;
++    }
++
++    // lower the target when highlights clip (no blown-out skies), with a hysteresis and a slowly moving value so that
++    // the target itself does not flip the exposure back and forth
++    if (clipFraction > 2.0 * kClipFractionLimit) {
++        m_clipping = true;
++    } else if (clipFraction < 0.75 * kClipFractionLimit) {
++        m_clipping = false;
++    }
++    double wantedTarget = kTargetMean;
++    if (m_clipping) {
++        wantedTarget *= std::max(0.7, 1.0 - (clipFraction - kClipFractionLimit) * 4.0);
++    }
++    m_targetSmooth += (wantedTarget - m_targetSmooth) * 0.15;
++    const double target = m_targetSmooth;
++
++    // m52xq r17: when the sensor (exposure at the limit, analogue gain at the limit) cannot reach the target, the
++    // rest is added as digital gain by the application. The measured frames do not contain it, so the wanted value
++    // follows directly from the mean, approached smoothly. m52xq r19: only from pictures that were taken with the
++    // present sensor settings (otherwise the new exposure is multiplied with the brightness of the old picture).
++    if (!m_expManual && !m_isoManual && m_maxDigital > 1.0 && m_sinceApply >= 8) {
++        const double capTotal = std::max(m_expMin * lineUs(), std::min({m_expMax * lineUs(), m_maxAutoExpUs, m_expCapUs})) * std::min(rawToGain(m_gainMax), kMaxAutoMultiplier);
++        const double needTotal = m_expRaw * lineUs() * rawToGain(m_gainRaw) * (target / mean);
++        const double wanted = std::clamp(needTotal / capTotal, 1.0, m_maxDigital);
++        if (std::abs(wanted - m_digital) > 0.05 * m_digital) {
++            m_digital += (wanted - m_digital) * 0.4;
++        }
++        if (m_digital < 1.0) {
++            m_digital = 1.0;
++        }
++    }
++    // m52xq r22: dim camera: exposure, gain and digital gain are all at their limits and it is still too dark -> longer
++    // frame; bright again -> back to the normal length
++    if (m_extendable && !m_expManual && !m_isoManual && m_sinceApply >= 8) {
++        const double maxExpNow = std::max(m_expMin * lineUs(), std::min({m_expMax * lineUs(), m_maxAutoExpUs, m_expCapUs}));
++        const bool atLimits = m_expRaw * lineUs() >= 0.9 * maxExpNow && rawToGain(m_gainRaw) >= 0.9 * std::min(rawToGain(m_gainMax), kMaxAutoMultiplier) &&
++                              m_digital >= 0.9 * m_maxDigital;
++        if (atLimits && mean < 0.75 * target && extendFrame(true)) {
++            m_expCapUs = 1e9; // a longer frame allows a longer exposure: the learned cap does not apply any more
++            return;
++        }
++        if (m_vblank > m_vblankDefault && mean > 1.2 * target && m_expRaw * lineUs() < 0.5 * maxExpNow && extendFrame(false)) {
++            return;
++        }
+     }
+     double ratio = target / mean;
+     // damping, and a dead band to avoid hunting
+     ratio = std::pow(ratio, 0.55);
+-    if (std::abs(ratio - 1.0) < 0.06 && clipFraction <= kClipFractionLimit) {
++    if (++m_logCount % 4 == 0) {
++        qInfo().nospace() << "SensorAe: mean " << mean << " target " << target << " exposure " << m_expRaw << " gain " << m_gainRaw
++                          << " digital " << m_digital << " clip " << clipFraction;
++    }
++    if (std::abs(ratio - 1.0) < 0.08) {
++        if (++m_stable >= 6 && !m_saved) {
++            saveMemory(); // converged: remember it for the next start
++        }
+         return;
+     }
+-    ratio = std::clamp(ratio, 0.5, 2.0);
++    m_stable = 0;
++    m_saved = false;
++    // m52xq r18: small steps (a big sensor jump shows as a visible stair in the viewfinder)
++    ratio = std::clamp(ratio, 0.7, 1.5);
+ 
+     const double curExp = m_expRaw * lineUs();
+     const double curGain = rawToGain(m_gainRaw);
+@@ -307,7 +579,7 @@
+     const double minGain = rawToGain(m_gainMin);
+     const double maxGain = std::min(rawToGain(m_gainMax), kMaxAutoMultiplier);
+     const double minExp = m_expMin * lineUs();
+-    const double maxExp = std::min(m_expMax * lineUs(), kMaxAutoExposureUs);
++    const double maxExp = std::max(minExp, std::min({m_expMax * lineUs(), m_maxAutoExpUs, m_expCapUs}));
+ 
+     double exposure = curExp, gain = curGain;
+     if (m_expManual) {
+diff -ruN a/src/sensorae.h b/src/sensorae.h
+--- a/src/sensorae.h	2026-10-10 01:06:32.849163154 +0300
++++ b/src/sensorae.h	2026-10-10 02:03:55.770772479 +0300
+@@ -21,6 +21,15 @@
+ 
+     bool available() const { return m_fd >= 0; }
+ 
++    // m52xq r17: digital gain (>= 1) the frames need on top of the sensor exposure and analogue gain in a dark scene;
++    // applied by the application to the viewfinder, photos and video
++    // (the value that is shown: it approaches the wanted one smoothly every frame, no visible steps)
++    double digitalGain() const { return m_digitalShown; }
++    // m52xq r24: channel gains (gray world) for the cameras whose sensor is driven by libcamera (ultrawide); index 0 / 2 of the
++    // frame bytes, 1 for the green channel
++    double wbGain0() const { return m_wb0; }
++    double wbGain2() const { return m_wb2; }
++
+     // ISO 100 = 1x analogue gain
+     int iso() const;
+     int minIso() const;
+@@ -51,6 +60,9 @@
+     double rawToGain(int raw) const;
+     double lineUs() const;
+     void apply(double exposureUs, double multiplier);
++    QString memoryPath() const;
++    void saveMemory();
++    void restoreMemory();
+ 
+     int m_fd = -1;
+     QString m_cameraId;
+@@ -63,4 +75,34 @@
+     bool m_expManual = false;
+     int m_wait = 0;
+     int m_frame = 0;
++    double m_digital = 1.0; // wanted
++    double m_digitalShown = 1.0; // applied to the picture
++    int m_stable = 0;
++    bool m_saved = false;
++    double m_lastMean = 0.0; // brightness of the previous judged frame (has the last change arrived?)
++    int m_sinceApply = 1000; // frames since the sensor settings were changed
++    int m_settleTries = 0;
++    double m_targetSmooth = 100.0;
++    bool m_clipping = false;
++    int m_logCount = 0;
++    bool m_digitalOnly = false; // the sensor is driven by libcamera, only the digital gain and the white balance are done here
++    double m_wb0 = 1.0, m_wb2 = 1.0;
++    void processDigitalOnly(const QImage &image);
++    // m52xq r20: the real maximum exposure (microseconds). The sensors cannot expose longer than their frame length allows
++    // (the rear sensor ignores everything above ~100 lines at its 8.5 fps frame): learned at run time, remembered
++    double m_expCapUs = 1e9;
++    // m52xq r22: dim cameras (macro, ultrawide) lengthen the frame (V4L2 VBLANK) when exposure, gain and digital gain are
++    // not enough: up to ~130 ms of exposure at ~7 fps, back to the default length when the scene is bright
++    bool m_extendable = false;
++    int m_vblank = 0, m_vblankMin = 0, m_vblankMax = 0, m_vblankDefault = 0;
++    int m_expMaxDefault = 0; // exposure maximum at the default frame length
++    double m_maxAutoExpUs = 33000.0;
++    bool extendFrame(bool longer);
++    void requeryExposureRange();
++    double m_expBeforeUs = 0.0;
++    double m_meanBefore = 0.0;
++    bool m_raisedExposure = false;
++    double m_maxDigital = 1.0;
++    double m_lineScale = 1.0; // real line time / nominal line time (the sensors run slower than their tables say)
++    double displayLineUs() const { return m_lineUs * m_lineScale; }
+ };

@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: None
+# SPDX-License-Identifier: CC0-1.0
+# M52XQ: overrides /usr/share/applications/org.kde.plasma.camera.desktop (/usr/local/share comes first in XDG_DATA_DIRS):
+# the camera application is started through m52xq-plasma-camera, which closes Megapixels completely first
+
+[Desktop Entry]
+Comment=
+Encoding=UTF-8
+Keywords=
+Name=Camera
+GenericName=Camera Application
+Type=Application
+Icon=camera-photo
+Exec=/usr/local/bin/m52xq-plasma-camera
+Categories=Qt;KDE;AudioVideo;
+X-KDE-FormFactor=desktop;tablet;handset;

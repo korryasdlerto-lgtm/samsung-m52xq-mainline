@@ -1,0 +1,34 @@
+#!/bin/sh
+# M52XQ: turn the screen on when a notification (incoming SMS, messages, ...) arrives while it is off. Plasma Mobile leaves the
+# display blank for a notification; the system itself already wakes from sleep for calls/SMS (net/qrtr wake filter).
+# v42: notifications of plasma-nm ("Network Management": connection activated/deactivated) are ignored - after a sleep the mobile
+# data reconnect on every dark wake-up, and that notification kept the phone awake with the display on (24.10 19:34). The app
+# name of every notification goes to the journal (journalctl --user -u m52xq-notify-screen-wake).
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
+pending=0
+dbus-monitor --session "interface='org.freedesktop.Notifications',member='Notify'" 2>/dev/null | while read -r line; do
+	case "$line" in
+	*"member=Notify"*)
+		pending=1
+		continue
+		;;
+	esac
+	# the first argument of Notify is the app name
+	[ "$pending" = 1 ] || continue
+	case "$line" in
+	string\ *) ;;
+	*) continue ;;
+	esac
+	pending=0
+	app=${line#string \"}
+	app=${app%\"}
+	case "$app" in
+	"Network Management" | "Управление сетью")
+		echo "notification from \"$app\": ignored"
+		continue
+		;;
+	esac
+	# в44 (01.11, user): a message (SMS, Telegram, ...) in sleep / with the display off gives only the sound
+	# (m52xq-notify-sound), the display stays off; calls still turn it on (m52xq-call-screen-wake, plasma-dialer)
+	echo "notification from \"$app\": display kept off"
+done

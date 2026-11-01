@@ -1,0 +1,7 @@
+[Unit]
+Description=M52XQ: cellular flight mode %i (SIM cards and modem radio)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/m52xq-flight-mode %i
+TimeoutStartSec=300

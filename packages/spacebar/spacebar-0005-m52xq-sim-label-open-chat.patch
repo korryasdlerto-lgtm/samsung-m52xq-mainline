@@ -1,0 +1,28 @@
+--- a/src/messagemodel.cpp
++++ b/src/messagemodel.cpp
+@@ -278,7 +278,24 @@
+         }
+     }
+     const QString key = message.sentByMe ? QString(SL("out:") + message.id) : QString(SL("in:") + QString::number(message.datetime.toMSecsSinceEpoch()));
+-    return m_sims.value(key, 0);
++    const int sim = m_sims.value(key, 0);
++    if (sim || message.sentByMe) {
++        return sim;
++    }
++    // m52xq r54: a message received while its chat is open is saved as read with the receive time instead of the network
++    // time (ChannelLogger::saveMessage, "read && < 60 s"), so the "in:" key (network time) does not match: take the closest
++    // "in:" entry up to 2 min before the message
++    const qint64 t = message.datetime.toMSecsSinceEpoch();
++    qint64 best = -1;
++    int bestSim = 0;
++    for (auto it = m_sims.cbegin(); it != m_sims.cend(); ++it) {
++        const qint64 k = it.key().startsWith(SL("in:")) ? it.key().mid(3).toLongLong() : -1;
++        if (k >= 0 && k <= t && t - k <= 120000 && k > best) {
++            best = k;
++            bestSim = it.value();
++        }
++    }
++    return bestSim;
+ }
+
+ void MessageModel::setSendSim(int sim)

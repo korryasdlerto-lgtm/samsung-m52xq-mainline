@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+# m52xq: network modes of one SIM subscription of the DSDS modem (qmicli can only talk to SIM1: it has no NAS
+# "Bind Subscription"). Own QRTR client: NAS Bind Subscription 0x0045 (0 = SIM1, 1 = SIM2), then
+#   m52xq-nas-mode <sub> set gsm[|umts|lte|5gnr]   Set System Selection Preference 0x0033, mode TLV 0x11 (permanent)
+#   m52xq-nas-mode <sub> get                       Get System Selection Preference 0x0034
+#   m52xq-nas-mode <sub> gsm                       exit 0 if the subscription is registered on GSM (System Info 0x004D)
+import socket, struct, sys, time
+
+AF_QIPCRTR = 42
+NAS = 3
+MODES = {'cdma': 0x01, 'hdr': 0x02, 'gsm': 0x04, 'umts': 0x08, 'lte': 0x10, 'td-scdma': 0x20, '5gnr': 0x40}
+
+
+def parse_tlvs(b):
+    out, i = {}, 0
+    while i + 3 <= len(b):
+        t, ln = struct.unpack_from('<BH', b, i)
+        out[t] = b[i + 3:i + 3 + ln]
+        i += 3 + ln
+    return out
+
+
+def tlv(t, fmt, *v):
+    d = struct.pack('<' + fmt, *v)
+    return struct.pack('<BH', t, len(d)) + d
+
+
+class Nas:
+    def __init__(self):
+        self.s = socket.socket(AF_QIPCRTR, socket.SOCK_DGRAM)
+        self.s.sendto(struct.pack('<IIIII', 10, NAS, 0, 0, 0), (self.s.getsockname()[0], 0xfffffffe))
+        self.s.settimeout(5)
+        while True:
+            data, _ = self.s.recvfrom(4096)
+            cmd, svc, inst, node, port = struct.unpack_from('<IIIII', data)
+            if cmd == 4 and svc == NAS and node == 0:
+                self.addr = (node, port)
+                break
+            if cmd == 4 and svc == 0:
+                sys.exit('NAS service not found')
+        self.txn = 0
+
+    def req(self, msg, payload=b''):
+        self.txn += 1
+        self.s.sendto(struct.pack('<BHHH', 0, self.txn, msg, len(payload)) + payload, self.addr)
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            self.s.settimeout(max(0.1, deadline - time.time()))
+            try:
+                data, src = self.s.recvfrom(65536)
+            except socket.timeout:
+                break
+            flags, txn, mid, ln = struct.unpack_from('<BHHH', data)
+            if src == self.addr and flags == 2 and txn == self.txn:
+                t = parse_tlvs(data[7:7 + ln])
+                res, err = struct.unpack('<HH', t.get(2, b'\0\0\0\0'))
+                if res:
+                    sys.exit('NAS 0x%04X: QMI error %d' % (msg, err))
+                return t
+        sys.exit('NAS 0x%04X: timeout' % msg)
+
+
+def main():
+    if len(sys.argv) < 3 or sys.argv[1] not in ('0', '1'):
+        sys.exit(__doc__ or 'usage: m52xq-nas-mode 0|1 get|gsm|set <modes>')
+    sub, cmd = int(sys.argv[1]), sys.argv[2]
+    n = Nas()
+    n.req(0x0045, tlv(0x01, 'B', sub))
+    if cmd == 'set':
+        mask = 0
+        for m in sys.argv[3].split('|'):
+            mask |= MODES[m]
+        n.req(0x0033, tlv(0x11, 'H', mask) + tlv(0x17, 'B', 1))
+    elif cmd == 'get':
+        t = n.req(0x0034)
+        mask = struct.unpack('<H', t[0x11])[0] if 0x11 in t else 0
+        print('|'.join(m for m, b in MODES.items() if mask & b) or 'none')
+    elif cmd == 'gsm':
+        # System Info: TLV 0x12 = GSM service status (srv_status 2 = service, true status, preferred data path)
+        t = n.req(0x004D)
+        sys.exit(0 if 0x12 in t and t[0x12][0] == 2 else 1)
+    else:
+        sys.exit('unknown command ' + cmd)
+
+
+main()

@@ -1,0 +1,20 @@
+[Unit]
+Description=Create /mnt/userdata/{varlog,coredumps,home,apk-cache} before their bind-mounts (needed on a freshly-wiped userdata)
+DefaultDependencies=no
+RequiresMountsFor=/mnt/userdata
+Before=var-log.mount var-lib-systemd-coredump.mount home-user.mount var-cache-apk.mount local-fs.target
+After=mnt-userdata.mount
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# home is special: /home/user already has real content baked in at
+# flash time (kscreenlockerrc etc, injected by update-binary straight
+# onto the system partition). If /mnt/userdata/home doesn't exist yet
+# (fresh/wiped userdata), seed it with a one-time copy of that content
+# BEFORE the bind-mount takes over, so it isn't shadowed by an empty
+# directory on every subsequent boot.
+ExecStart=/bin/sh -c 'mkdir -p /mnt/userdata/varlog /mnt/userdata/coredumps /mnt/userdata/apk-cache; if [ ! -d /mnt/userdata/home ]; then mkdir -p /mnt/userdata/home; cp -a /home/user/. /mnt/userdata/home/ 2>/dev/null; chown -R 10000:10000 /mnt/userdata/home; fi'
+
+[Install]
+WantedBy=local-fs.target

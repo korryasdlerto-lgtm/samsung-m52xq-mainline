@@ -1,0 +1,19 @@
+# M52XQ: mobile data over IPA (qmapmux0.0 on rmnet_ipa0). lifecell APN "internet";
+# the network refuses IPv6 ("ip-version-mismatch: IPv4 only allowed"), so IPv4 only.
+[connection]
+id=Мобильный интернет
+uuid=9b1f6c2e-3a8d-4e7b-9c51-6d2f0a4e8b13
+type=gsm
+autoconnect=true
+
+[gsm]
+apn=internet
+
+[ipv4]
+method=auto
+
+[ipv6]
+addr-gen-mode=default
+method=disabled
+
+[proxy]

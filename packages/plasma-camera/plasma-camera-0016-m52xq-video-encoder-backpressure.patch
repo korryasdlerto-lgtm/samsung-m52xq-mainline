@@ -1,0 +1,1923 @@
+diff -ruN a/src/CMakeLists.txt b/src/CMakeLists.txt
+--- a/src/CMakeLists.txt	2026-10-19 02:47:08.891586386 +0300
++++ b/src/CMakeLists.txt	2026-10-19 15:45:16.980405434 +0300
+@@ -17,6 +17,8 @@
+     plasmacamera/worker.cpp
+     m52xq/photo_gpu.c
+     m52xq/rawphoto.c
++    m52xq/videoenc.cpp
++    m52xq/rawvideo.cpp
+     resources.qrc
+ )
+ 
+diff -ruN a/src/contents/ui/camera/CameraControls.qml b/src/contents/ui/camera/CameraControls.qml
+--- a/src/contents/ui/camera/CameraControls.qml	2025-12-05 16:55:48.000000000 +0200
++++ b/src/contents/ui/camera/CameraControls.qml	2026-10-19 03:45:31.350536817 +0300
+@@ -69,6 +69,8 @@
+ 
+                     videoRecorder: root.captureSession.recorder
+                     isSavingVideo: root.captureSession.isSavingVideo
++                    lastVideoUrl: root.captureSession.lastVideoUrl
++                    lastVideoThumbUrl: root.captureSession.lastVideoThumbUrl
+ 
+                     Component.onCompleted: {
+                         root.captureSession.imageSaved.connect(updatePreview)
+diff -ruN a/src/contents/ui/camera/CameraPage.qml b/src/contents/ui/camera/CameraPage.qml
+--- a/src/contents/ui/camera/CameraPage.qml	2026-10-19 02:06:11.494551840 +0300
++++ b/src/contents/ui/camera/CameraPage.qml	2026-10-19 03:20:57.252149888 +0300
+@@ -263,7 +263,7 @@
+             anchors.bottomMargin: (root.wide ? 0 : controlContainer.height) + Kirigami.Units.largeSpacing
+ 
+             visible: root.captureSession.isRecordingVideo
+-            duration: root.captureSession.recorder.duration
++            duration: root.captureSession.recordingDuration // m52xq r39: also for the own encoder
+         }
+     }
+ }
+diff -ruN a/src/contents/ui/camera/LandscapeControls.qml b/src/contents/ui/camera/LandscapeControls.qml
+--- a/src/contents/ui/camera/LandscapeControls.qml	2026-10-17 17:25:12.502573411 +0300
++++ b/src/contents/ui/camera/LandscapeControls.qml	2026-10-19 03:45:31.350536817 +0300
+@@ -100,6 +100,8 @@
+ 
+                 videoRecorder: root.captureSession.recorder
+                 isSavingVideo: root.captureSession.isSavingVideo
++                lastVideoUrl: root.captureSession.lastVideoUrl
++                lastVideoThumbUrl: root.captureSession.lastVideoThumbUrl
+ 
+                 Component.onCompleted: root.captureSession.imageSaved.connect(updatePreview)
+                 function updatePreview(_, fileName: string) {
+diff -ruN a/src/contents/ui/camera/PreviewArea.qml b/src/contents/ui/camera/PreviewArea.qml
+--- a/src/contents/ui/camera/PreviewArea.qml	2025-12-05 16:55:48.000000000 +0200
++++ b/src/contents/ui/camera/PreviewArea.qml	2026-10-19 03:45:31.350536817 +0300
+@@ -18,6 +18,8 @@
+ 
+     property bool showVideoPreview: false // when set to true, the preview for the videoRecorder is shown, if false for the imageCapture
+     property bool videoThumbnailRequested: false
++    property string lastVideoUrl // m52xq r41: video of the own encoder (the Qt recorder is not used for it)
++    property string lastVideoThumbUrl // r42: its first frame as a small JPEG
+     property string imageUrl  // TODO: set default image url to some placeholder? (the last picture you took)
+ 
+     function setPhotoPreview() {
+@@ -46,11 +48,18 @@
+         videoRecorder.recorderStateChanged.connect(createVideoThumbnail);
+     }
+ 
++    onLastVideoUrlChanged: {
++        if (lastVideoUrl.length > 0) {
++            videoThumbnailRequested = false; // r42: the JPEG is shown, the 4K video is not decoded here
++            showVideoPreview = true;
++        }
++    }
++
+     MouseArea {
+         anchors.fill: parent
+         onClicked: {
+             if (showVideoPreview)
+-                Qt.openUrlExternally(videoRecorder.actualLocation);
++                Qt.openUrlExternally(preview.lastVideoUrl.length > 0 ? preview.lastVideoUrl : videoRecorder.actualLocation);
+             else
+                 Qt.openUrlExternally(preview.imageUrl);
+         }
+@@ -138,6 +147,15 @@
+                 fillMode: VideoOutput.PreserveAspectCrop
+             }
+ 
++            Image {
++                anchors.fill: parent
++                visible: preview.lastVideoThumbUrl.length > 0
++                source: preview.lastVideoThumbUrl
++                fillMode: Image.PreserveAspectCrop
++                asynchronous: true
++                cache: false
++            }
++
+             Controls.BusyIndicator {
+                 id: thumbnailBusyIdicator
+ 
+diff -ruN a/src/lensautofocus.cpp b/src/lensautofocus.cpp
+--- a/src/lensautofocus.cpp	2026-10-19 02:06:11.494551840 +0300
++++ b/src/lensautofocus.cpp	2026-10-21 21:16:21.426846731 +0300
+@@ -117,6 +117,15 @@
+     return kMacro;
+ }
+ 
++void LensAutofocus::reapply()
++{
++    if (m_available && m_current >= 0) {
++        const int pos = m_current;
++        setPosition(pos);
++        qInfo() << "Autofocus: lens position" << pos << "written again";
++    }
++}
++
+ void LensAutofocus::setManual(int position)
+ {
+     if (!m_available) {
+diff -ruN a/src/lensautofocus.h b/src/lensautofocus.h
+--- a/src/lensautofocus.h	2026-10-19 02:06:11.494551840 +0300
++++ b/src/lensautofocus.h	2026-10-22 01:07:19.557334365 +0300
+@@ -23,11 +23,15 @@
+     void focusAt(double u, double v);
+     // m52xq r18: a photo is taken or a video starts: finish the search at the best position found so far and leave the lens alone
+     void captureStarted();
++    // m52xq r46: write the present lens position again (the camera was reconfigured, e.g. the raw 4K stream)
++    void reapply();
+ 
+     // m52xq: manual focus (the lens belongs to the rear main camera only)
+     bool available() const { return m_available; }
+     bool manual() const { return m_manual; }
+     int position() const { return m_current; }
++    // m52xq r54: a search (tap to focus) is running
++    bool searching() const { return m_state == State::Settling || m_state == State::Scanning; }
+     static int minPosition();
+     static int maxPosition();
+     void setManual(int position);
+diff -ruN a/src/m52xq/rawvideo.cpp b/src/m52xq/rawvideo.cpp
+--- a/src/m52xq/rawvideo.cpp	1970-01-01 02:00:00.000000000 +0200
++++ b/src/m52xq/rawvideo.cpp	2026-10-22 02:36:40.516129139 +0300
+@@ -0,0 +1,651 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++// m52xq: see rawvideo.h
++
++#include "rawvideo.h"
++#include "videoenc.h"
++
++#include <QDebug>
++#include <QFile>
++
++#include <epoxy/egl.h>
++#include <epoxy/gl.h>
++
++#include <algorithm>
++#include <chrono>
++#include <cmath>
++#include <cstring>
++
++#ifndef DRM_FORMAT_R8
++#define DRM_FORMAT_R8 0x20203852 // fourcc 'R8  ' (drm_fourcc.h)
++#endif
++#ifndef EGL_PLATFORM_SURFACELESS_MESA
++#define EGL_PLATFORM_SURFACELESS_MESA 0x31DD
++#endif
++
++namespace
++{
++const char *kVertex =
++    "#version 300 es\n"
++    "void main() {\n"
++    "    vec2 p = vec2(float((gl_VertexID & 1) * 2 - 1), float((gl_VertexID >> 1) * 2 - 1));\n"
++    "    gl_Position = vec4(p, 0.0, 1.0);\n"
++    "}\n";
++
++// shared: 8 most significant bits of the packed RAW10 pixel, bilinear demosaic at an integer position, colour
++const char *kDevelopCommon =
++    "#version 300 es\n"
++    "precision highp float;\n"
++    "precision highp int;\n"
++    "uniform highp sampler2D raw;\n"
++    "uniform ivec2 size;\n"
++    "uniform ivec2 redPos;\n"   // position of the red pixel in the 2x2 cell
++    "uniform vec3 gains;\n"     // white balance x digital gain
++    "uniform float black;\n"
++    // r52: the camera dma-buf holds 'fold' sensor rows per texture row (its pitch has to be a multiple of 64 bytes)
++    "uniform int fold;\n"
++    "uniform int rawStride;\n"
++    "out vec4 frag;\n"
++    "float px(ivec2 p) {\n"
++    "    p = clamp(p, ivec2(0), size - 1);\n"
++    "    int col = (p.x >> 2) * 5 + (p.x & 3);\n"
++    "    return texelFetch(raw, ivec2(col + (p.y % fold) * rawStride, p.y / fold), 0).r;\n"
++    "}\n"
++    "vec3 develop(ivec2 p) {\n"
++    "    float c = px(p);\n"
++    "    float n = px(p + ivec2(0, -1)), s = px(p + ivec2(0, 1)), e = px(p + ivec2(1, 0)), w = px(p + ivec2(-1, 0));\n"
++    "    float d = (px(p + ivec2(-1, -1)) + px(p + ivec2(1, -1)) + px(p + ivec2(-1, 1)) + px(p + ivec2(1, 1))) * 0.25;\n"
++    "    int rx = (p.x - redPos.x) & 1, ry = (p.y - redPos.y) & 1;\n"
++    "    vec3 rgb;\n"
++    "    if (rx == 0 && ry == 0) rgb = vec3(c, (n + s + e + w) * 0.25, d);\n"
++    "    else if (rx == 1 && ry == 1) rgb = vec3(d, (n + s + e + w) * 0.25, c);\n"
++    "    else if (ry == 0) rgb = vec3((e + w) * 0.5, c, (n + s) * 0.5);\n"
++    "    else rgb = vec3((n + s) * 0.5, c, (e + w) * 0.5);\n"
++    "    rgb = max(rgb - vec3(black), vec3(0.0)) / (1.0 - black) * gains;\n"
++    "    vec3 g = pow(clamp(rgb, 0.0, 1.0), vec3(1.0 / 2.2));\n"
++    // r46: the look of Megapixels / the viewfinder (the video was flat and grey): S-curve k=0.5, +25 % saturation
++    "    g += 0.5 * (g * g * (3.0 - 2.0 * g) - g);\n"
++    "    float l = dot(g, vec3(0.299, 0.587, 0.114));\n"
++    "    return clamp(vec3(l) + (g - vec3(l)) * 1.25, 0.0, 1.0);\n"
++    "}\n";
++
++// pass 1: the upright video frame; source position = a0 + ax * x + ay * y (crop, zoom, rotation, mirror)
++const char *kVideoMain =
++    "uniform vec2 a0;\n"
++    "uniform vec2 ax;\n"
++    "uniform vec2 ay;\n"
++    // r57: smaller videos (FHD from the 4624 wide frame): the mean of 4 source points per output pixel (no aliasing)
++    "uniform int supersample;\n"
++    "void main() {\n"
++    "    vec2 o = gl_FragCoord.xy;\n"
++    "    vec2 s = a0 + ax * o.x + ay * o.y;\n"
++    "    if (supersample == 0) {\n"
++    "        frag = vec4(develop(ivec2(floor(s))), 1.0);\n"
++    "        return;\n"
++    "    }\n"
++    "    vec2 qx = ax * 0.25, qy = ay * 0.25;\n"
++    "    vec3 c = develop(ivec2(floor(s - qx - qy))) + develop(ivec2(floor(s + qx - qy)))\n"
++    "           + develop(ivec2(floor(s - qx + qy))) + develop(ivec2(floor(s + qx + qy)));\n"
++    "    frag = vec4(c * 0.25, 1.0);\n"
++    "}\n";
++
++// viewfinder: a quarter of the frame in the camera orientation
++const char *kViewMain =
++    "void main() {\n"
++    "    ivec2 o = ivec2(gl_FragCoord.xy);\n"
++    "    frag = vec4(develop(o * 4 + ivec2(1, 1)), 1.0);\n"
++    "}\n";
++
++// pass 2: RGBA -> NV12 (BT.709 limited range); output row r = Y row r, then the UV rows
++const char *kPack =
++    "#version 300 es\n"
++    "precision highp float;\n"
++    "precision highp int;\n"
++    "uniform highp sampler2D tex;\n"
++    "uniform ivec2 outSize;\n"
++    "out vec4 frag;\n"
++    "float y8(vec3 c) { return (16.0 + 219.0 * dot(c, vec3(0.2126, 0.7152, 0.0722))) / 255.0; }\n"
++    "vec2 uv8(vec3 c) { float y = dot(c, vec3(0.2126, 0.7152, 0.0722));\n"
++    "    return vec2(128.0 + 224.0 * (c.b - y) / 1.8556, 128.0 + 224.0 * (c.r - y) / 1.5748) / 255.0; }\n"
++    "void main() {\n"
++    "    ivec2 f = ivec2(gl_FragCoord.xy);\n"
++    "    if (f.y < outSize.y) {\n"
++    "        int x = f.x * 4;\n"
++    "        frag = vec4(y8(texelFetch(tex, ivec2(x, f.y), 0).rgb), y8(texelFetch(tex, ivec2(x + 1, f.y), 0).rgb),\n"
++    "                    y8(texelFetch(tex, ivec2(x + 2, f.y), 0).rgb), y8(texelFetch(tex, ivec2(x + 3, f.y), 0).rgb));\n"
++    "    } else {\n"
++    "        int r = (f.y - outSize.y) * 2;\n"
++    "        int x = f.x * 4;\n"
++    "        vec2 a = uv8(texelFetch(tex, ivec2(x, r), 0).rgb);\n"
++    "        vec2 b = uv8(texelFetch(tex, ivec2(x + 2, r), 0).rgb);\n"
++    "        frag = vec4(a.x, a.y, b.x, b.y);\n"
++    "    }\n"
++    "}\n";
++
++GLuint compile(GLenum type, const std::string &src)
++{
++    GLuint sh = glCreateShader(type);
++    const char *p = src.c_str();
++    glShaderSource(sh, 1, &p, nullptr);
++    glCompileShader(sh);
++    GLint ok = 0;
++    glGetShaderiv(sh, GL_COMPILE_STATUS, &ok);
++    if (!ok) {
++        char log[2048] = "";
++        glGetShaderInfoLog(sh, sizeof(log), nullptr, log);
++        qWarning() << "m52xq rawvideo: shader:" << log;
++        glDeleteShader(sh);
++        return 0;
++    }
++    return sh;
++}
++
++GLuint program(const std::string &fragment)
++{
++    GLuint vs = compile(GL_VERTEX_SHADER, kVertex), fs = compile(GL_FRAGMENT_SHADER, fragment);
++    if (!vs || !fs) {
++        return 0;
++    }
++    GLuint p = glCreateProgram();
++    glAttachShader(p, vs);
++    glAttachShader(p, fs);
++    glLinkProgram(p);
++    glDeleteShader(vs);
++    glDeleteShader(fs);
++    GLint ok = 0;
++    glGetProgramiv(p, GL_LINK_STATUS, &ok);
++    if (!ok) {
++        qWarning() << "m52xq rawvideo: link failed";
++        glDeleteProgram(p);
++        return 0;
++    }
++    return p;
++}
++
++GLuint makeTarget(GLenum internal, int w, int h, GLuint *fb)
++{
++    GLuint t;
++    glGenTextures(1, &t);
++    glBindTexture(GL_TEXTURE_2D, t);
++    glTexImage2D(GL_TEXTURE_2D, 0, internal, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
++    glGenFramebuffers(1, fb);
++    glBindFramebuffer(GL_FRAMEBUFFER, *fb);
++    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, t, 0);
++    return t;
++}
++} // namespace
++
++M52xqRawVideo::M52xqRawVideo(QObject *parent)
++    : QObject(parent)
++{
++}
++
++M52xqRawVideo::~M52xqRawVideo()
++{
++    stop();
++}
++
++bool M52xqRawVideo::start(M52xqVideoEncoder *encoder, int outW, int outH, int rotation, bool mirror)
++{
++    stop();
++    m_encoder = encoder;
++    m_outW = outW & ~3;
++    m_outH = outH & ~1;
++    m_rotation = ((rotation % 360) + 360) % 360;
++    m_mirror = mirror;
++    m_quit = false;
++    m_hasFrame = false;
++    m_frames = 0;
++    m_dropped = 0;
++    m_dmabufOk = true; // r52: tried again for every recording (another camera, another stride)
++    m_thread = std::thread(&M52xqRawVideo::loop, this);
++    return true;
++}
++
++void M52xqRawVideo::stop()
++{
++    {
++        std::lock_guard<std::mutex> lock(m_mutex);
++        m_quit = true;
++    }
++    m_cv.notify_all();
++    if (m_thread.joinable()) {
++        m_thread.join();
++        std::function<void()> pending;
++        {
++            std::lock_guard<std::mutex> lock(m_mutex);
++            pending = std::move(m_release);
++            m_release = nullptr;
++            m_fd = -1;
++            m_hasFrame = false;
++        }
++        if (pending) {
++            pending(); // the camera buffer of a frame that was not developed any more
++        }
++        qInfo() << "m52xq rawvideo: stopped," << m_frames.load() << "frames developed," << m_dropped.load() << "dropped";
++    }
++}
++
++void M52xqRawVideo::setParams(double digitalGain, double zoom)
++{
++    m_gain = digitalGain;
++    m_zoom = zoom;
++}
++
++void M52xqRawVideo::pushRaw(const uint8_t *data, size_t size, int width, int height, int stride, const QString &cfa)
++{
++    std::unique_lock<std::mutex> lock(m_mutex);
++    if (m_quit || m_hasFrame) {
++        ++m_dropped; // the GPU thread is still busy with the previous frame
++        return;
++    }
++    lock.unlock();
++    QByteArray copy(reinterpret_cast<const char *>(data), static_cast<qsizetype>(size)); // the camera reuses its buffer
++    lock.lock();
++    m_frame = std::move(copy);
++    m_w = width;
++    m_h = height;
++    m_stride = stride;
++    m_cfa = cfa;
++    m_hasFrame = true;
++    lock.unlock();
++    m_cv.notify_all();
++}
++
++bool M52xqRawVideo::pushRawDmabuf(int fd, unsigned offset, int width, int height, int stride, const QString &cfa,
++                                  std::function<void()> release)
++{
++    {
++        std::lock_guard<std::mutex> lock(m_mutex);
++        if (m_quit || m_hasFrame) {
++            ++m_dropped;
++            return false;
++        }
++        m_frame = QByteArray();
++        m_fd = fd;
++        m_offset = offset;
++        m_release = std::move(release);
++        m_w = width;
++        m_h = height;
++        m_stride = stride;
++        m_cfa = cfa;
++        m_hasFrame = true;
++    }
++    m_cv.notify_all();
++    return true;
++}
++
++void M52xqRawVideo::loop()
++{
++    // --- surfaceless EGL / GLES 3 context of this thread ---
++    EGLDisplay dpy = EGL_NO_DISPLAY;
++    if (epoxy_has_egl_extension(EGL_NO_DISPLAY, "EGL_MESA_platform_surfaceless")) {
++        dpy = eglGetPlatformDisplayEXT(EGL_PLATFORM_SURFACELESS_MESA, EGL_DEFAULT_DISPLAY, nullptr);
++    }
++    if (dpy == EGL_NO_DISPLAY || !eglInitialize(dpy, nullptr, nullptr)) {
++        qWarning() << "m52xq rawvideo: no EGL display";
++        return;
++    }
++    eglBindAPI(EGL_OPENGL_ES_API);
++    const EGLint ctxAttrs[] = {EGL_CONTEXT_MAJOR_VERSION, 3, EGL_CONTEXT_MINOR_VERSION, 0, EGL_NONE};
++    EGLContext ctx = eglCreateContext(dpy, EGL_NO_CONFIG_KHR, EGL_NO_CONTEXT, ctxAttrs);
++    if (ctx == EGL_NO_CONTEXT || !eglMakeCurrent(dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, ctx)) {
++        qWarning() << "m52xq rawvideo: no GLES 3 context" << Qt::hex << eglGetError();
++        return;
++    }
++    const GLuint progVideo = program(std::string(kDevelopCommon) + kVideoMain);
++    const GLuint progView = program(std::string(kDevelopCommon) + kViewMain);
++    const GLuint progPack = program(kPack);
++    if (!progVideo || !progView || !progPack) {
++        eglMakeCurrent(dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
++        eglDestroyContext(dpy, ctx);
++        return;
++    }
++
++    GLuint rawTex = 0, rgbTex = 0, rgbFb = 0, packTex = 0, packFb = 0, viewTex = 0, viewFb = 0;
++    int texStride = 0, texH = 0;
++    QImage view;
++    double wbR = 1.0, wbB = 1.0; // gray world white balance, adapted slowly
++    std::vector<uint8_t> nv12Scratch;
++    double tSum = 0, tUp = 0, tView = 0, tVid = 0, tRead = 0, tVDraw = 0, tVRead = 0;
++    // r50: viewfinder images handed out in turn (no 4 MB copy per frame): an image still held by the GUI is skipped
++    QImage viewPool[3];
++    int tN = 0;
++    // r47: the GPU frequency floor at its maximum while recording (the governor stayed low: 44 ms per frame)
++    auto readMinFreq = []() {
++        QFile f(QStringLiteral("/sys/class/devfreq/3d00000.qcom,kgsl-3d0/min_freq"));
++        return f.open(QIODevice::ReadOnly) ? f.readAll().trimmed() : QByteArray();
++    };
++    auto writeMinFreq = [](const QByteArray &v) {
++        QFile f(QStringLiteral("/sys/class/devfreq/3d00000.qcom,kgsl-3d0/min_freq"));
++        if (!v.isEmpty() && f.open(QIODevice::WriteOnly)) {
++            f.write(v);
++        }
++    };
++    // r50: back to the lowest frequency afterwards (the saved value could be a floor another run had left behind:
++    // 630 / 812 MHz stayed set after r48 / r49)
++    QByteArray lowestFreq = QByteArrayLiteral("315000000");
++    {
++        QFile af(QStringLiteral("/sys/class/devfreq/3d00000.qcom,kgsl-3d0/available_frequencies"));
++        if (af.open(QIODevice::ReadOnly)) {
++            const QList<QByteArray> l = af.readAll().simplified().split(' ');
++            if (!l.isEmpty() && !l.first().isEmpty()) {
++                lowestFreq = l.first();
++            }
++        }
++    }
++    const QByteArray savedMinFreq = readMinFreq();
++    {
++        QFile mf(QStringLiteral("/sys/class/devfreq/3d00000.qcom,kgsl-3d0/max_freq"));
++        if (mf.open(QIODevice::ReadOnly)) {
++            writeMinFreq(mf.readAll().trimmed());
++        }
++        qInfo() << "m52xq rawvideo: GPU min_freq" << savedMinFreq << "->" << readMinFreq();
++    }
++    // r49: white balance + viewfinder signal from the read-back viewfinder frame
++    auto useView = [&]() {
++        // gray world on the viewfinder frame (it already carries the present gains)
++        {
++            double sr = 0, sg = 0, sb = 0;
++            for (int y = 0; y < view.height(); y += 4) {
++                const uchar *l = view.constScanLine(y);
++                for (int x = 0; x < view.width(); x += 4) {
++                    const uchar *p = l + x * 4;
++                    if (p[0] > 245 || p[1] > 245 || p[2] > 245) {
++                        continue;
++                    }
++                    sr += p[0];
++                    sg += p[1];
++                    sb += p[2];
++                }
++            }
++            if (sr > 1000 && sb > 1000 && sg > 1000) {
++                // the values are gamma coded: the linear ratio is ratio^2.2
++                const double cr = std::pow(sg / sr, 2.2), cb = std::pow(sg / sb, 2.2);
++                wbR = std::clamp(wbR * std::pow(cr, 0.15), 0.4, 4.0);
++                wbB = std::clamp(wbB * std::pow(cb, 0.15), 0.4, 4.0);
++            }
++        }
++        Q_EMIT viewfinderFrame(view);
++    };
++
++    // r51: one texture per camera dma-buf (EGLImage, R8, linear, pitch = stride): the GPU reads the camera buffer itself;
++    // the copy (pushRaw memcpy 20 MB + glTexSubImage2D + the work of the GPU on the upload) took 18-21 ms per frame
++    struct DmabufTex {
++        EGLImageKHR image = EGL_NO_IMAGE_KHR;
++        GLuint tex = 0;
++    };
++    std::map<std::pair<int, unsigned>, DmabufTex> dmabufTex;
++    // r52: freedreno imports only pitches that are multiples of 64 bytes (stride main 5792, front 4080 / 8160 are not):
++    // 'fold' sensor rows side by side in one texture row (pitch fold x stride, at most the maximum texture width)
++    GLint maxTex = 0;
++    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTex);
++    auto foldFor = [&](int stride, int h) {
++        for (int k = 1; k <= 8; k *= 2) {
++            if ((k * stride) % 64 == 0 && k * stride <= maxTex && h % k == 0) {
++                return k;
++            }
++        }
++        return 0;
++    };
++    // r53: the main camera (fold 2: 1734 rows) still failed with EGL_BAD_ALLOC, the front (fold 4: 612 rows) worked: the
++    // image height is tried as it is, then rounded down to 4 and 32 rows (the last sensor rows are outside the 16:9 crop)
++    int rawRows = 0; // sensor rows the imported texture holds
++    auto importDmabuf = [&](int fd, unsigned offset, int stride, int h, int k) -> GLuint {
++        auto it = dmabufTex.find({fd, offset});
++        if (it != dmabufTex.end()) {
++            return it->second.tex;
++        }
++        EGLImageKHR img = EGL_NO_IMAGE_KHR;
++        EGLint err = EGL_SUCCESS;
++        for (const int align : {1, 4, 32}) {
++            const int rows = (h / k) / align * align;
++            const EGLint attrs[] = {EGL_WIDTH, k * stride, EGL_HEIGHT, rows, EGL_LINUX_DRM_FOURCC_EXT, DRM_FORMAT_R8,
++                                    EGL_DMA_BUF_PLANE0_FD_EXT, fd, EGL_DMA_BUF_PLANE0_OFFSET_EXT, static_cast<EGLint>(offset),
++                                    EGL_DMA_BUF_PLANE0_PITCH_EXT, k * stride, EGL_NONE};
++            img = eglCreateImageKHR(dpy, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, nullptr, attrs);
++            if (img != EGL_NO_IMAGE_KHR) {
++                if (rawRows == 0 || rows * k < rawRows) {
++                    rawRows = rows * k;
++                }
++                break;
++            }
++            err = eglGetError();
++            qInfo() << "m52xq rawvideo: dma-buf import with" << rows << "rows:" << Qt::hex << err << Qt::dec;
++        }
++        if (img == EGL_NO_IMAGE_KHR) {
++            qWarning() << "m52xq rawvideo: dma-buf import failed" << Qt::hex << err << Qt::dec << "stride" << stride
++                       << "fold" << k << "- copying the frames";
++            return 0;
++        }
++        DmabufTex d;
++        d.image = img;
++        glGenTextures(1, &d.tex);
++        glBindTexture(GL_TEXTURE_2D, d.tex);
++        glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, img);
++        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
++        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
++        if (glGetError() != GL_NO_ERROR) {
++            qWarning() << "m52xq rawvideo: dma-buf texture failed - copying the frames";
++            glDeleteTextures(1, &d.tex);
++            eglDestroyImageKHR(dpy, img);
++            return 0;
++        }
++        qInfo() << "m52xq rawvideo: camera dma-buf" << fd << "imported, stride" << stride << "x" << h << "fold" << k << "rows"
++                << rawRows;
++        dmabufTex[{fd, offset}] = d;
++        return d.tex;
++    };
++
++    for (;;) {
++        QByteArray raw;
++        int w, h, stride;
++        QString cfa;
++        int fd = -1;
++        unsigned offset = 0;
++        std::function<void()> release;
++        {
++            std::unique_lock<std::mutex> lock(m_mutex);
++            m_cv.wait(lock, [this]() { return m_quit || m_hasFrame; });
++            if (m_quit) {
++                break;
++            }
++            raw = std::move(m_frame);
++            m_frame = QByteArray();
++            fd = m_fd;
++            offset = m_offset;
++            release = std::move(m_release);
++            m_fd = -1;
++            m_release = nullptr;
++            w = m_w;
++            h = m_h;
++            stride = m_stride;
++            cfa = m_cfa;
++            m_hasFrame = false; // r47: the camera thread may already copy the next frame while this one is developed
++        }
++        const auto t0 = std::chrono::steady_clock::now();
++
++        if (!rawTex || texStride != stride || texH != h) {
++            if (rawTex) {
++                glDeleteTextures(1, &rawTex);
++            }
++            glGenTextures(1, &rawTex);
++            glBindTexture(GL_TEXTURE_2D, rawTex);
++            glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, stride, h, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
++            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
++            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
++            texStride = stride;
++            texH = h;
++            rgbTex = makeTarget(GL_RGBA8, m_outW, m_outH, &rgbFb);
++            packTex = makeTarget(GL_RGBA8, m_outW / 4, m_outH * 3 / 2, &packFb);
++            viewTex = makeTarget(GL_RGBA8, w / 4, h / 4, &viewFb);
++            for (auto &img : viewPool) {
++                img = QImage(w / 4, h / 4, QImage::Format_RGBX8888);
++            }
++        }
++        glActiveTexture(GL_TEXTURE0);
++        int fold = 1;
++        if (fd >= 0) {
++            fold = foldFor(stride, h);
++            const GLuint t = fold ? importDmabuf(fd, offset, stride, h, fold) : 0;
++            if (!t) {
++                m_dmabufOk = false; // the next frames come as copies
++                if (release) {
++                    release();
++                }
++                continue;
++            }
++            glBindTexture(GL_TEXTURE_2D, t);
++        } else {
++            glBindTexture(GL_TEXTURE_2D, rawTex);
++            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
++            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, stride, h, GL_RED, GL_UNSIGNED_BYTE, raw.constData());
++            raw = QByteArray(); // the raw copy is not needed any more
++            glFinish(); // r50: measure the upload with the work of the GPU on it
++        }
++        const auto tA = std::chrono::steady_clock::now();
++
++        // red position of the 2x2 cell from the pattern name
++        const QString c = cfa.left(4);
++        const int ri = std::max(0, static_cast<int>(c.indexOf(QLatin1Char('R'))));
++        const int redX = ri & 1, redY = ri >> 1;
++
++        // viewfinder (white balance only: the screen and the auto exposure apply the digital gain themselves)
++        auto setCommon = [&](GLuint p, double gain) {
++            glUseProgram(p);
++            glUniform1i(glGetUniformLocation(p, "raw"), 0);
++            glUniform2i(glGetUniformLocation(p, "size"), w, fd >= 0 && rawRows > 0 ? std::min(h, rawRows) : h);
++            glUniform2i(glGetUniformLocation(p, "redPos"), redX, redY);
++            glUniform3f(glGetUniformLocation(p, "gains"), float(wbR * gain), float(gain), float(wbB * gain));
++            glUniform1f(glGetUniformLocation(p, "black"), 16.0f / 255.0f);
++            glUniform1i(glGetUniformLocation(p, "fold"), fold);
++            glUniform1i(glGetUniformLocation(p, "rawStride"), stride);
++        };
++        // the viewfinder (and the white balance) on every frame: skipping frames made it judder.
++        glBindFramebuffer(GL_FRAMEBUFFER, viewFb);
++        glViewport(0, 0, w / 4, h / 4);
++        setCommon(progView, 1.0);
++        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
++        glFinish();
++        const auto tV1 = std::chrono::steady_clock::now();
++        // (swapped out of the pool, so that bits() does not detach it)
++        int slot = -1;
++        for (int i = 0; i < 3; ++i) {
++            if (!viewPool[i].isNull() && viewPool[i].isDetached()) {
++                slot = i;
++                view.swap(viewPool[i]);
++                break;
++            }
++        }
++        if (slot < 0) { // all three still on the screen: one more
++            view = QImage(w / 4, h / 4, QImage::Format_RGBX8888);
++        }
++        glPixelStorei(GL_PACK_ALIGNMENT, 4);
++        // r49: synchronous read-back straight into the image like Megapixels (with GALLIUM_THREAD=0 in m52xq-camera-launch:
++        // the mapped pixel buffers of r47/r48 were slow memory, 21-72 ms per frame)
++        glReadPixels(0, 0, w / 4, h / 4, GL_RGBA, GL_UNSIGNED_BYTE, view.bits());
++        const auto tV2 = std::chrono::steady_clock::now();
++        tVDraw += std::chrono::duration<double, std::milli>(tV1 - tA).count();
++        tVRead += std::chrono::duration<double, std::milli>(tV2 - tV1).count();
++        useView();
++        if (slot >= 0) {
++            viewPool[slot].swap(view); // back into the pool, shared with the GUI until it drops the frame
++        }
++        view = QImage();
++        const auto tB = std::chrono::steady_clock::now();
++
++        // the video frame
++        {
++            // output (x, y) (gl_FragCoord, row 0 = top of the upright video) -> source position, as in videoenc convert()
++            const int rot = m_rotation;
++            const bool swap = rot == 90 || rot == 270;
++            const double Wd = swap ? h : w, Hd = swap ? w : h;
++            const double z = std::max(1.0, m_zoom.load());
++            const double s = std::max(m_outW / (Wd / z), m_outH / (Hd / z));
++            auto map = [&](double ox, double oy, double *xs, double *ys) {
++                const double xd = Wd / 2 + (ox - m_outW / 2.0) / s;
++                const double yd = Hd / 2 + (oy - m_outH / 2.0) / s;
++                double xm, ym;
++                switch (rot) {
++                case 90:
++                    xm = yd;
++                    ym = h - xd;
++                    break;
++                case 180:
++                    xm = w - xd;
++                    ym = h - yd;
++                    break;
++                case 270:
++                    xm = w - yd;
++                    ym = xd;
++                    break;
++                default:
++                    xm = xd;
++                    ym = yd;
++                    break;
++                }
++                *xs = xm;
++                *ys = m_mirror ? h - ym : ym;
++            };
++            double x0, y0, x1, y1, x2, y2;
++            map(0, 0, &x0, &y0);
++            map(1, 0, &x1, &y1);
++            map(0, 1, &x2, &y2);
++
++            glBindFramebuffer(GL_FRAMEBUFFER, rgbFb);
++            glViewport(0, 0, m_outW, m_outH);
++            setCommon(progVideo, m_gain.load());
++            glUniform2f(glGetUniformLocation(progVideo, "a0"), float(x0), float(y0));
++            glUniform2f(glGetUniformLocation(progVideo, "ax"), float(x1 - x0), float(y1 - y0));
++            glUniform2f(glGetUniformLocation(progVideo, "ay"), float(x2 - x0), float(y2 - y0));
++            glUniform1i(glGetUniformLocation(progVideo, "supersample"), std::hypot(x1 - x0, y1 - y0) > 1.5 ? 1 : 0);
++            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
++
++            glBindFramebuffer(GL_FRAMEBUFFER, packFb);
++            glViewport(0, 0, m_outW / 4, m_outH * 3 / 2);
++            glUseProgram(progPack);
++            glBindTexture(GL_TEXTURE_2D, rgbTex);
++            glUniform1i(glGetUniformLocation(progPack, "tex"), 0);
++            glUniform2i(glGetUniformLocation(progPack, "outSize"), m_outW, m_outH);
++            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
++            // r49: the Megapixels way: finish, then one synchronous glReadPixels straight into a buffer of the encoder
++            glFinish();
++            if (release) {
++                release(); // r51: the GPU is done with the camera buffer: back to the camera
++                release = nullptr;
++            }
++            const auto tC = std::chrono::steady_clock::now();
++            uint8_t *dst = nullptr;
++            const int idx = m_encoder ? m_encoder->acquireBuffer(&dst) : -1;
++            if (idx >= 0) {
++                glReadPixels(0, 0, m_outW / 4, m_outH * 3 / 2, GL_RGBA, GL_UNSIGNED_BYTE, dst);
++                m_encoder->commitBuffer(idx);
++            }
++            tVid += std::chrono::duration<double, std::milli>(tC - tB).count();
++            tRead += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tC).count();
++        }
++        ++m_frames;
++        const auto tEnd = std::chrono::steady_clock::now();
++        tSum += std::chrono::duration<double, std::milli>(tEnd - t0).count();
++        tUp += std::chrono::duration<double, std::milli>(tA - t0).count();
++        tView += std::chrono::duration<double, std::milli>(tB - tA).count();
++        if (++tN == 60) {
++            qInfo() << "m52xq rawvideo: per frame" << tSum / tN << "ms (upload" << tUp / tN << "view" << tView / tN << "= draw" << tVDraw / tN << "read" << tVRead / tN << "+ wb/emit"
++                    << (tView - tVDraw - tVRead) / tN << "video"
++                    << tVid / tN << "read-back" << tRead / tN << "), wb" << wbR << wbB << "gain" << m_gain.load();
++            tSum = tUp = tView = tVid = tRead = tVDraw = tVRead = 0;
++            tN = 0;
++        }
++    }
++    for (auto &[key, d] : dmabufTex) {
++        glDeleteTextures(1, &d.tex);
++        eglDestroyImageKHR(dpy, d.image);
++    }
++    dmabufTex.clear();
++    writeMinFreq(lowestFreq);
++    qInfo() << "m52xq rawvideo: GPU min_freq back to" << readMinFreq();
++
++    eglMakeCurrent(dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
++    eglDestroyContext(dpy, ctx);
++}
+diff -ruN a/src/m52xq/rawvideo.h b/src/m52xq/rawvideo.h
+--- a/src/m52xq/rawvideo.h	1970-01-01 02:00:00.000000000 +0200
++++ b/src/m52xq/rawvideo.h	2026-10-21 23:54:36.746234370 +0300
+@@ -0,0 +1,77 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++// m52xq: real 4K video in plasma-camera like the m52xq Megapixels build: while recording the camera delivers its raw
++// RAW10 stream (main 4624x3468, front 3264x2448, ~20 fps) and this class develops every frame on the GPU (own surfaceless
++// EGL context in its own thread): bilinear demosaic, white balance, digital gain, gamma, crop/rotation/mirror into the
++// upright 3840x2160 frame, NV12 packing (to M52xqVideoEncoder = Venus) and a quarter-size viewfinder frame for the screen
++// and the auto exposure. libcamera's software ISP managed only ~8 fps at 16 MP.
++
++#pragma once
++
++#include <QByteArray>
++#include <QImage>
++#include <QObject>
++#include <QString>
++
++#include <atomic>
++#include <condition_variable>
++#include <deque>
++#include <functional>
++#include <map>
++#include <mutex>
++#include <thread>
++
++class M52xqVideoEncoder;
++class M52xqRawVideo;
++
++// fed by the camera worker thread with every raw frame
++inline std::atomic<M52xqRawVideo *> g_m52xqRawVideo{nullptr};
++
++class M52xqRawVideo : public QObject
++{
++    Q_OBJECT
++
++public:
++    explicit M52xqRawVideo(QObject *parent = nullptr);
++    ~M52xqRawVideo() override;
++
++    // outW x outH = upright video size; rotation/mirror like the still photo; cfa e.g. "GRBG"
++    bool start(M52xqVideoEncoder *encoder, int outW, int outH, int rotation, bool mirror);
++    void stop();
++    // camera worker thread: the raw frame (copied when the GPU thread is free, else dropped)
++    void pushRaw(const uint8_t *data, size_t size, int width, int height, int stride, const QString &cfa);
++    // r51: camera worker thread: the frame as the dma-buf of the camera buffer (no copy). release() is called (from the GPU
++    // thread) when the GPU no longer reads the buffer. false: not taken (busy or stopped), the caller keeps the buffer.
++    bool pushRawDmabuf(int fd, unsigned offset, int width, int height, int stride, const QString &cfa,
++                       std::function<void()> release);
++    // false after the import of a dma-buf failed once: pushRaw() (copy) is used then
++    bool dmabufUsable() const { return m_dmabufOk.load(); }
++    // GUI thread: digital gain of the auto exposure and the digital zoom
++    void setParams(double digitalGain, double zoom);
++
++Q_SIGNALS:
++    // quarter-size frame in the camera orientation (white balance applied, no digital gain) for the viewfinder
++    void viewfinderFrame(const QImage &frame);
++
++private:
++    void loop();
++
++    M52xqVideoEncoder *m_encoder = nullptr;
++    int m_outW = 0, m_outH = 0, m_rotation = 0;
++    bool m_mirror = false;
++
++    std::mutex m_mutex;
++    std::condition_variable m_cv;
++    QByteArray m_frame; // the next raw frame
++    int m_w = 0, m_h = 0, m_stride = 0;
++    QString m_cfa;
++    bool m_hasFrame = false;
++    int m_fd = -1; // r51: dma-buf frame instead of m_frame
++    unsigned m_offset = 0;
++    std::function<void()> m_release;
++    std::atomic<bool> m_dmabufOk{true};
++    bool m_quit = false;
++    std::thread m_thread;
++    std::atomic<double> m_gain{1.0};
++    std::atomic<double> m_zoom{1.0};
++    std::atomic<int> m_frames{0}, m_dropped{0};
++};
+diff -ruN a/src/m52xq/videoenc.cpp b/src/m52xq/videoenc.cpp
+--- a/src/m52xq/videoenc.cpp	1970-01-01 02:00:00.000000000 +0200
++++ b/src/m52xq/videoenc.cpp	2026-10-22 02:44:04.918815954 +0300
+@@ -0,0 +1,449 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++// m52xq: see videoenc.h. The encoder commands are those of the m52xq Megapixels build (r48/r52/r77).
++
++#include "videoenc.h"
++
++#include <QDebug>
++#include <QFile>
++#include <QMetaObject>
++
++#include <algorithm>
++#include <cmath>
++#include <csignal>
++#include <fcntl.h>
++#include <spawn.h>
++#include <sys/wait.h>
++#include <unistd.h>
++
++extern char **environ;
++
++static constexpr int kBuffers = 3;
++
++static QString shellQuote(const QString &s)
++{
++    QString q = s;
++    q.replace(QLatin1String("'"), QLatin1String("'\\''"));
++    return QLatin1Char('\'') + q + QLatin1Char('\'');
++}
++
++M52xqVideoEncoder::M52xqVideoEncoder(QObject *parent)
++    : QObject(parent)
++{
++}
++
++M52xqVideoEncoder::~M52xqVideoEncoder()
++{
++    if (m_pid > 0) {
++        stop();
++    }
++    if (m_writer.joinable()) {
++        m_writer.join();
++    }
++    if (m_waiter.joinable()) {
++        m_waiter.join();
++    }
++}
++
++bool M52xqVideoEncoder::start(const QString &fileName, int width, int height, bool hardware, bool audio)
++{
++    if (m_pid > 0 || width <= 0 || height <= 0) {
++        return false;
++    }
++    if (m_writer.joinable()) {
++        m_writer.join();
++    }
++    if (m_waiter.joinable()) {
++        m_waiter.join();
++    }
++    m_fileName = fileName;
++    m_width = width & ~1;
++    m_height = height & ~1;
++    m_hardware = hardware;
++    m_frameSize = static_cast<size_t>(m_width) * m_height * 3 / 2;
++    m_dropped = 0;
++    m_written = 0;
++
++    const QString out = shellQuote(fileName);
++    QString cmd;
++    if (hardware) {
++        // GStreamer does the whole recording (one clock for the video from stdin and the microphone); on stop the shell
++        // forwards SIGINT to gst-launch (-e: EOS, finished file); then ffmpeg only copies the streams and sets the BT.709 tags
++        const QString raw = shellQuote(fileName + QLatin1String(".raw.mkv"));
++        const QString audioPart = audio
++            ? QStringLiteral("pulsesrc ! audio/x-raw,channels=1 ! audioconvert ! volume volume=6 ! audioresample ! vorbisenc bitrate=96000 ! queue ! mux.audio_0 ")
++            : QString();
++        cmd = QStringLiteral("exec 3<&0; gst-launch-1.0 -e -q matroskamux name=mux ! filesink location=%1 "
++                             "filesrc location=/dev/stdin blocksize=%2 do-timestamp=true ! "
++                             "video/x-raw,format=NV12,width=%3,height=%4,framerate=30/1 ! queue max-size-buffers=4 ! "
++                             "v4l2h264enc extra-controls=\"controls,video_bitrate_mode=1,video_bitrate=40000000;\" ! "
++                             "h264parse ! queue ! mux.video_0 %5<&3 & "
++                             "P=$!; trap 'kill -INT $P' INT; wait $P; wait $P; "
++                             "ffmpeg -y -loglevel warning -i %1 -c copy "
++                             "-bsf:v h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0:level=5.1 %6; "
++                             "rm -f %1")
++                  .arg(raw)
++                  .arg(m_frameSize)
++                  .arg(m_width)
++                  .arg(m_height)
++                  .arg(audioPart, out);
++    } else {
++        const QString audioIn = audio ? QStringLiteral("-f pulse -i default ") : QString();
++        const QString audioOut = audio ? QStringLiteral("-af volume=18dB,alimiter=limit=0.95 -c:a libvorbis -b:a 96k ") : QStringLiteral("-an ");
++        cmd = QStringLiteral("exec ffmpeg -y -loglevel warning -use_wallclock_as_timestamps 1 -f rawvideo -pixel_format nv12 "
++                             "-video_size %1x%2 -i pipe:0 %3"
++                             "-c:v libx264 -preset ultrafast -crf 27 -maxrate 17M -bufsize 34M -colorspace bt709 -color_primaries bt709 -color_trc bt709 "
++                             "-color_range tv -fps_mode vfr %4%5")
++                  .arg(m_width)
++                  .arg(m_height)
++                  .arg(audioIn, audioOut, out);
++    }
++
++    std::signal(SIGPIPE, SIG_IGN); // a finished encoder must not end plasma-camera
++    int fds[2];
++    if (pipe2(fds, O_CLOEXEC) < 0) {
++        return false;
++    }
++    fcntl(fds[1], F_SETPIPE_SZ, 1 << 20);
++    posix_spawn_file_actions_t fa;
++    posix_spawn_file_actions_init(&fa);
++    posix_spawn_file_actions_adddup2(&fa, fds[0], 0);
++    const QByteArray cmdBytes = cmd.toLocal8Bit();
++    char *argv[] = {const_cast<char *>("sh"), const_cast<char *>("-c"), const_cast<char *>(cmdBytes.constData()), nullptr};
++    pid_t pid = -1;
++    const int rc = posix_spawn(&pid, "/bin/sh", &fa, nullptr, argv, environ);
++    posix_spawn_file_actions_destroy(&fa);
++    ::close(fds[0]);
++    if (rc != 0) {
++        ::close(fds[1]);
++        qWarning() << "m52xq video: cannot start the encoder" << rc;
++        return false;
++    }
++    m_pid = pid;
++    m_fd = fds[1];
++    qInfo() << "m52xq video:" << m_width << "x" << m_height << (hardware ? "Venus" : "x264") << "->" << fileName << cmd;
++
++    {
++        std::lock_guard<std::mutex> lock(m_mutex);
++        m_pool.assign(kBuffers, std::vector<uint8_t>(m_frameSize));
++        m_pending.assign(kBuffers, Pending());
++        m_free.clear();
++        m_work.clear();
++        for (int i = 0; i < kBuffers; ++i) {
++            m_free.push_back(i);
++        }
++        m_stopping = false;
++    }
++    m_writer = std::thread(&M52xqVideoEncoder::writerLoop, this);
++    m_waiter = std::thread(&M52xqVideoEncoder::waitLoop, this);
++    return true;
++}
++
++void M52xqVideoEncoder::writerLoop()
++{
++    for (;;) {
++        int idx;
++        {
++            std::unique_lock<std::mutex> lock(m_mutex);
++            m_cv.wait(lock, [this]() { return !m_work.empty() || m_stopping; });
++            if (m_work.empty()) {
++                // stopping and everything written: close the pipe (EOF), otherwise filesrc of gst-launch stays blocked in
++                // read() and the EOS of SIGINT never arrives (third 4K video of 19.10 stuck for minutes)
++                if (m_fd >= 0) {
++                    ::close(m_fd);
++                    m_fd = -1;
++                }
++                return;
++            }
++            idx = m_work.front();
++            m_work.pop_front();
++        }
++        Pending job;
++        {
++            std::lock_guard<std::mutex> lock(m_mutex);
++            job = std::move(m_pending[idx]);
++            m_pending[idx] = Pending();
++        }
++        if (!job.image.isNull()) { // r45: buffers from acquireBuffer are already NV12
++            convert(job.image, job.rotation, job.mirror, job.zoom, m_pool[idx].data(), job.gain, job.wb0, job.wb2);
++        }
++        job.image = QImage();
++        const uint8_t *p = m_pool[idx].data();
++        size_t left = m_frameSize;
++        bool ok = true;
++        while (left > 0) {
++            const ssize_t n = ::write(m_fd, p, left);
++            if (n <= 0) {
++                if (n < 0 && errno == EINTR) {
++                    continue;
++                }
++                ok = false;
++                break;
++            }
++            p += n;
++            left -= static_cast<size_t>(n);
++        }
++        if (ok) {
++            ++m_written;
++        }
++        {
++            std::lock_guard<std::mutex> lock(m_mutex);
++            m_free.push_back(idx);
++        }
++        if (!ok) {
++            qWarning() << "m52xq video: the encoder does not take frames any more";
++            std::lock_guard<std::mutex> lock(m_mutex);
++            if (m_fd >= 0) {
++                ::close(m_fd);
++                m_fd = -1;
++            }
++            return;
++        }
++    }
++}
++
++void M52xqVideoEncoder::waitLoop()
++{
++    int status = 0;
++    const pid_t pid = m_pid;
++    while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {
++    }
++    const bool ok = QFile::exists(m_fileName) && QFile(m_fileName).size() > 0;
++    QMetaObject::invokeMethod(this, [this, ok]() {
++        if (m_writer.joinable()) {
++            {
++                std::lock_guard<std::mutex> lock(m_mutex);
++                m_stopping = true;
++            }
++            m_cv.notify_all();
++            m_writer.join();
++        }
++        if (m_fd >= 0) {
++            ::close(m_fd);
++            m_fd = -1;
++        }
++        m_pid = -1;
++        qInfo() << "m52xq video: encoder finished" << (ok ? "OK" : "without a file") << m_fileName << "frames" << m_written.load()
++                << "dropped" << m_dropped.load();
++        Q_EMIT finished(ok, m_fileName);
++    }, Qt::QueuedConnection);
++}
++
++void M52xqVideoEncoder::stop()
++{
++    if (m_pid <= 0) {
++        return;
++    }
++    {
++        std::lock_guard<std::mutex> lock(m_mutex);
++        m_stopping = true;
++    }
++    m_cv.notify_all();
++    // gst-launch -e: EOS, ffmpeg: finishes the file. The writer is not waited for here (a stuck encoder must not block
++    // the GUI): when the process has ended its writes fail (EPIPE) and waitLoop joins it and closes the pipe.
++    ::kill(m_pid, SIGINT);
++}
++
++void M52xqVideoEncoder::setParams(int rotation, bool mirror, double zoom, double gain, double wb0, double wb2)
++{
++    std::lock_guard<std::mutex> lock(m_mutex);
++    m_pRotation = rotation;
++    m_pMirror = mirror;
++    m_pZoom = zoom;
++    m_pGain = gain;
++    m_pWb0 = wb0;
++    m_pWb2 = wb2;
++}
++
++int M52xqVideoEncoder::acquireBuffer(uint8_t **data)
++{
++    std::lock_guard<std::mutex> lock(m_mutex);
++    if (m_pid <= 0 || m_stopping || m_free.empty()) {
++        if (m_pid > 0 && !m_stopping) {
++            ++m_dropped;
++        }
++        return -1;
++    }
++    const int idx = m_free.front();
++    m_free.pop_front();
++    m_pending[idx] = Pending();
++    *data = m_pool[idx].data();
++    return idx;
++}
++
++void M52xqVideoEncoder::commitBuffer(int idx)
++{
++    {
++        std::lock_guard<std::mutex> lock(m_mutex);
++        m_work.push_back(idx);
++    }
++    m_cv.notify_all();
++}
++
++bool M52xqVideoEncoder::wantsFrame()
++{
++    std::lock_guard<std::mutex> lock(m_mutex);
++    if (m_pid <= 0 || m_stopping) {
++        return false;
++    }
++    if (m_free.empty()) {
++        ++m_dropped;
++        return false;
++    }
++    return true;
++}
++
++void M52xqVideoEncoder::pushFrame(const QImage &frame)
++{
++    int idx;
++    {
++        std::lock_guard<std::mutex> lock(m_mutex);
++        if (m_pid <= 0 || m_stopping || m_free.empty() || frame.isNull()) {
++            return;
++        }
++        idx = m_free.front();
++        m_free.pop_front();
++        m_pending[idx].image = frame;
++        m_pending[idx].rotation = m_pRotation;
++        m_pending[idx].mirror = m_pMirror;
++        m_pending[idx].zoom = m_pZoom;
++        m_pending[idx].gain = m_pGain;
++        m_pending[idx].wb0 = m_pWb0;
++        m_pending[idx].wb2 = m_pWb2;
++        m_work.push_back(idx);
++    }
++    m_cv.notify_all();
++}
++
++void M52xqVideoEncoder::pushFrame(const QImage &frame, int rotation, bool mirror, double zoom)
++{
++    if (m_pid <= 0 || frame.isNull()) {
++        return;
++    }
++    int idx;
++    {
++        std::lock_guard<std::mutex> lock(m_mutex);
++        if (m_stopping || m_free.empty()) {
++            ++m_dropped; // the encoder is behind: drop this frame (no queue that grows)
++            return;
++        }
++        idx = m_free.front();
++        m_free.pop_front();
++    }
++    {
++        std::lock_guard<std::mutex> lock(m_mutex);
++        m_pending[idx].image = frame; // shared, the writer thread converts it
++        m_pending[idx].rotation = rotation;
++        m_pending[idx].mirror = mirror;
++        m_pending[idx].zoom = zoom;
++        m_work.push_back(idx);
++    }
++    m_cv.notify_all();
++}
++
++// one pass: (crop to the zoom and the video aspect, scale, rotate, mirror) the frame into NV12, BT.709 limited range
++void M52xqVideoEncoder::convert(const QImage &frameIn, int rotation, bool mirror, double zoom, uint8_t *out, double gain,
++                                double wb0, double wb2) const
++{
++    // digital gain of the viewfinder (gain^(1/2.2) on the gamma coded values) and its white balance, as applyDigitalGain
++    uint8_t lut[3][256];
++    {
++        const double k = std::pow(std::max(gain, 1.0), 1.0 / 2.2);
++        for (int i = 0; i < 256; ++i) {
++            lut[0][i] = static_cast<uint8_t>(std::min(255.0, i * k * wb0 + 0.5));
++            lut[1][i] = static_cast<uint8_t>(std::min(255.0, i * k + 0.5));
++            lut[2][i] = static_cast<uint8_t>(std::min(255.0, i * k * wb2 + 0.5));
++        }
++    }
++    QImage frame = frameIn;
++    int ro = 0, go = 1, bo = 2;
++    switch (frame.format()) {
++    case QImage::Format_RGBX8888:
++    case QImage::Format_RGBA8888:
++    case QImage::Format_RGBA8888_Premultiplied:
++        break;
++    case QImage::Format_RGB32:
++    case QImage::Format_ARGB32:
++    case QImage::Format_ARGB32_Premultiplied:
++        ro = 2;
++        bo = 0;
++        break;
++    default:
++        frame = frame.convertToFormat(QImage::Format_RGBX8888);
++        break;
++    }
++    const int W = frame.width(), H = frame.height();
++    const int OW = m_width, OH = m_height;
++    const int rot = ((rotation % 360) + 360) % 360;
++    const bool swap = rot == 90 || rot == 270;
++    const double Wd = swap ? H : W, Hd = swap ? W : H; // the frame as the still photo shows it
++    const double z = std::max(1.0, zoom);
++    const double s = std::max(OW / (Wd / z), OH / (Hd / z)); // output pixels per shown pixel
++
++    // output (ox, oy) -> source (xs, ys); affine, so evaluated at three points
++    auto map = [&](double ox, double oy, double *xs, double *ys) {
++        const double xd = Wd / 2 + (ox + 0.5 - OW / 2.0) / s;
++        const double yd = Hd / 2 + (oy + 0.5 - OH / 2.0) / s;
++        double xm, ym;
++        switch (rot) {
++        case 90:
++            xm = yd;
++            ym = H - xd;
++            break;
++        case 180:
++            xm = W - xd;
++            ym = H - yd;
++            break;
++        case 270:
++            xm = W - yd;
++            ym = xd;
++            break;
++        default:
++            xm = xd;
++            ym = yd;
++            break;
++        }
++        *xs = xm;
++        *ys = mirror ? H - ym : ym;
++    };
++    double x0, y0, x1, y1, x2, y2;
++    map(0, 0, &x0, &y0);
++    map(1, 0, &x1, &y1);
++    map(0, 1, &x2, &y2);
++    const double dxx = x1 - x0, dyx = y1 - y0, dxy = x2 - x0, dyy = y2 - y0;
++
++    const uchar *src = frame.constBits();
++    const qsizetype bpl = frame.bytesPerLine();
++    uint8_t *yPlane = out;
++    uint8_t *uvPlane = out + static_cast<size_t>(OW) * OH;
++
++    auto rows = [&](int from, int to) {
++        for (int oy = from; oy < to; ++oy) {
++            double xs = x0 + dxy * oy, ys = y0 + dyy * oy;
++            uint8_t *yl = yPlane + static_cast<size_t>(oy) * OW;
++            uint8_t *uvl = (oy & 1) ? nullptr : uvPlane + static_cast<size_t>(oy / 2) * OW;
++            for (int ox = 0; ox < OW; ++ox, xs += dxx, ys += dyx) {
++                const int xi = std::clamp(static_cast<int>(xs), 0, W - 1);
++                const int yi = std::clamp(static_cast<int>(ys), 0, H - 1);
++                const uchar *p = src + yi * bpl + xi * 4;
++                // lut index 0/2 = byte 0/2 of the frame, like applyDigitalGain
++                const int r = lut[ro][p[ro]], g = lut[1][p[go]], b = lut[bo][p[bo]];
++                yl[ox] = static_cast<uint8_t>(16 + ((47 * r + 157 * g + 16 * b + 128) >> 8));
++                if (uvl && !(ox & 1)) {
++                    uvl[ox] = static_cast<uint8_t>(128 + ((-26 * r - 87 * g + 112 * b + 128) >> 8));
++                    uvl[ox + 1] = static_cast<uint8_t>(128 + ((112 * r - 102 * g - 10 * b + 128) >> 8));
++                }
++            }
++        }
++    };
++    constexpr int kThreads = 6;
++    std::thread workers[kThreads - 1];
++    const int step = ((OH / kThreads) + 1) & ~1;
++    for (int t = 0; t < kThreads - 1; ++t) {
++        const int from = std::min(OH, t * step), to = std::min(OH, (t + 1) * step);
++        workers[t] = std::thread(rows, from, to);
++    }
++    rows(std::min(OH, (kThreads - 1) * step), OH);
++    for (auto &w : workers) {
++        w.join();
++    }
++}
+diff -ruN a/src/m52xq/videoenc.h b/src/m52xq/videoenc.h
+--- a/src/m52xq/videoenc.h	1970-01-01 02:00:00.000000000 +0200
++++ b/src/m52xq/videoenc.h	2026-10-19 15:43:05.497716511 +0300
+@@ -0,0 +1,92 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++// m52xq: video recording of plasma-camera the way the m52xq Megapixels build does it: the frames are converted to NV12
++// here and piped to an external encoder process; 4K goes to the Venus hardware encoder (GStreamer v4l2h264enc + pulsesrc,
++// matroska), the smaller sizes to x264 (ffmpeg, 4:2:0) because the Venus rate control is erratic at 1080p.
++// The Qt recorder chose x264 4:4:4 from the RGB frames and its frame queue grew to gigabytes (OOM kill).
++
++#pragma once
++
++#include <QImage>
++#include <QObject>
++#include <QString>
++
++#include <atomic>
++#include <condition_variable>
++#include <deque>
++#include <mutex>
++#include <thread>
++#include <vector>
++
++class M52xqVideoEncoder;
++// r44: the recording encoder, fed directly by the camera worker thread with every camera frame (the GUI thread got only
++// ~2 frames per second of the 16 MP viewfinder: 21 frames in 12 s)
++inline std::atomic<M52xqVideoEncoder *> g_m52xqVideoEncoder{nullptr};
++
++class M52xqVideoEncoder : public QObject
++{
++    Q_OBJECT
++
++public:
++    explicit M52xqVideoEncoder(QObject *parent = nullptr);
++    ~M52xqVideoEncoder() override;
++
++    // width x height = the upright size of the video; hardware: Venus (4K); audio: record the microphone
++    bool start(const QString &fileName, int width, int height, bool hardware, bool audio);
++    // the viewfinder frame (camera orientation); rotation clockwise in degrees and the vertical mirror like the still photo,
++    // zoom: the middle 1/zoom of the frame. Drops the frame when all buffers are busy.
++    void pushFrame(const QImage &frame, int rotation, bool mirror, double zoom);
++    // r44: frame from the camera worker with the parameters set by setParams (rotation, mirror, zoom, digital gain and
++    // white balance of the viewfinder, applied while converting)
++    void pushFrame(const QImage &frame);
++    void setParams(int rotation, bool mirror, double zoom, double gain, double wb0, double wb2);
++    bool wantsFrame();
++    // r45: a ready NV12 frame (the GPU raw path): get a free buffer of width*height*3/2 bytes, fill it, commit it
++    int acquireBuffer(uint8_t **data);
++    void commitBuffer(int idx);
++    // ends the recording; finished() is emitted when the file is complete
++    void stop();
++
++    bool active() const { return m_pid > 0; }
++    QString fileName() const { return m_fileName; }
++    int droppedFrames() const { return m_dropped.load(); }
++    int writtenFrames() const { return m_written.load(); }
++
++Q_SIGNALS:
++    void finished(bool ok, const QString &fileName);
++
++private:
++    void writerLoop();
++    void waitLoop();
++    void convert(const QImage &frame, int rotation, bool mirror, double zoom, uint8_t *out, double gain = 1.0,
++                 double wb0 = 1.0, double wb2 = 1.0) const;
++    int m_pRotation = 0;
++    bool m_pMirror = false;
++    double m_pZoom = 1.0, m_pGain = 1.0, m_pWb0 = 1.0, m_pWb2 = 1.0;
++
++    QString m_fileName;
++    int m_width = 0, m_height = 0;
++    bool m_hardware = false;
++    int m_fd = -1;
++    pid_t m_pid = -1;
++    size_t m_frameSize = 0;
++
++    std::mutex m_mutex;
++    std::condition_variable m_cv;
++    std::vector<std::vector<uint8_t>> m_pool;
++    // r43: the frame (shared QImage, no copy) and its parameters per buffer; converted in the writer thread, not in the
++    // busy GUI thread (only 39 frames reached the encoder in 21 s)
++    struct Pending {
++        QImage image;
++        int rotation = 0;
++        bool mirror = false;
++        double zoom = 1.0;
++        double gain = 1.0, wb0 = 1.0, wb2 = 1.0;
++    };
++    std::vector<Pending> m_pending;
++    std::deque<int> m_free, m_work;
++    bool m_stopping = false;
++    std::thread m_writer;
++    std::thread m_waiter;
++    std::atomic<int> m_dropped{0};
++    std::atomic<int> m_written{0}; // r43
++};
+diff -ruN a/src/plasmacamera/worker.cpp b/src/plasmacamera/worker.cpp
+--- a/src/plasmacamera/worker.cpp	2026-10-19 02:46:16.151717681 +0300
++++ b/src/plasmacamera/worker.cpp	2026-10-21 23:54:56.249189486 +0300
+@@ -3,6 +3,8 @@
+ 
+ #include <chrono>
+ #include "worker.h"
++#include "../m52xq/videoenc.h"
++#include "../m52xq/rawvideo.h"
+ 
+ #include <QDir>
+ #include <QFile>
+@@ -401,11 +403,108 @@
+     QMetaObject::invokeMethod(this, "processRequestDataAndEmit", Qt::QueuedConnection);
+ }
+ 
++void Worker::startRawVideo()
++{
++    if (!m_camera || m_state != State::Running) {
++        return;
++    }
++    const QString camId = QString::fromStdString(m_camera->id());
++    const bool mainCam = camId.contains(QLatin1String("camera@2d"));
++    const libcamera::Size size = mainCam ? libcamera::Size(4624, 3468) : libcamera::Size(3264, 2448);
++    stopStreaming();
++    m_config = m_camera->generateConfiguration({libcamera::StreamRole::Raw});
++    bool ok = m_config && !m_config->empty();
++    if (ok) {
++        libcamera::StreamConfiguration &sc = m_config->at(0);
++        sc.size = size;
++        sc.bufferCount = 4;
++        ok = m_config->validate() != libcamera::CameraConfiguration::Invalid && m_camera->configure(m_config.get()) == 0;
++        if (ok) {
++            m_stream = sc.stream();
++            m_rawW = static_cast<int>(sc.size.width);
++            m_rawH = static_cast<int>(sc.size.height);
++            m_rawStride = static_cast<int>(sc.stride);
++            const QString fmt = QString::fromStdString(sc.pixelFormat.toString());
++            m_rawCfa = fmt.startsWith(QLatin1Char('S')) ? fmt.mid(1, 4) : QStringLiteral("GRBG");
++            m_size = QSize(m_rawW, m_rawH);
++            m_format = sc.pixelFormat;
++            qInfo() << "m52xq: raw video stream" << QString::fromStdString(sc.toString()) << "stride" << m_rawStride;
++            ok = createRequests() == 0;
++        }
++    }
++    if (ok) {
++        m_camera->requestCompleted.connect(this, &Worker::requestComplete);
++        ok = m_camera->start() == 0;
++    }
++    if (!ok) {
++        qWarning() << "m52xq: raw video stream not possible, back to the viewfinder";
++        stopStreaming();
++        startViewFinder();
++        return;
++    }
++    for (std::unique_ptr<libcamera::Request> &request : m_requests) {
++        m_camera->queueRequest(request.get());
++    }
++    m_framePollTimer->start();
++    setMode(CaptureMode::Video);
++}
++
++void Worker::stopRawVideo()
++{
++    if (m_mode != CaptureMode::Video) {
++        return;
++    }
++    stopStreaming();
++    setMode(CaptureMode::None);
++    startViewFinder();
++    setMode(CaptureMode::ViewFinder);
++}
++
+ void Worker::processRequestDataAndEmit()
+ {
++    // m52xq r45: raw video stream: hand the frame to the GPU developer and give the request back
++    if (m_mode == CaptureMode::Video) {
++        libcamera::Request *request;
++        {
++            const QMutexLocker lock(&m_doneMutex);
++            if (m_doneQueue.isEmpty()) {
++                return;
++            }
++            request = m_doneQueue.dequeue();
++        }
++        if (request->buffers().count(m_stream)) {
++            libcamera::FrameBuffer *buffer = request->buffers().at(m_stream);
++            Image *image = m_mappedBuffers[buffer].get();
++            M52xqRawVideo *rv = g_m52xqRawVideo.load();
++            // r51: the GPU reads the camera buffer itself (dma-buf); the request goes back to the camera when it is done
++            if (rv && rv->dmabufUsable() && buffer->planes().size() == 1) {
++                const libcamera::FrameBuffer::Plane &plane = buffer->planes()[0];
++                if (rv->pushRawDmabuf(plane.fd.get(), plane.offset, m_rawW, m_rawH, m_rawStride, m_rawCfa, [this, request]() {
++                        const QMutexLocker lock(&m_freeMutex);
++                        m_freeQueue.enqueue(request);
++                    })) {
++                    return;
++                }
++            } else if (rv && image) {
++                rv->pushRaw(image->data(0).data(), buffer->metadata().planes()[0].bytesused, m_rawW, m_rawH, m_rawStride, m_rawCfa);
++            }
++        }
++        {
++            const QMutexLocker lock(&m_freeMutex);
++            m_freeQueue.enqueue(request);
++        }
++        return;
++    }
++
+     // Populates m_image
+     processRequestData();
+ 
++    // m52xq r44: a video is being recorded: every camera frame goes to the encoder (copied: the buffer is reused)
++    if (M52xqVideoEncoder *enc = g_m52xqVideoEncoder.load(); enc && m_mode != CaptureMode::StillImage && !m_image.isNull() &&
++        enc->wantsFrame()) {
++        enc->pushFrame(m_image.copy());
++    }
++
+     // Implement photo capture
+     if (m_mode == CaptureMode::StillImage) {
+         const QMutexLocker lock(&m_stillCaptureFramesMutex);
+diff -ruN a/src/plasmacamera/worker.h b/src/plasmacamera/worker.h
+--- a/src/plasmacamera/worker.h	2026-10-19 02:46:16.151717681 +0300
++++ b/src/plasmacamera/worker.h	2026-10-19 15:45:16.980405434 +0300
+@@ -84,6 +84,9 @@
+     void capture();
+     // m52xq r36: one raw frame of the full sensor (main 9248x6936, front 6528x4896), then back to the viewfinder
+     void captureRaw();
++    // m52xq r45: 4K video: the camera delivers its raw stream to M52xqRawVideo while recording
++    void startRawVideo();
++    void stopRawVideo();
+ 
+     void setSettings(const Settings &settings);
+ 
+@@ -143,6 +146,8 @@
+     int m_rawFrames = 0;
+     QByteArray m_rawData;
+     libcamera::Stream *m_rawStream = nullptr;
++    int m_rawW = 0, m_rawH = 0, m_rawStride = 0; // r45
++    QString m_rawCfa;
+     void processRequestData(); // convert buffers to QImage stored at m_image
+ 
+     bool m_error = false;
+diff -ruN a/src/plasmacamera.cpp b/src/plasmacamera.cpp
+--- a/src/plasmacamera.cpp	2026-10-19 02:46:29.159685176 +0300
++++ b/src/plasmacamera.cpp	2026-10-19 15:45:16.980405434 +0300
+@@ -225,6 +225,16 @@
+     return m_cameraFormat;
+ }
+ 
++void PlasmaCamera::startRawVideo()
++{
++    QMetaObject::invokeMethod(m_cameraWorker, "startRawVideo", Qt::QueuedConnection);
++}
++
++void PlasmaCamera::stopRawVideo()
++{
++    QMetaObject::invokeMethod(m_cameraWorker, "stopRawVideo", Qt::QueuedConnection);
++}
++
+ bool PlasmaCamera::captureRawImage()
+ {
+     if (m_state != State::Running) {
+diff -ruN a/src/plasmacamera.h b/src/plasmacamera.h
+--- a/src/plasmacamera.h	2026-10-19 02:46:29.159685176 +0300
++++ b/src/plasmacamera.h	2026-10-19 15:45:16.980405434 +0300
+@@ -157,6 +157,8 @@
+     bool captureImage();
+     // m52xq r36: full-resolution photo from one raw frame of the sensor (main and front camera)
+     bool captureRawImage();
++    void startRawVideo(); // m52xq r45
++    void stopRawVideo();
+ 
+     // Focus
+     QSize afWindow() const;
+diff -ruN a/src/plasmacameramanager.cpp b/src/plasmacameramanager.cpp
+--- a/src/plasmacameramanager.cpp	2026-10-19 02:47:08.891586386 +0300
++++ b/src/plasmacameramanager.cpp	2026-10-22 02:36:40.516129139 +0300
+@@ -13,6 +13,10 @@
+ #include <cmath>
+ 
+ #include <QFile>
++#include <QProcess>
++#include <QDateTime>
++#include <QStandardPaths>
++#include <QDir>
+ #include <QFileInfo>
+ #include <QTimer>
+ 
+@@ -38,6 +42,39 @@
+     // m_session links m_videoInput and m_audioInput to m_recorder
+     m_session.setVideoFrameInput(&m_videoInput);
+     connect(&m_videoFrameTimer, &QTimer::timeout, this, &PlasmaCameraManager::processVideoFrame);
++    // r45: while the raw stream is recorded, the viewfinder shows the quarter-size frames of the GPU developer
++    connect(&m_rawVideo, &M52xqRawVideo::viewfinderFrame, this, [this](const QImage &frame) {
++        if (!m_rawRecording || !m_plasmaCamera) {
++            return;
++        }
++        g_vfFrameCamHash.store(qHash(m_plasmaCamera->realCameraId()));
++        processViewfinderFrame(frame);
++    });
++    connect(&m_m52xqVideo, &M52xqVideoEncoder::finished, this, [this](bool ok, const QString &file) {
++        m_ownRecording = false;
++        setIsSavingVideo(false);
++        Q_EMIT isRecordingVideoChanged();
++        if (!ok) {
++            setError(0, ResourceError, QStringLiteral("The video could not be saved: %1").arg(file));
++        } else {
++            QDir cache(QStandardPaths::writableLocation(QStandardPaths::CacheLocation));
++            cache.mkpath(QStringLiteral("."));
++            const QString thumb = cache.absoluteFilePath(QFileInfo(file).completeBaseName() + QStringLiteral(".jpg"));
++            auto *p = new QProcess(this);
++            connect(p, &QProcess::finished, this, [this, p, file, thumb]() {
++                p->deleteLater();
++                m_lastVideoUrl = QStringLiteral("file://") + file;
++                m_lastVideoThumbUrl = QFile::exists(thumb) ? QStringLiteral("file://") + thumb : QString();
++                Q_EMIT lastVideoUrlChanged();
++            });
++            p->start(QStringLiteral("ffmpeg"), {QStringLiteral("-y"), QStringLiteral("-loglevel"), QStringLiteral("error"),
++                                                QStringLiteral("-ss"), QStringLiteral("0.5"), QStringLiteral("-i"), file,
++                                                QStringLiteral("-frames:v"), QStringLiteral("1"), QStringLiteral("-vf"),
++                                                QStringLiteral("scale=320:-2"), thumb});
++        }
++    });
++    // m52xq r37: a new video frame only when the encoder is ready for it
++    connect(&m_videoInput, &QVideoFrameInput::readyToSendVideoFrame, this, [this]() { m_videoInputReady = true; });
+     connect(&m_orientationSensor, &QOrientationSensor::readingChanged, this, &PlasmaCameraManager::updateFromOrientationSensor);
+ 
+     m_orientationSensor.start();
+@@ -162,12 +199,23 @@
+ 
+ bool PlasmaCameraManager::isRecordingVideo() const
+ {
++    if (m_ownRecording) {
++        return !m_isSavingVideo;
++    }
+     if (!m_recorder) {
+         return false;
+     }
+     return m_recorder->recorderState() == QMediaRecorder::RecordingState && !m_isSavingVideo;
+ }
+ 
++qint64 PlasmaCameraManager::recordingDuration() const
++{
++    if (m_ownRecording) {
++        return m_recordClock.isValid() ? m_recordClock.elapsed() : 0;
++    }
++    return m_recorder ? m_recorder->duration() : 0;
++}
++
+ bool PlasmaCameraManager::isSavingVideo() const
+ {
+     return m_isSavingVideo;
+@@ -181,6 +229,9 @@
+     m_autofocus.captureStarted(); // m52xq r18: the lens stays where it is during the video
+ 
+     m_droppedFrames = false; // reset
++    m_frameRecordingCount = 0; // r37: every video starts at time 0 (the count ran on from the previous video)
++    m_lastSentMs = 0;
++    m_videoInputReady = true;
+ 
+     // m52xq: the encoder ignores QVideoFrame rotation/mirror and the container gets no rotation tag, so the frames are
+     // rotated like the still photo (flip for a mirrored camera, then rotate by camera + device orientation). Fixed for
+@@ -198,11 +249,91 @@
+         setFlashLed(qMax(1, flashMaxLevel() / 2)); // torch while recording
+     }
+ 
++    // m52xq r38: record like Megapixels: 4K through the Venus hardware encoder, the smaller sizes through x264 4:2:0
++    // (the Qt recorder used x264 4:4:4 from the RGB frames, grew to gigabytes and was killed by the OOM killer)
++    {
++        QSize size(3840, 2160);
++        switch (m_videoResolution) {
++        case Resolution540p:
++            size = QSize(960, 540);
++            break;
++        case Resolution720p:
++            size = QSize(1280, 720);
++            break;
++        case Resolution1080p:
++            size = QSize(1920, 1080);
++            break;
++        case Resolution1440p:
++            size = QSize(2560, 1440);
++            break;
++        default:
++            break;
++        }
++        const bool hardware = size.width() >= 3840 && QFile::exists(QStringLiteral("/dev/video18")) &&
++            QFile::exists(QStringLiteral("/usr/bin/gst-launch-1.0"));
++        if (m_recordRotation == 90 || m_recordRotation == 270) {
++            size.transpose();
++        }
++        QDir dir(QStandardPaths::writableLocation(QStandardPaths::MoviesLocation));
++        dir.mkpath(QStringLiteral("."));
++        const QString file = dir.absoluteFilePath(
++            QStringLiteral("VID%1.mkv").arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMddHHmmss"))));
++        if (m_m52xqVideo.start(file, size.width(), size.height(), hardware, m_audioRecordingEnabled)) {
++            m_ownRecording = true;
++            m_lastVideoFile = file;
++            m_m52xqVideo.setParams(m_recordRotation, m_recordMirror, effectiveZoom(), m_ae.digitalGain(), m_ae.wbGain0(), m_ae.wbGain2());
++            const QString cam = m_plasmaCamera->cameraDevice();
++            // r57: every size goes through the raw stream (FHD through the software ISP managed ~8 fps); the encoder is
++            // still Venus for 4K and x264 for the smaller sizes
++            m_rawRecording = cam.contains(QLatin1String("camera@2d")) || cam.contains(QLatin1String("camera@1a"));
++            if (m_rawRecording) {
++                // r45: the camera switches to its raw stream, every frame is developed on the GPU (real 4K, ~20 fps)
++                m_rawVideo.setParams(m_ae.digitalGain(), effectiveZoom());
++                m_rawVideo.start(&m_m52xqVideo, size.width(), size.height(), m_recordRotation, m_recordMirror);
++                g_m52xqRawVideo.store(&m_rawVideo);
++                m_plasmaCamera->startRawVideo();
++                // r46: the 4K video was completely out of focus: after the camera switched to the raw stream the lens
++                // was not where the autofocus had left it; write the position again once the stream runs
++                for (int ms : {700, 1500, 3000}) {
++                    QTimer::singleShot(ms, this, [this]() {
++                        if (m_rawRecording) {
++                            m_autofocus.reapply();
++                        }
++                    });
++                }
++            } else {
++                g_m52xqVideoEncoder.store(&m_m52xqVideo);
++            }
++            m_recordClock.start();
++            m_lastDurationEmit = -1;
++            Q_EMIT recordingDurationChanged();
++            m_videoFrameTimer.start();
++            Q_EMIT isRecordingVideoChanged();
++            return;
++        }
++        qWarning() << "m52xq video: own encoder failed, using the Qt recorder";
++    }
++
+     m_recorder->record();
+ }
+ 
+ void PlasmaCameraManager::stopRecordingVideo()
+ {
++    if (m_ownRecording) {
++        m_videoFrameTimer.stop();
++        setFlashLed(0);
++        setIsSavingVideo(true);
++        Q_EMIT isRecordingVideoChanged();
++        g_m52xqVideoEncoder.store(nullptr);
++        if (m_rawRecording) {
++            g_m52xqRawVideo.store(nullptr);
++            m_rawVideo.stop(); // r51: first: it gives the camera buffer it develops back
++            m_plasmaCamera->stopRawVideo();
++            m_rawRecording = false;
++        }
++        m_m52xqVideo.stop(); // finished() ends the saving state
++        return;
++    }
+     if (!m_recorder) {
+         return;
+     }
+@@ -326,6 +457,7 @@
+     });
+ 
+     m_session.setRecorder(recorder);
++    connect(m_recorder, &QMediaRecorder::durationChanged, this, &PlasmaCameraManager::recordingDurationChanged);
+     connect(m_recorder, &QMediaRecorder::recorderStateChanged, this, [this]() {
+         if (m_recorder->recorderState() == QMediaRecorder::RecordingState) {
+             m_videoFrameTimer.start();
+@@ -664,7 +796,9 @@
+             }
+         }
+     }
+-    if (!isRecordingVideo()) {
++    // r54: while recording the lens stays where it is, except for a tap: its search gets the frames (the tap during a 4K
++    // video did nothing: no frames reached the autofocus), after it the lens is held again
++    if (!isRecordingVideo() || m_autofocus.searching()) {
+         m_autofocus.processFrame(image);
+     }
+     m_ae.processFrame(image);
+@@ -812,6 +946,18 @@
+ 
+ void PlasmaCameraManager::processVideoFrame()
+ {
++    if (m_ownRecording) {
++        // r39: the overlay shows whole seconds: notify a few times a second
++        if (m_recordClock.isValid() && m_recordClock.elapsed() / 250 != m_lastDurationEmit) {
++            m_lastDurationEmit = m_recordClock.elapsed() / 250;
++            Q_EMIT recordingDurationChanged();
++        }
++        // r38: the newest viewfinder frame, converted to NV12 of the video size in one pass (dropped while the encoder is busy)
++        // r44: the camera worker feeds the encoder; here only the look of the viewfinder is handed over
++        m_m52xqVideo.setParams(m_recordRotation, m_recordMirror, effectiveZoom(), m_ae.digitalGain(), m_ae.wbGain0(), m_ae.wbGain2());
++        m_rawVideo.setParams(m_ae.digitalGain(), effectiveZoom());
++        return;
++    }
+     // Set the time in the video that the frame should show up.
+     // This allows for frames to be dropped without impacting video speed.
+     // TODO: This causes severe frame corruption on devices that drop frames, how do we make it smoother?
+@@ -819,9 +965,35 @@
+     m_videoFrame.setStartTime(m_frameRecordingCount * frameLengthMicroseconds);
+     m_videoFrame.setEndTime((m_frameRecordingCount + 1) * frameLengthMicroseconds - 1);
+ 
++    // m52xq r37: the software encoder (4K) is slower than the camera: every frame sent while it was busy waited in its
++    // queue (64 MB each at 4616x3468) and plasma-camera grew to 6.5 GB until the OOM killer ended it (broken file).
++    // Skip the frame while the encoder has not taken the previous one; the time stamps keep the video speed.
++    // also skip while the encoder is more than 0.7 s of video behind the sent frames (QMediaRecorder::duration = what has
++    // been written; the input queue alone did not hold the encoder back)
++    const bool behind = m_recorder && m_lastSentMs > 1000 && m_lastSentMs - m_recorder->duration() > 700;
++    if (!m_videoInputReady || behind) {
++        m_frameRecordingCount++;
++        if (!m_droppedFrames) {
++            Q_EMIT framesDropped();
++            m_droppedFrames = true;
++        }
++        return;
++    }
++    // r37: the frame is scaled to the recorded size before it is sent (not 16 MP for a 4K / Full HD video)
++    QSize target = m_recorder ? m_recorder->videoResolution() : QSize();
++    if (m_recordRotation == 90 || m_recordRotation == 270) {
++        target.transpose();
++    }
++
+     QVideoFrame sendFrame = m_videoFrame;
+-    if (!m_currentFrame.isNull() && (m_recordRotation != 0 || m_recordMirror || effectiveZoom() > 1.001)) {
++    const bool scale = !m_currentFrame.isNull() && target.isValid() && target.width() > 0 &&
++        (m_currentFrame.width() > target.width() * 1.05 || m_currentFrame.height() > target.height() * 1.05);
++    if (!m_currentFrame.isNull() && (scale || m_recordRotation != 0 || m_recordMirror || effectiveZoom() > 1.001)) {
+         QImage image = m_currentFrame;
++        if (scale) {
++            const QSize src = (m_recordRotation == 90 || m_recordRotation == 270) ? target.transposed() : target;
++            image = image.scaled(src, Qt::KeepAspectRatioByExpanding, Qt::FastTransformation);
++        }
+         if (effectiveZoom() > 1.001) {
+             // keep the frame size constant for the encoder: crop the centre and scale back up
+             image = applyZoom(image).scaled(m_currentFrame.size(), Qt::IgnoreAspectRatio, Qt::FastTransformation);
+@@ -843,7 +1015,9 @@
+     bool success = m_videoInput.sendVideoFrame(sendFrame);
+     if (success) {
+         m_frameRecorded = true;
++        m_lastSentMs = m_videoFrame.startTime() / 1000;
+     } else {
++        m_videoInputReady = false; // r37: wait for readyToSendVideoFrame
+         if (!m_droppedFrames) {
+             Q_EMIT framesDropped();
+             m_droppedFrames = true;
+diff -ruN a/src/plasmacameramanager.h b/src/plasmacameramanager.h
+--- a/src/plasmacameramanager.h	2026-10-19 02:47:08.891586386 +0300
++++ b/src/plasmacameramanager.h	2026-10-19 15:45:16.980405434 +0300
+@@ -15,6 +15,9 @@
+ #include <QLightSensor>
+ 
+ #include "lensautofocus.h"
++#include "m52xq/videoenc.h"
++#include "m52xq/rawvideo.h"
++#include <QElapsedTimer>
+ #include <QThreadPool>
+ #include "sensorae.h"
+ #include "plasmacamera.h"
+@@ -70,6 +73,11 @@
+     Q_PROPERTY(int ambientLux READ ambientLux NOTIFY flashChanged)
+     Q_PROPERTY(bool isRecordingVideo READ isRecordingVideo NOTIFY isRecordingVideoChanged)
+     Q_PROPERTY(bool isSavingVideo READ isSavingVideo NOTIFY isSavingVideoChanged)
++    // m52xq r39: duration of the running video in ms (own encoder or the Qt recorder) for the overlay
++    Q_PROPERTY(qint64 recordingDuration READ recordingDuration NOTIFY recordingDurationChanged)
++    // m52xq r41: the last video of the own encoder (file:// URL) for the thumbnail in the corner
++    Q_PROPERTY(QString lastVideoUrl READ lastVideoUrl NOTIFY lastVideoUrlChanged)
++    Q_PROPERTY(QString lastVideoThumbUrl READ lastVideoThumbUrl NOTIFY lastVideoUrlChanged)
+ 
+ public:
+     explicit PlasmaCameraManager(QObject *parent = nullptr);
+@@ -162,6 +170,9 @@
+ 
+     bool isRecordingVideo() const;
+     bool isSavingVideo() const;
++    qint64 recordingDuration() const;
++    QString lastVideoUrl() const { return m_lastVideoUrl; }
++    QString lastVideoThumbUrl() const { return m_lastVideoThumbUrl; }
+ 
+     /*!
+      * Start a new video recording.
+@@ -209,6 +220,8 @@
+     void aeChanged();
+     void flashChanged();
+     void isSavingVideoChanged();
++    void recordingDurationChanged();
++    void lastVideoUrlChanged();
+ 
+     void framesDropped();
+ 
+@@ -350,6 +363,19 @@
+     QVideoSink *m_videoSink = nullptr;
+     int m_frameRecordingCount = 0;
+     bool m_frameRecorded = false;
++    qint64 m_lastSentMs = 0; // r37: time stamp of the last frame given to the encoder
++    bool m_videoInputReady = true;
++    // m52xq r38: own video recording like Megapixels (NV12 to Venus for 4K, x264 4:2:0 below), not the Qt recorder
++    M52xqVideoEncoder m_m52xqVideo;
++    bool m_ownRecording = false;
++    M52xqRawVideo m_rawVideo; // r45: real 4K from the raw stream (main and front camera)
++    bool m_rawRecording = false;
++    qint64 m_lastPushedKey = 0; // r43: a viewfinder frame is given to the encoder once
++    QString m_lastVideoFile;
++    QString m_lastVideoUrl;
++    QString m_lastVideoThumbUrl; // r42: small JPEG made by ffmpeg (decoding the 4K video in the app was too heavy)
++    QElapsedTimer m_recordClock; // r39
++    qint64 m_lastDurationEmit = -1; // m52xq r37: the encoder has taken the last frame (QVideoFrameInput::readyToSendVideoFrame)
+ 
+     QMediaCaptureSession m_session;
+     QTimer m_videoFrameTimer;

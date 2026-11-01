@@ -1,0 +1,6 @@
+[Unit]
+Description=M52XQ: re-claim the accelerometer for KWin after an iio-sensor-proxy restart
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/m52xq-sensor-reclaim

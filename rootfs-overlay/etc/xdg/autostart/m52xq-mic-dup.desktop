@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=M52XQ microphone (left channel to both)
+Exec=/usr/local/bin/m52xq-mic-dup.sh
+X-KDE-autostart-phase=2
+NoDisplay=true

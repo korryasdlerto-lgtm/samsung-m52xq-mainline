@@ -1,0 +1,54 @@
+#!/bin/sh
+# M52XQ в44 (01.11): after a wake-up plasmashell sometimes does not answer a notification in time
+# ("kf.notifications: Failed to notify ... NoReply"). From then on that daemon sends its notifications WITHOUT actions
+# (KNotification keeps the empty server capabilities): a tap on the SMS / missed call card in the shade opens nothing
+# (12:12, spacebar-daemon). A restart of the daemon fixes it. Restart it once the app window is closed (an open window
+# loses the connection to the new daemon and stops showing new messages) and, for the telephony daemon, no call is active.
+U=user
+F=/run/m52xq-notify-heal
+mkdir -p $F
+
+uctl() { systemctl --user -M $U@ "$@"; }
+
+calls_active() {
+	for m in $(mmcli -L 2>/dev/null | grep -o 'Modem/[0-9]*' | cut -d/ -f2); do
+		timeout 5 mmcli -m "$m" --voice-list-calls 2>/dev/null | grep 'Call/' | grep -qv terminated && return 0
+	done
+	return 1
+}
+
+heal_spacebar() {
+	pgrep -x spacebar >/dev/null && return 1
+	for p in $(pgrep -x spacebar-daemon); do kill "$p"; done
+	sleep 2
+	# the daemon may also run in a transient unit (manual restart): the autostart unit is the normal one
+	uctl reset-failed app-org.kde.spacebar.daemon@autostart.service 2>/dev/null
+	uctl restart app-org.kde.spacebar.daemon@autostart.service
+}
+
+heal_telephony() {
+	pgrep -x plasma-dialer >/dev/null && return 1
+	calls_active && return 1
+	uctl restart app-org.kde.telephony.daemon@autostart.service
+}
+
+for t in spacebar-daemon kde-telephony-daemon; do
+	journalctl -f -n0 -o cat -t $t | while read -r line; do
+		case "$line" in
+		*"Failed to notify"*)
+			[ -e $F/$t ] || echo "notify-heal: $t lost a notification (\"$line\"), restart pending"
+			touch $F/$t
+			;;
+		esac
+	done &
+done
+
+while sleep 15; do
+	for t in spacebar-daemon kde-telephony-daemon; do
+		[ -e $F/$t ] || continue
+		case $t in
+		spacebar-daemon) heal_spacebar ;;
+		kde-telephony-daemon) heal_telephony ;;
+		esac && rm -f $F/$t && echo "notify-heal: $t restarted"
+	done
+done

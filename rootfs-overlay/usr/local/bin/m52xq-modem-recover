@@ -1,0 +1,48 @@
+#!/bin/sh
+# m52xq: runs after every resume (from the system-sleep hook, in its own transient unit).
+# 1) hexagonrpcd-* have Conflicts=suspend.target: systemd stops them before suspend and nothing starts them
+#    again -> the ADSP loses its FastRPC servers (SSC registry etc.). Start them again.
+# 2) after resume ModemManager may drop the modem ("qcom-soc not supported by any plugin"):
+#    recover only when the modem is really missing or not enabled; leave a healthy modem alone.
+# v40: wait until the sleep transaction is over first -- a start while suspend.target is still active is refused
+# ("Requested transaction contradicts existing jobs", 23.10: since the slower 2G hook for two SIMs the sensors
+# never came back after the first sleep, autorotation and proximity stayed dead)
+for i in $(seq 60); do
+	systemctl is-active -q suspend.target sleep.target || break
+	sleep 0.5
+done
+for i in 1 2 3; do
+	systemctl start hexagonrpcd-adsp-rootpd hexagonrpcd-adsp-sensorspd >/dev/null 2>&1 && break
+	sleep 2
+done
+# Bluetooth was blocked by the sleep hook: give it back if it was on before the sleep
+if [ -f /run/m52xq-bt-was-on ]; then
+	rfkill unblock bluetooth >/dev/null 2>&1
+	rm -f /run/m52xq-bt-was-on
+fi
+# v40: flight mode (m52xq-flight-mode): the modem stays off
+[ -f /etc/m52xq/flight ] && exit 0
+sleep 3
+# v40 dual SIM: one modem object per SIM, check and enable every one of them (the index of a modem changes between
+# ModemManager restarts, "-m 0" is not always the same SIM)
+bad=
+if mmcli -L 2>/dev/null | grep -q "/Modem/"; then
+	for m in $(mmcli -L 2>/dev/null | grep -o "Modem/[0-9]*" | cut -d/ -f2); do
+		state=$(mmcli -m $m 2>/dev/null | sed -n 's/.*state: *\([a-z-]*\).*/\1/p' | head -1)
+		case "$state" in
+		registered|connected|searching|enabling|connecting|disconnecting) ;;
+		*) bad="$bad $m" ;;
+		esac
+	done
+	[ -z "$bad" ] && exit 0
+else
+	systemctl restart ModemManager
+fi
+for m in ${bad:-$(sleep 5; mmcli -L 2>/dev/null | grep -o "Modem/[0-9]*" | cut -d/ -f2)}; do
+	i=0
+	while [ $i -lt 20 ]; do
+		sleep 2
+		mmcli -m $m --enable >/dev/null 2>&1 && break
+		i=$((i+1))
+	done
+done

@@ -1,0 +1,8 @@
+[Unit]
+Description=M52XQ: Wi-Fi hotspot next to the Wi-Fi client connection (wlan1)
+After=NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/m52xq-hotspot-run
+Restart=no

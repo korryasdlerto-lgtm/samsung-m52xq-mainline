@@ -1,0 +1,9 @@
+module org.kde.plasma.private.mobileshell.wallpaperimageplugin
+linktarget wallpaperimageplugin
+optional plugin wallpaperimageplugin
+classname org_kde_plasma_private_mobileshell_wallpaperimagepluginPlugin
+typeinfo wallpaperimageplugin.qmltypes
+prefer :/org/kde/plasma/private/mobileshell/wallpaperimageplugin/
+WallpaperPluginConfigLoader 254.0 WallpaperPluginConfigLoader.qml
+depends QtQuick
+

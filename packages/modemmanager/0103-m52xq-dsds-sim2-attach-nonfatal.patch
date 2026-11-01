@@ -1,0 +1,23 @@
+diff --git a/src/mm-iface-modem-simple.c b/src/mm-iface-modem-simple.c
+index b4ddbbe..e4e0e7c 100644
+--- a/src/mm-iface-modem-simple.c
++++ b/src/mm-iface-modem-simple.c
+@@ -508,6 +508,18 @@ packet_service_attach_in_3gpp_network_ready (MMIfaceModemSimple *self,
+     GError *error = NULL;
+ 
+     if (!packet_service_attach_in_3gpp_network_finish (self, res, &error)) {
++        /* m52xq DSDS (MM_QRTR_DSDS, m52xq-sim-mode): the packet service state of the SIM2 modem object comes from
++         * messages that ignore the subscription binding (they show SIM1, detached while the data is on SIM2), and
++         * the explicit attach is refused ('Internal') although the modem has SIM2 attached (NAS Get System Info of
++         * subscription 1: LTE service domain CS+PS); go on with the connection, the data call itself decides */
++        if (g_getenv ("MM_QRTR_DSDS")) {
++            mm_obj_warn (ctx->self, "packet service attach in 3GPP network failed: %s (dual SIM: connecting anyway)",
++                         error->message);
++            g_error_free (error);
++            ctx->step++;
++            connection_step (ctx);
++            return;
++        }
+         mm_obj_warn (ctx->self, "packet service attach in 3GPP network failed: %s", error->message);
+         mm_dbus_method_invocation_take_error (ctx->invocation, error);
+         connection_context_free (ctx);

@@ -1,0 +1,57 @@
+#!/bin/sh
+# M52XQ: flight mode for the cellular part (root). Usage: m52xq-flight-mode on|off|status|apply
+# on  - ModemManager disables the modems, the modem radio goes to low-power (DMS operating mode, transmitter off)
+#       and both SIM cards are powered off (UIM power off, slots 1 and 2): no SIM sends anything any more.
+#       /etc/m52xq/flight keeps it so: m52xq-modem-recover, the 2G sleep hook and the boot setup leave the modem off.
+# off - SIM cards powered on, radio online, SIM mode / data SIM of m52xq-sim-mode applied again, ModemManager restarted.
+# apply - at boot (from m52xq-sim-mode-boot): flight mode stays on if it was on.
+# While it is on, ModemManager is stopped and masked until the next boot (systemctl mask --runtime): otherwise the
+# airplane switch in the shade (NetworkManager radio wwan on) made MM enable the modems and turn the radio online.
+# Wi-Fi and Bluetooth are not touched (Plasma has its own switches for them).
+F=/etc/m52xq/flight
+Q="timeout 15 qmicli -d qrtr://0"
+
+on() {
+	mkdir -p ${F%/*}
+	echo 1 > $F
+	sync
+	for m in $(mmcli -L 2>/dev/null | grep -o "Modem/[0-9]*" | cut -d/ -f2); do
+		timeout 15 mmcli -m $m --disable >/dev/null 2>&1
+	done
+	$Q --dms-set-operating-mode=low-power >/dev/null 2>&1
+	echo "m52xq-flight-mode: radio low-power: $?"
+	for s in 1 2; do
+		$Q --uim-sim-power-off=$s >/dev/null 2>&1
+		echo "m52xq-flight-mode: SIM$s powered off: $?"
+	done
+	systemctl mask --runtime ModemManager.service >/dev/null 2>&1
+	systemctl stop ModemManager.service
+	echo "m52xq-flight-mode: ModemManager stopped and masked: $?"
+	echo "m52xq-flight-mode: on"
+}
+
+off() {
+	rm -f $F
+	sync
+	systemctl unmask --runtime ModemManager.service >/dev/null 2>&1
+	for s in 1 2; do
+		$Q --uim-sim-power-on=$s >/dev/null 2>&1
+		echo "m52xq-flight-mode: SIM$s powered on: $?"
+	done
+	$Q --dms-set-operating-mode=online >/dev/null 2>&1
+	echo "m52xq-flight-mode: radio online: $?"
+	sleep 2
+	# SIM sessions and the data SIM of the saved SIM mode, then a fresh ModemManager
+	/usr/local/sbin/m52xq-sim-mode apply
+	systemctl restart ModemManager
+	echo "m52xq-flight-mode: off"
+}
+
+case $1 in
+on) on ;;
+off) off ;;
+status) [ -f $F ] && echo on || echo off ;;
+apply) [ -f $F ] && on ;;
+*) echo "usage: $0 on|off|status|apply" >&2; exit 2 ;;
+esac
+exit 0

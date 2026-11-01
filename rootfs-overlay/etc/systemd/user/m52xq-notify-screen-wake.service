@@ -1,0 +1,11 @@
+[Unit]
+Description=M52XQ: turn the screen on for new notifications (SMS, messages)
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/local/bin/m52xq-notify-screen-wake
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

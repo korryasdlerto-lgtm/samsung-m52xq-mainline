@@ -1,0 +1,91 @@
+--- a/src/libssc-sensor.c	2026-06-27 20:26:15.000000000 +0300
++++ b/src/libssc-sensor.c	2026-10-03 14:47:28.899661673 +0300
+@@ -236,6 +236,16 @@
+ 	ctx->sensor = self;
+ 
+ 	/* Start listening for report signals */
++	/*
++	 * M52XQ: drop the handler of an earlier open/discovery first: it keeps a
++	 * pointer to a ReportReceivedContext that may already be freed, and the
++	 * next report then crashes iio-sensor-proxy in report_received() (seen
++	 * after repeated ClaimProximity/ReleaseProximity during phone calls).
++	 */
++	if (priv->report_id) {
++		g_signal_handler_disconnect (priv->client, priv->report_id);
++		priv->report_id = 0;
++	}
+ 	priv->report_id = g_signal_connect (priv->client,
+ 			"report",
+ 			G_CALLBACK (report_received),
+@@ -675,6 +685,16 @@
+ 	ctx->sensor = self;
+ 
+ 	/* Start listening for report signals */
++	/*
++	 * M52XQ: drop the handler of an earlier open/discovery first: it keeps a
++	 * pointer to a ReportReceivedContext that may already be freed, and the
++	 * next report then crashes iio-sensor-proxy in report_received() (seen
++	 * after repeated ClaimProximity/ReleaseProximity during phone calls).
++	 */
++	if (priv->report_id) {
++		g_signal_handler_disconnect (priv->client, priv->report_id);
++		priv->report_id = 0;
++	}
+ 	priv->report_id = g_signal_connect (priv->client,
+ 			"report",
+ 			G_CALLBACK (report_received),
+--- a/src/libssc-sensor-proximity.c	2026-06-27 20:26:15.000000000 +0300
++++ b/src/libssc-sensor-proximity.c	2026-10-03 14:47:28.911661586 +0300
+@@ -16,6 +16,7 @@
+  * along with this program. If not, see <https://www.gnu.org/licenses/>.
+  */
+ 
++#include <string.h>
+ #include "ssc-common.pb-c.h"
+ #include "ssc-sensor-proximity.pb-c.h"
+ #include "libssc-client-private.h"
+@@ -87,6 +88,30 @@
+ 				return;
+ 			}
+ 
++			/* M52XQ: dump every Samsung stk3a0x report (known + unknown fields) to find the real distance value */
++			{
++				GString *u = g_string_new (NULL);
++				for (unsigned i = 0; i < msg->base.n_unknown_fields; i++) {
++					ProtobufCMessageUnknownField *f = &msg->base.unknown_fields[i];
++					guint64 v = 0;
++					if (f->wire_type == PROTOBUF_C_WIRE_TYPE_VARINT) {
++						for (size_t k = 0, sh = 0; k < f->len && sh < 64; k++, sh += 7) {
++							v |= (guint64)(f->data[k] & 0x7f) << sh;
++							if (!(f->data[k] & 0x80))
++								break;
++						}
++						g_string_append_printf (u, " f%u=%" G_GUINT64_FORMAT, f->tag, v);
++					} else if (f->wire_type == PROTOBUF_C_WIRE_TYPE_32BIT && f->len == 4) {
++						float fl; memcpy (&fl, f->data, 4);
++						g_string_append_printf (u, " f%u=%.3f", f->tag, fl);
++					} else {
++						g_string_append_printf (u, " f%u:w%d/%zu", f->tag, f->wire_type, f->len);
++					}
++				}
++				g_message ("M52XQ prox near=%d distance=%d accuracy=%d%s", msg->near, msg->distance, msg->accuracy, u->str);
++				g_string_free (u, TRUE);
++			}
++
+ 			switch (msg->near) {
+ 				case SSC_SENSOR_PROXIMITY_NEAR:
+ 					near = true;
+@@ -95,7 +120,12 @@
+ 					near = false;
+ 					break;
+ 				default:
+-					g_assert_not_reached ();
++					/* M52XQ: Samsung stk3a0x reports other values here; log and skip
++					 * instead of aborting the whole client (iio-sensor-proxy). */
++					g_message ("Unknown proximity state near=%d distance=%d accuracy=%d",
++						   msg->near, msg->distance, msg->accuracy);
++					ssc_proximity_response__free_unpacked (msg, NULL);
++					return;
+ 			}
+ 
+ 			ssc_proximity_response__free_unpacked (msg, NULL);

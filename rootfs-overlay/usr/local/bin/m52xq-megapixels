@@ -1,0 +1,6 @@
+#!/bin/sh
+# M52XQ: start Megapixels on a clean CAMSS graph. Megapixels only enables its own links; a link left
+# enabled by another camera app (plasma-camera / libcamera) makes the link setup fail with
+# "Resource busy" and Megapixels then crashes. m52xq-camera-launch closes the other camera application completely
+# (plasma-camera) and resets the links with media-ctl -r before it starts Megapixels.
+exec /usr/local/bin/m52xq-camera-launch megapixels "$@"

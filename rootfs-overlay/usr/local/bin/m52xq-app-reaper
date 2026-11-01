@@ -1,0 +1,67 @@
+#!/bin/sh
+# m52xq: before the sleep, end the programs that were started as apps but no longer have a window (their window was closed
+# with the cross in the task switcher, but the process stayed: haruna hung on a broken video, 19.10, 200-300 MB each, all
+# night). Left alone: everything started by autostart (app-*@autostart.service: clock, telephony, messages, ...), every
+# program that has a window (KWin), and every program that plays sound right now (a music player in the background).
+# Writes what it did to /var/log/m52xq-sleep.log ("reaper ...") and the journal. Run as root from the system-sleep hook.
+# Off switch: touch /etc/m52xq-app-reaper-off (then it only logs what it would end).
+
+U=user
+UID_=$(id -u $U 2>/dev/null) || exit 0
+RUN=/run/user/$UID_
+L=${DRYRUN:+/dev/stdout}
+L=${L:-/var/log/m52xq-sleep.log}
+asuser() { su $U -s /bin/sh -c "export XDG_RUNTIME_DIR=$RUN DBUS_SESSION_BUS_ADDRESS=unix:path=$RUN/bus; $*" 2>/dev/null; }
+
+# 1. apps the user launched (not autostart): unit name and its processes
+units=$(asuser "systemctl --user list-units --type=service,scope --state=running --no-legend --plain 'app-*@*.service' 'app-*.scope'" |
+	awk '{print $1}' | grep -v '@autostart\.service$')
+[ -n "$units" ] || exit 0
+
+# 2. process ids that own a window (KWin script, the output goes to the journal)
+JS=/run/m52xq-kwin-pids.js
+cat > $JS <<'EOF'
+var out = [];
+workspace.windowList().forEach(function (w) { out.push(w.pid); });
+print("M52XQ-WINDOWS " + out.join(" "));
+EOF
+chmod 644 $JS
+since=$(date '+%Y-%m-%d %H:%M:%S')
+asuser "id=\$(busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting loadScript ss $JS m52xqreaper | cut -d' ' -f2); busctl --user call org.kde.KWin /Scripting/Script\$id org.kde.kwin.Script run >/dev/null; sleep 0.5; busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting unloadScript s m52xqreaper >/dev/null"
+win=$(journalctl --since "$since" --no-pager -o cat 2>/dev/null | grep -o 'M52XQ-WINDOWS.*' | tail -1 | cut -d' ' -f2-)
+rm -f $JS
+if [ -z "$(journalctl --since "$since" --no-pager -o cat 2>/dev/null | grep -o 'M52XQ-WINDOWS')" ]; then
+	echo "reaper: no window list from KWin, nothing ended" >> $L
+	exit 0
+fi
+
+# 3. process ids that play sound now
+snd=$(asuser "pactl list sink-inputs" | sed -n 's/.*application.process.id = "\([0-9]*\)".*/\1/p' | tr '\n' ' ')
+
+for u in $units; do
+	pids=$(asuser "systemctl --user show -p ControlGroup --value '$u'")
+	pids=$(cat /sys/fs/cgroup${pids}/cgroup.procs 2>/dev/null | tr '\n' ' ')
+	[ -n "$pids" ] || continue
+	keep=""
+	for p in $pids; do
+		case " $win " in *" $p "*) keep="window" ;; esac
+		case " $snd " in *" $p "*) keep="sound" ;; esac
+	done
+	name=$(cat /proc/${pids%% *}/comm 2>/dev/null)
+	rss=0
+	for p in $pids; do r=$(awk '/VmRSS/{print int($2/1024)}' /proc/$p/status 2>/dev/null); rss=$((rss + ${r:-0})); done
+	if [ -n "$keep" ]; then
+		continue
+	fi
+	if [ -f /etc/m52xq-app-reaper-off ] || [ -n "$DRYRUN" ]; then
+		echo "reaper: would end $name ($u, pids $pids, ${rss} MB): no window, no sound" >> $L
+		continue
+	fi
+	echo "reaper: ending $name ($u, pids $pids, ${rss} MB): no window, no sound" >> $L
+	logger -t m52xq-app-reaper "ending $name ($u, pids $pids, ${rss} MB): no window, no sound"
+	asuser "systemctl --user kill --signal=TERM '$u'"
+	sleep 2
+	# still there after 2 s (hung): kill, never wait for a stop timeout here (the sleep would wait for it)
+	for p in $pids; do [ -d /proc/$p ] && asuser "systemctl --user kill --signal=KILL '$u'" && break; done
+done
+exit 0

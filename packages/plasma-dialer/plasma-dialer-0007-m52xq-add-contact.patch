@@ -1,0 +1,306 @@
+--- a/plasma-dialer/src/CMakeLists.txt	2026-10-30 06:39:29.848380492 +0200
++++ b/plasma-dialer/src/CMakeLists.txt	2026-10-30 06:39:35.092343128 +0200
+@@ -3,6 +3,7 @@
+ # SPDX-License-Identifier: LicenseRef-KDE-Accepted-GPL
+ 
+ set(dialer_SRCS
++    contactcontroller.cpp
+     lockscreenutils.cpp
+     ringtoneutils.cpp
+     keytones.cpp
+@@ -15,12 +16,13 @@
+ 
+ add_executable(plasma-dialer main.cpp ${dialer_SRCS})
+ 
+-ecm_add_qml_module(plasma-dialer GENERATE_PLUGIN_SOURCE URI org.kde.plasma.dialer)
++ecm_add_qml_module(plasma-dialer GENERATE_PLUGIN_SOURCE URI org.kde.plasma.dialer DEPENDENCIES "org.kde.contacts")
+ 
+ qt_target_qml_sources(plasma-dialer QML_FILES
+     qml/Main.qml
+     qml/components/Sidebar.qml
+     qml/components/BottomToolbar.qml
++    qml/AddContactPage.qml
+     qml/DialerPage.qml
+     qml/ContactsPage.qml
+     qml/HistoryPage.qml
+@@ -47,7 +49,7 @@
+ 
+ 
+ find_package(Qt6 ${QT_MIN_VERSION} CONFIG REQUIRED Core Quick Qml QuickControls2 Multimedia)
+-find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS Config Crash CoreAddons I18n DBusAddons)
++find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS Config Contacts Crash CoreAddons I18n DBusAddons)
+ find_package(KF6KirigamiAddons 1.3 REQUIRED)
+ 
+ if (DIALER_BUILD_SHELL_OVERLAY)
+@@ -82,6 +84,7 @@
+     Qt::QuickControls2
+     Qt::Multimedia
+     KF6::ConfigGui
++    KF6::Contacts
+     KF6::CoreAddons
+     KF6::Crash
+     KF6::I18n
+--- a/plasma-dialer/src/contactcontroller.cpp	1970-01-01 02:00:00.000000000 +0200
++++ b/plasma-dialer/src/contactcontroller.cpp	2026-10-30 06:54:23.811589037 +0200
+@@ -0,0 +1,53 @@
++/*
++ *   SPDX-FileCopyrightText: 2021 Nicolas Fella <nicolas.fella@gmx.de>
++ *
++ *   SPDX-License-Identifier: LGPL-2.0-or-later
++ */
++
++#include "contactcontroller.h"
++
++#include <KContacts/VCardConverter>
++
++#include <KConfigGroup>
++#include <KWindowConfig>
++#include <QDebug>
++
++const static KContacts::VCardConverter converter;
++
++ContactController::ContactController()
++    : m_dataResource(QStringLiteral("data"), KConfig::SimpleConfig, QStandardPaths::AppDataLocation)
++{
++}
++
++QByteArray ContactController::addresseeToVCard(const KContacts::Addressee &addressee)
++{
++    return converter.createVCard(addressee);
++}
++
++KContacts::Addressee ContactController::emptyAddressee()
++{
++    return {};
++}
++
++KContacts::PhoneNumber ContactController::createPhoneNumber(const QString &number)
++{
++    KContacts::PhoneNumber pn(number);
++    pn.setType(KContacts::PhoneNumber::Cell);
++    return pn;
++}
++
++QByteArray ContactController::vcardFor(const QString &name, const QString &number)
++{
++    KContacts::Addressee a;
++    const QString n = name.trimmed();
++    a.setFormattedName(n);
++    a.setGivenName(n);
++    const QString num = number.trimmed();
++    if (!num.isEmpty()) {
++        KContacts::PhoneNumber pn(num);
++        pn.setType(KContacts::PhoneNumber::Cell);
++        a.insertPhoneNumber(pn);
++    }
++    qDebug() << "add contact: name" << n << "number" << num;
++    return converter.createVCard(a);
++}
+--- a/plasma-dialer/src/contactcontroller.h	1970-01-01 02:00:00.000000000 +0200
++++ b/plasma-dialer/src/contactcontroller.h	2026-10-30 06:54:23.811589037 +0200
+@@ -0,0 +1,39 @@
++/*
++ *   SPDX-FileCopyrightText: 2021 Nicolas Fella <nicolas.fella@gmx.de>
++ *
++ *   SPDX-License-Identifier: LGPL-2.0-or-later
++ */
++
++#pragma once
++
++#include <QImage>
++#include <QObject>
++#include <QQmlEngine>
++#include <QQuickWindow>
++
++#include <KContacts/Addressee>
++#include <KContacts/PhoneNumber>
++
++#include <KSharedConfig>
++#include <memory>
++
++class QFileDialog;
++
++class ContactController : public QObject
++{
++    Q_OBJECT
++    QML_ELEMENT
++    QML_SINGLETON
++
++public:
++    ContactController();
++
++    Q_INVOKABLE QByteArray addresseeToVCard(const KContacts::Addressee &addressee);
++    Q_INVOKABLE KContacts::Addressee emptyAddressee();
++    Q_INVOKABLE KContacts::PhoneNumber createPhoneNumber(const QString &number);
++    // m52xq: the vCard is made from plain strings: writes to the nested value-type property addressee.formattedName were dropped in QML
++    Q_INVOKABLE QByteArray vcardFor(const QString &name, const QString &number);
++
++private:
++    KConfig m_dataResource;
++};
+--- a/plasma-dialer/src/qml/AddContactPage.qml	1970-01-01 02:00:00.000000000 +0200
++++ b/plasma-dialer/src/qml/AddContactPage.qml	2026-10-30 06:54:23.811589037 +0200
+@@ -0,0 +1,128 @@
++/*
++ *   SPDX-FileCopyrightText: 2019 Nicolas Fella <nicolas.fella@gmx.de>
++ *
++ *   SPDX-License-Identifier: LGPL-2.0-or-later
++ */
++
++pragma ComponentBehavior: Bound
++
++import QtQuick
++import QtQuick.Controls as Controls
++import QtQuick.Layouts
++import QtQuick.Templates as T
++
++import Qt.labs.platform
++import Qt5Compat.GraphicalEffects
++
++import org.kde.people as KPeople
++import org.kde.kirigami as Kirigami
++import org.kde.kirigamiaddons.formcard as FormCard
++import org.kde.contacts as KContacts
++
++import org.kde.plasma.dialer
++
++FormCard.FormCardPage {
++    id: root
++    title: i18n("Adding contact")
++    property QtObject person
++    property KContacts.addressee addressee: ContactController.emptyAddressee()
++    property list<KContacts.phoneNumber> pendingPhoneNumbers: addressee.phoneNumbers
++
++    signal save()
++
++    property string phoneNumber: ""
++
++    // m52xq: PersonPluginManager.addContact() returns false until a PersonsModel has loaded the vCard data source
++    property QtObject keepSource: KPeople.PersonsModel {}
++
++    enabled: !person
++
++    FormCard.FormCard {
++        Layout.topMargin: Kirigami.Units.largeSpacing
++        Layout.fillWidth: true
++
++        FormCard.FormTextFieldDelegate{
++            id: name
++            label: i18n("Name")
++
++            text: root.addressee.formattedName
++            onAccepted: {
++                root.addressee.formattedName = text
++            }
++            Connections {
++                target: root
++                function onSave() {
++                    // m52xq: write the whole addressee back; a sub-property write on a value-type property is dropped (empty FN/N in the vCard)
++                    var a = root.addressee
++                    a.formattedName = name.text
++                    a.givenName = name.text
++                    root.addressee = a
++                }
++            }
++        }
++    }
++
++    FormCard.FormCard {
++        Layout.topMargin: Kirigami.Units.largeSpacing
++
++        FormCard.FormTextFieldDelegate{
++                id: phoneField
++
++                label: i18n("Phone")
++                inputMethodHints: Qt.ImhDialableCharactersOnly
++                text: root.phoneNumber
++                onAccepted: {
++                    root.pendingPhoneNumbers.number = text
++                }
++
++                Connections {
++                    target: root
++                    function onSave() {
++                        var numbers = root.pendingPhoneNumbers
++                        numbers.push(ContactController.createPhoneNumber(phoneField.text))
++                        pendingPhoneNumbers = numbers
++                        phoneField.accepted()
++                        root.addressee.phoneNumbers = root.pendingPhoneNumbers
++                    }
++                }
++            }
++    }
++
++    footer: T.Control {
++        id: footerToolBar
++
++        implicitWidth: Math.max(implicitBackgroundWidth + leftInset + rightInset,
++                                implicitContentWidth + leftPadding + rightPadding)
++        implicitHeight: Math.max(implicitBackgroundHeight + topInset + bottomInset,
++                                implicitContentHeight + topPadding + bottomPadding)
++
++        leftPadding: Kirigami.Units.smallSpacing
++        rightPadding: Kirigami.Units.smallSpacing
++        bottomPadding: Kirigami.Units.smallSpacing
++        topPadding: Kirigami.Units.smallSpacing // + footerSeparator.implicitHeight
++
++        contentItem: RowLayout {
++            spacing: parent.spacing
++
++            // footer buttons
++            Controls.DialogButtonBox {
++                // we don't explicitly set padding, to let the style choose the padding
++                id: dialogButtonBox
++                standardButtons: Controls.DialogButtonBox.Save
++
++                Layout.fillWidth: true
++                Layout.alignment: dialogButtonBox.alignment
++
++                position: Controls.DialogButtonBox.Footer
++
++                onAccepted: {
++                    // m52xq: the vCard is built from the plain strings of the two fields (name, number) in C++
++                    if (!KPeople.PersonPluginManager.addContact({ "vcard": ContactController.vcardFor(name.text, phoneField.text) }))
++                                console.warn("could not create contact")
++
++                    Kirigami.PageStack.pop()
++                }
++            }
++        }
++    }
++}
+--- a/plasma-dialer/src/qml/DialerPage.qml	2026-09-08 13:55:56.000000000 +0300
++++ b/plasma-dialer/src/qml/DialerPage.qml	2026-10-30 06:39:36.016336550 +0200
+@@ -32,6 +32,21 @@
+     bottomPadding: 0
+ 
+     actions: [
++        // m52xq: "Add contact" for the typed number (as in plasma-dialer 6.8 and in the Lomiri build)
++        Kirigami.Action {
++            id: addPhoneNumber
++
++            icon.name: "list-add-user"
++            visible: dialPad.number !== ""
++            enabled: !applicationWindow().lockscreenMode
++            text: i18n("Add contact")
++            onTriggered: {
++                var comp = Qt.createComponent("AddContactPage.qml")
++                var page = comp.createObject(pageStack)
++                page.phoneNumber = numberEntryText
++                pageStack.push(page)
++            }
++        },
+         Kirigami.Action {
+             id: settingsAction
+ 
+--- a/plasma-dialer/src/qml/Main.qml	2026-10-30 06:39:32.384362416 +0200
++++ b/plasma-dialer/src/qml/Main.qml	2026-10-30 06:39:36.016336550 +0200
+@@ -37,6 +37,8 @@
+             return pagePool.loadPage("settings/SettingsPage.qml");
+         case "CallBlockSettings":
+             return pagePool.loadPage("settings/CallBlockSettingsPage.qml");
++        case "AddContactPage":
++            return pagePool.loadPage("AddContactPage.qml");
+         case "RingtoneSettings":
+             return pagePool.loadPage("settings/RingtoneSettingsPage.qml");
+         case "About":

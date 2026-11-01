@@ -1,0 +1,9 @@
+module org.kde.plasma.private.mobileshell.taskswitcherplugin
+linktarget mobiletaskswitcherplugin
+optional plugin mobiletaskswitcherplugin
+classname org_kde_plasma_private_mobileshell_taskswitcherpluginPlugin
+typeinfo mobiletaskswitcherplugin.qmltypes
+depends QtCore
+prefer :/org/kde/plasma/private/mobileshell/taskswitcherplugin/
+depends QtQuick
+

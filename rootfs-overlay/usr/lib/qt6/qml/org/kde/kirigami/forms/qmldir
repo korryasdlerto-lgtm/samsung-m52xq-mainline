@@ -1,0 +1,16 @@
+module org.kde.kirigami.forms
+linktarget KF6KirigamiFormsplugin
+plugin KirigamiFormsplugin
+classname KirigamiFormsPlugin
+typeinfo KirigamiForms.qmltypes
+optional import org.kde.kirigami.forms.private.flat
+optional import org.kde.kirigami.forms.private.cards
+default import org.kde.kirigami.forms.private.flat
+depends QtQuick.Controls
+depends org.kde.kirigami.platform
+depends org.kde.kirigami.primitives
+depends org.kde.kirigami.layouts
+depends org.kde.kirigami.forms.private.templates
+prefer :/qt/qml/org/kde/kirigami/forms/
+depends QtQuick
+

@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+# m52xq: the data SIM (DDS, designated data subscription) of the dual-SIM modem, through its DSD service (QMI service
+# 42, message ids found on 23.10 — not in libqmi): 0x004F Get Current DDS (TLV 0x10 u32), 0x004E Switch DDS
+# (TLV 0x01 u32), 1 = SIM1, 2 = SIM2. The modem sends indication 0x004E when the switch is done.
+#   m52xq-dds get        prints 1 or 2
+#   m52xq-dds set 1|2    switches and waits until the modem reports it (exit 1 if it did not within 10 s)
+import socket, struct, sys, time
+
+AF_QIPCRTR = 42
+DSD = 42
+
+
+def parse_tlvs(b):
+    out, i = {}, 0
+    while i + 3 <= len(b):
+        t, ln = struct.unpack_from('<BH', b, i)
+        out[t] = b[i + 3:i + 3 + ln]
+        i += 3 + ln
+    return out
+
+
+class Dsd:
+    def __init__(self):
+        self.s = socket.socket(AF_QIPCRTR, socket.SOCK_DGRAM)
+        self.s.sendto(struct.pack('<IIIII', 10, DSD, 0, 0, 0), (self.s.getsockname()[0], 0xfffffffe))
+        self.s.settimeout(5)
+        while True:
+            data, _ = self.s.recvfrom(4096)
+            cmd, svc, inst, node, port = struct.unpack_from('<IIIII', data)
+            if cmd == 4 and svc == DSD and node == 0:
+                self.addr = (node, port)
+                break
+            if cmd == 4 and svc == 0:
+                sys.exit('DSD service not found')
+        self.txn = 0
+
+    def req(self, msg, payload=b''):
+        self.txn += 1
+        self.s.sendto(struct.pack('<BHHH', 0, self.txn, msg, len(payload)) + payload, self.addr)
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            self.s.settimeout(max(0.05, deadline - time.time()))
+            try:
+                data, src = self.s.recvfrom(65536)
+            except socket.timeout:
+                break
+            flags, txn, mid, ln = struct.unpack_from('<BHHH', data)
+            if src == self.addr and flags == 2 and txn == self.txn:
+                t = parse_tlvs(data[7:7 + ln])
+                res, err = struct.unpack('<HH', t.get(2, b'\0\0\0\0'))
+                if res:
+                    sys.exit('DSD 0x%04X: QMI error %d' % (msg, err))
+                return t
+        sys.exit('DSD 0x%04X: timeout' % msg)
+
+    def get(self):
+        t = self.req(0x004F)
+        return struct.unpack('<I', t[0x10][:4])[0] if 0x10 in t else 0
+
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] not in ('get', 'set') or (sys.argv[1] == 'set' and sys.argv[2:3] not in (['1'], ['2'])):
+        sys.exit('usage: m52xq-dds get | set 1|2')
+    d = Dsd()
+    if sys.argv[1] == 'get':
+        print(d.get())
+        return
+    want = int(sys.argv[2])
+    if d.get() == want:
+        return
+    d.req(0x004E, struct.pack('<BHI', 0x01, 4, want))
+    for i in range(20):
+        time.sleep(0.5)
+        if d.get() == want:
+            return
+    sys.exit('the modem did not switch the data SIM to %d' % want)
+
+
+main()

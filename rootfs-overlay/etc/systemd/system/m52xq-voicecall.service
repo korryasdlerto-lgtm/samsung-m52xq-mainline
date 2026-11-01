@@ -1,0 +1,11 @@
+[Unit]
+Description=M52XQ: modem voice path (q6voice CS-Voice + codec mixers) for the length of a call
+After=ModemManager.service sound.target
+
+[Service]
+ExecStart=/usr/bin/python3 -u /usr/local/bin/m52xq-voicecall
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

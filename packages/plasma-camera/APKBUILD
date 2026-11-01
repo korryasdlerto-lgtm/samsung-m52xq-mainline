@@ -1,0 +1,97 @@
+# The group tag is just to easily find this APKBUILD by some scripts for automation
+# group=kde-other
+maintainer="Bart Ribbers <bribbers@disroot.org>"
+pkgname=plasma-camera
+pkgver=2.1.1
+pkgrel=58
+pkgdesc="Camera application for Plasma Mobile"
+# armhf blocked by qt6-qtdeclarative
+arch="all !armhf"
+options="!check"
+url="https://invent.kde.org/plasma-mobile/plasma-camera"
+license="GPL-3.0-or-later AND BSD-3-Clause"
+depends="
+	gst-plugins-bad
+	gst-plugins-good
+	kirigami
+	kirigami-addons
+	libcamera
+	qt6-qtmultimedia
+	qt6-qtsensors
+	"
+makedepends="
+	extra-cmake-modules
+	libepoxy-dev
+	libjpeg-turbo-dev
+	kcoreaddons-dev
+	linux-headers
+	ki18n-dev
+	kirigami-dev
+	libcamera-dev
+	libkexiv2-dev
+	qt6-qtbase-dev
+	qt6-qtdeclarative-dev
+	qt6-qtmultimedia-dev
+	qt6-qtsensors-dev
+	qt6-qtsvg-dev
+	samurai
+	"
+checkdepends="appstream"
+subpackages="$pkgname-lang"
+source="https://download.kde.org/stable/plasma-camera/plasma-camera-$pkgver.tar.xz
+	plasma-camera-0001-viewfinder-follows-orientation.patch
+	plasma-camera-0002-lens-autofocus.patch
+	plasma-camera-0003-video-rotation.patch
+	plasma-camera-0004-pinch-zoom.patch
+	plasma-camera-0005-controls-ui.patch
+	plasma-camera-0006-viewfinder-frame-throttle.patch
+	plasma-camera-0007-m52xq-start-order-digital-gain.patch
+	plasma-camera-0008-m52xq-rear-no-cap-learning-memory-v2.patch
+	plasma-camera-0009-m52xq-frame-copy-drop-stale-camera.patch
+	plasma-camera-0010-m52xq-frame-camera-id-dark-frame-log.patch
+	plasma-camera-0011-m52xq-sensorae-gain-x64-vblank-reset-fast-dark.patch
+	plasma-camera-0012-m52xq-viewfinder-max-20mp.patch
+	plasma-camera-0013-m52xq-tap-to-focus.patch
+	plasma-camera-0014-m52xq-photo-resolution-jpeg92.patch
+	plasma-camera-0015-m52xq-full-resolution-raw-photo.patch
+	plasma-camera-0016-m52xq-video-encoder-backpressure.patch
+	"
+
+build() {
+	cmake -B build -G Ninja \
+		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+		-DCMAKE_INSTALL_PREFIX=/usr \
+		-DCMAKE_INSTALL_LIBDIR=lib
+	cmake --build build
+}
+
+check() {
+	ctest --test-dir build
+}
+
+package() {
+	DESTDIR="$pkgdir" cmake --install build
+	# The contrast autofocus drives the lens subdevice (Galaxy M52 5G: Fitipower FP5529)
+	mkdir -p "$pkgdir"/usr/lib/udev/rules.d
+	echo 'SUBSYSTEM=="video4linux", ATTR{name}=="fp5529*", MODE="0666"' > "$pkgdir"/usr/lib/udev/rules.d/99-m52xq-lens.rules
+}
+
+sha512sums="
+0a7a6e4bcce5fcb483291e15bca3a4537a4f00a8b7ab4fbd3f38e775ec8757a4b99e4fd4124435e734f865a167a61e836945520005c4058bc41757216e8a325f  plasma-camera-2.1.1.tar.xz
+f8b214470befde04faf091975f7da14a9adb61b9e81407ed2fb5685a0bba872276c8f8a9833975a22f4b202b03ef69998345ba9ff241241743f98938279eb565  plasma-camera-0001-viewfinder-follows-orientation.patch
+34aeb3c88015590ded0e001f992b8b7a5eae1e42df18aef7b8d6789b8ac35a3f56ddcfad4010d7ed63eeaeaa1e1e75541ca85a28048823817346836fd0eaf942  plasma-camera-0002-lens-autofocus.patch
+7c227a93b337e33fb8b8c27cf9606787aa37aef432e7035ede47e4149f125afd39ce3f12099b8daf2998b1693a90330849d633a18b7180e0894d15376c2fe4bd  plasma-camera-0003-video-rotation.patch
+ee6d8b48c460f93c03b2722ad5c0be590c54a747d1fdf997416312942b15d1705d4e73655a755bc6503ae23c41d9982307c1169dd6e4be9a25bfce7f10d97959  plasma-camera-0004-pinch-zoom.patch
+6452c553870827cb1f9dc86fc8ed2ebee70a3cc0a029fc65078b2f02b72f7a12ca2f3a6e6f5f646c0506944e56830c3a3d4868232ff3b83f77825d8e50093d10  plasma-camera-0005-controls-ui.patch
+5b381b6bbf8d45b85916cf51b11a8b7d3caea2825294e07d2c1229b005086b1792ee783cd8f675c4cef48cb375bc2b1a0235dfa302bfa062d858105fa26af049  plasma-camera-0006-viewfinder-frame-throttle.patch
+71bfcdda3de7d0ab19c69a27e6a28400ffc6c0b7dad8b8499fe72335b46d5e184c576652f46659c4859f91075da33d40958d6ee12586e9ef9b8ae4c1d65a7278  plasma-camera-0007-m52xq-start-order-digital-gain.patch
+cc390279f1242afa9198f8710ca9c82e66304c87fde0d0bc83c7e16b2489d45de4d3ada31fecfe045bbda2916b5a42f47bd0a1e4048d3ad9ee54b668112c2855  plasma-camera-0008-m52xq-rear-no-cap-learning-memory-v2.patch
+cd81395a804532643d83e9bb2442626305c02b9e6d91ef4d66a07489d925dd9610a9878f3a0f124492b2e79fa921b8f49c06d15dec889c927a0f51245d4911d5  plasma-camera-0009-m52xq-frame-copy-drop-stale-camera.patch
+152c9d019a186b059d2cf48cb7efca7ee2a95f851ebebd1519a73a04c23ca39c3c23e3065a20b4587c9e5d1877c77788a6c7aa950dbf3a0236ca5be32068d20c  plasma-camera-0010-m52xq-frame-camera-id-dark-frame-log.patch
+6476a6eaad6d693915f31c74a5bb58e0fb6d6bc5ad1b95a6a353c09df1339cb3e3011dee3a0726e9ba16fd54e5c9097da02ba8866c4062ddf4e2f10aa493f626  plasma-camera-0011-m52xq-sensorae-gain-x64-vblank-reset-fast-dark.patch
+ce359aa583bac3477a49624b11d172ad30b12f6cbe5bb3194507d10890ec26822fcbaa3eb3eaa5587c0e66296df4f15a1ec7f0f3617bed1bc18dcc6d0cbef43a  plasma-camera-0012-m52xq-viewfinder-max-20mp.patch
+5de20351e11bbf3d004facf4b2340b0d98e98d99adb641abaa20d1014d441a8c139e65fe217b1f9b0b3e3333eab6a858abb22b7bf18a365ed6f28e16dce32c6f  plasma-camera-0013-m52xq-tap-to-focus.patch
+a951d05b8795fe9077e6bf75fa5bf8c3a27b410bf4834d645c439b14d24d04e110d8c8bf078e914d72f46058ff77b4c69831750b97ed0971480c7dd325c872da  plasma-camera-0014-m52xq-photo-resolution-jpeg92.patch
+f6a8de8bc342b96f61f92b961e1a580e476ae6e2ea1402aecf88433bbf8243f1f88cbe83718a05c13baf8a746b5c78f20e7255bda12b265995180973467f5b1a  plasma-camera-0015-m52xq-full-resolution-raw-photo.patch
+4cfd4111d2958686b7a0feb694810f61cd90844bbce1299a73d2ce8eff2bed8414c64dcda177be7cc6896da39607e9aa2ca1fea466e665d3e9c205d62420e7f7  plasma-camera-0016-m52xq-video-encoder-backpressure.patch
+"

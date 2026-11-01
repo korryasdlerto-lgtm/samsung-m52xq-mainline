@@ -1,0 +1,12 @@
+[Unit]
+Description=M52XQ: turn the screen on when Telegram starts a sound (incoming call)
+After=graphical-session.target
+ConditionUser=!root
+
+[Service]
+ExecStart=/usr/local/bin/m52xq-call-screen-wake
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

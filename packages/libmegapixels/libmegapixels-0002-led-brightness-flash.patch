@@ -1,0 +1,81 @@
+--- a/src/flash.c	2026-10-04 16:16:17.663725127 +0300
++++ b/src/flash.c	2026-10-04 16:16:17.679725122 +0300
+@@ -2,6 +2,9 @@
+ #include <unistd.h>
+ #include <stdlib.h>
+ #include <limits.h>
++#include <stdio.h>
++#include <string.h>
++#include <fcntl.h>
+ #include "flash.h"
+ #include "util.h"
+ 
+@@ -26,16 +29,55 @@
+ 
+ 	snprintf(result, PATH_MAX, "%s/flash_strobe", path);
+ 
++	/*
++	 * m52xq: the flash LED (sm5714 "white:flash") is a plain LED class device without flash_strobe: drive it through
++	 * "brightness" (max_brightness while the flash is on, 0 afterwards).
++	 */
++	if (access(result, F_OK) != 0) {
++		snprintf(result, PATH_MAX, "%s/brightness", path);
++	}
++
+ 	return result;
+ }
+ 
++static int
++flash_is_brightness(libmegapixels_camera *camera)
++{
++	size_t len = camera->flash_path ? strlen(camera->flash_path) : 0;
++
++	return len > 11 && strcmp(camera->flash_path + len - 11, "/brightness") == 0;
++}
++
++static int
++flash_max_brightness(libmegapixels_camera *camera)
++{
++	char path[PATH_MAX];
++	int max = 1;
++	size_t len = strlen(camera->flash_path);
++	FILE *f;
++
++	snprintf(path, sizeof(path), "%.*s/max_brightness", (int)(len - 11), camera->flash_path);
++	f = fopen(path, "r");
++	if (f) {
++		if (fscanf(f, "%d", &max) != 1 || max < 1) {
++			max = 1;
++		}
++		fclose(f);
++	}
++	return max;
++}
++
+ // Turns on the LED/V4L flash/strobe
+ void
+ libmegapixels_flash_on(libmegapixels_camera *camera)
+ {
+ 	if (camera->flash_type == LIBMEGAPIXELS_FLASH_LED) {
+ 		lseek(camera->flash_fd, 0, SEEK_SET);
+-		dprintf(camera->flash_fd, "1\n");
++		if (flash_is_brightness(camera)) {
++			dprintf(camera->flash_fd, "%d\n", flash_max_brightness(camera));
++		} else {
++			dprintf(camera->flash_fd, "1\n");
++		}
+ 	} else if (camera->flash_type == LIBMEGAPIXELS_FLASH_V4L) {
+ 		// Mode must be flash, and strobe source must be software, for strobe to be possible
+ 		// Strobe source may not exist, which is fine, we ignore the result
+@@ -51,6 +93,9 @@
+ void
+ libmegapixels_flash_off(libmegapixels_camera *camera)
+ {
+-	// Neither LED nor V4L currently needs any action in here, but in the future those or a different method may need to turn flash off here
+-	// For example, if flash strobe doesn't work, and we need to manually turn on/off torch mode
++	// Neither LED strobe nor V4L needs any action in here. The plain brightness LED (m52xq) has to be switched off.
++	if (camera->flash_type == LIBMEGAPIXELS_FLASH_LED && flash_is_brightness(camera)) {
++		lseek(camera->flash_fd, 0, SEEK_SET);
++		dprintf(camera->flash_fd, "0\n");
++	}
+ }

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=SIM cards manager
+Name[ru]=Менеджер SIM-карт
+Comment=Both SIM cards active, or only one of them
+Comment[ru]=Обе SIM-карты активны или только одна из них
+Icon=network-mobile
+Exec=/usr/local/bin/m52xq-sim-mode-menu
+Terminal=false
+Categories=System;Settings;
+Keywords=sim;dual;dsds;modem;сим;

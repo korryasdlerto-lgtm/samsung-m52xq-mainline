@@ -1,0 +1,6 @@
+[Unit]
+Description=M52XQ: NFC %i (quick setting)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/m52xq-nfc-power %i

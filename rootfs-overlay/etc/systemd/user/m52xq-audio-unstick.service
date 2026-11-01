@@ -1,0 +1,11 @@
+[Unit]
+Description=M52XQ: re-open the speaker sink when its PCM freezes (Telegram ringtone stops after ~1.5 s)
+After=pulseaudio.service graphical-session.target
+
+[Service]
+ExecStart=/usr/local/bin/m52xq-audio-unstick
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

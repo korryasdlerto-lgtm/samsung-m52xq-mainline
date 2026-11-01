@@ -1,0 +1,119 @@
+diff -ruN a/components/mobileshell/qml/dataproviders/SignalStrengthInfo.qml b/components/mobileshell/qml/dataproviders/SignalStrengthInfo.qml
+--- a/components/mobileshell/qml/dataproviders/SignalStrengthInfo.qml	2026-09-08 13:56:31.000000000 +0300
++++ b/components/mobileshell/qml/dataproviders/SignalStrengthInfo.qml	2026-10-23 00:34:10.956260002 +0300
+@@ -14,13 +14,43 @@
+ QtObject {
+     property Cellular.CellularModemList _modemList: Cellular.CellularModemList {}
+ 
+-    readonly property string icon: "network-mobile-" + Math.floor((_modemList.primaryModem ? _modemList.primaryModem.signalStrength : 0) / 20) * 20
++    // m52xq dual SIM: with both SIMs active ModemManager has a modem object per SIM; SIM2 is the modem
++    // device "qcom-soc-sim2". SIM1 is the other one (the primary modem with a single SIM).
++    function _isSim2(modem) {
++        return modem && modem.details && modem.details.device && modem.details.device.endsWith("-sim2");
++    }
++    readonly property var _sim2Modem: {
++        const modems = _modemList.modems;
++        for (let i = 0; i < modems.length; i++) {
++            if (_isSim2(modems[i])) return modems[i];
++        }
++        return null;
++    }
++    readonly property var _sim1Modem: {
++        const modems = _modemList.modems;
++        for (let i = 0; i < modems.length; i++) {
++            if (!_isSim2(modems[i])) return modems[i];
++        }
++        return _modemList.primaryModem;
++    }
++    readonly property bool dualSim: _sim1Modem !== null && _sim2Modem !== null && _sim1Modem !== _sim2Modem
+ 
+-    readonly property string label: {
+-        if (!_modemList.primaryModem) return "";
+-        if (_modemList.primaryModem.simLocked) return i18n("SIM Locked");
+-        return _modemList.primaryModem.operatorName;
++    function _icon(modem) {
++        return "network-mobile-" + Math.floor((modem ? modem.signalStrength : 0) / 20) * 20;
+     }
++    function _label(modem) {
++        if (!modem) return "";
++        if (modem.simLocked) return i18n("SIM Locked");
++        return modem.operatorName;
++    }
++
++    readonly property string icon: _icon(_sim1Modem)
++    readonly property string label: _label(_sim1Modem)
++
++    readonly property string icon2: dualSim ? _icon(_sim2Modem) : ""
++    readonly property string label2: dualSim ? _label(_sim2Modem) : ""
++    // both operators, e.g. "life:) | KYIVSTAR"
++    readonly property string labels: dualSim ? label + " | " + label2 : label
+ 
+     readonly property bool showIndicator: _modemList.modemAvailable
+ }
+diff -ruN a/components/mobileshell/qml/statusbar/indicators/SignalStrengthIndicator.qml b/components/mobileshell/qml/statusbar/indicators/SignalStrengthIndicator.qml
+--- a/components/mobileshell/qml/statusbar/indicators/SignalStrengthIndicator.qml	2026-09-08 13:56:31.000000000 +0300
++++ b/components/mobileshell/qml/statusbar/indicators/SignalStrengthIndicator.qml	2026-10-23 00:34:10.956260002 +0300
+@@ -22,8 +22,11 @@
+     property bool showLabel: true
+     property real textPixelSize: Kirigami.Units.gridUnit * 0.6
+ 
+-    width: strengthIcon.width + label.width
+-    Layout.minimumWidth: strengthIcon.width + label.width
++    // m52xq dual SIM: a second signal icon for SIM2
++    readonly property bool dualSim: MobileShell.SignalStrengthInfo.dualSim
++
++    width: strengthIcon.width + strengthIcon2.width + label.width
++    Layout.minimumWidth: strengthIcon.width + strengthIcon2.width + label.width
+ 
+     Kirigami.Icon {
+         id: strengthIcon
+@@ -38,15 +41,26 @@
+         visible: (!isInternetIndicatorMobileData || wirelessStatus.hotspotSSID.length !== 0) && MobileShell.SignalStrengthInfo.showIndicator
+     }
+ 
++    Kirigami.Icon {
++        id: strengthIcon2
++        anchors.left: strengthIcon.right
++        anchors.verticalCenter: parent.verticalCenter
++        height: parent.height
++        width: visible ? height : 0
++
++        source: MobileShell.SignalStrengthInfo.icon2
++        visible: strengthIcon.visible && dualSim
++    }
++
+     PlasmaComponents.Label {
+         id: label
+         visible: showLabel
+         width: visible ? implicitWidth : 0
+         anchors.leftMargin: Kirigami.Units.smallSpacing
+-        anchors.left: strengthIcon.right
++        anchors.left: strengthIcon2.right
+         anchors.verticalCenter: parent.verticalCenter
+ 
+-        text: MobileShell.SignalStrengthInfo.label
++        text: MobileShell.SignalStrengthInfo.labels
+         color: Kirigami.Theme.textColor
+         font.pixelSize: textPixelSize
+     }
+diff -ruN a/components/mobileshell/qml/statusbar/StatusBar.qml b/components/mobileshell/qml/statusbar/StatusBar.qml
+--- a/components/mobileshell/qml/statusbar/StatusBar.qml	2026-09-08 13:56:31.000000000 +0300
++++ b/components/mobileshell/qml/statusbar/StatusBar.qml	2026-10-23 00:34:10.956260002 +0300
+@@ -132,7 +132,7 @@
+                         visible: root.showTime
+                         internetIndicator: internetIndicatorItem
+                         implicitHeight: mainRow.rowHeight
+-                        Layout.preferredWidth: height
++                        Layout.preferredWidth: dualSim ? height * 2 : height
+                     }
+                     MobileShell.BluetoothIndicator {
+                         implicitHeight: mainRow.rowHeight
+@@ -172,7 +172,7 @@
+ 
+                 PlasmaComponents.Label {
+                     visible: root.showTime
+-                    text: MobileShell.SignalStrengthInfo.label
++                    text: MobileShell.SignalStrengthInfo.labels
+                     color: Kirigami.Theme.disabledTextColor
+                     font.pixelSize: root.smallerTextPixelSize
+                     horizontalAlignment: Qt.AlignRight

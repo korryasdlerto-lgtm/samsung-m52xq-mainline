@@ -1,0 +1,13 @@
+module org.kde.kirigamiaddons.onboarding
+linktarget onboardingplugin
+optional plugin onboardingplugin
+classname org_kde_kirigamiaddons_onboardingPlugin
+typeinfo onboardingplugin.qmltypes
+depends org.kde.kirigami
+depends QtQuick.Effects
+prefer :/qt/qml/org/kde/kirigamiaddons/onboarding/
+OnboardToolTip 1.0 OnboardToolTip.qml
+internal OnboardingEffect private/OnboardingEffect.qml
+internal OnboardingOverlay private/OnboardingOverlay.qml
+depends QtQuick
+

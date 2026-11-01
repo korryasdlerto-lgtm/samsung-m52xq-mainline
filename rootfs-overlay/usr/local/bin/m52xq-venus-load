@@ -1,0 +1,18 @@
+#!/bin/sh
+# M52XQ: load the Venus video codec (hardware H.264/HEVC/VP9 decoder + encoder) once the rootfs (firmware) is mounted.
+# The firmware qcom/vpu-2.0/venus.mbn (+ venus.b*) is the Samsung vpu20_1v from the apnhlos partition.
+# venus-core is the "sec3" build: m52xq_sec_persist=1 allocates the encoder PERSIST buffer from the secure
+# non-pixel context (SID 0x2184, arm-smmu patch in the kernel); without it an encoder session resets the phone.
+D=/usr/lib/modules/7.1.2/extra/venus
+[ -f /lib/firmware/qcom/vpu-2.0/venus.mbn ] || exit 0
+for m in v4l2-mem2mem videobuf2-dma-contig venus-core venus-dec venus-enc; do
+	n=$(echo "$m" | tr '-' '_')
+	grep -q "^$n " /proc/modules && continue
+	if [ "$m" = venus-core ]; then
+		insmod "$D/$m.ko" m52xq_sec_persist=1 || exit 0
+		sleep 3
+	else
+		insmod "$D/$m.ko" || exit 0
+	fi
+done
+exit 0

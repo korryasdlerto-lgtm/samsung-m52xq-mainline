@@ -1,0 +1,10 @@
+{
+    "KPackageStructure": "KPackage/GenericQML",
+    "KPlugin": {
+        "Description": "NFC quick setting for the Samsung M52",
+        "Icon": "m52xq-nfc-symbolic",
+        "Id": "org.kde.plasma.quicksetting.nfc",
+        "License": "GPL-2.0+",
+        "Name": "NFC"
+    }
+}

@@ -1,0 +1,96 @@
+diff -ruN -x '*.orig' a/src/plasmacamera/worker.cpp b/src/plasmacamera/worker.cpp
+--- a/src/plasmacamera/worker.cpp	2026-10-10 17:35:59.418223413 +0300
++++ b/src/plasmacamera/worker.cpp	2026-10-10 17:35:51.234010566 +0300
+@@ -229,6 +229,7 @@
+     // while the render thread still uploads the texture (SIGSEGV in memcpy inside Mesa at 30 fps)
+     m_image = m_image.copy();
+     g_vfFrameGeneration.store(g_camGeneration.load());
++    g_vfFrameCamHash.store(m_camera ? qHash(QString::fromStdString(m_camera->id())) : 0);
+     // Emit view finder frame, m_image is moved for performance
+     Q_EMIT viewFinderFrame(std::move(m_image));
+ }
+diff -ruN -x '*.orig' a/src/plasmacamera/worker.h b/src/plasmacamera/worker.h
+--- a/src/plasmacamera/worker.h	2026-10-10 17:35:59.418223413 +0300
++++ b/src/plasmacamera/worker.h	2026-10-10 17:35:51.230010462 +0300
+@@ -28,6 +28,7 @@
+ inline std::atomic<long long> g_vfLastEmitMs{0};
+ inline std::atomic<unsigned> g_camGeneration{0}; // r28: counts viewfinder (re)starts
+ inline std::atomic<unsigned> g_vfFrameGeneration{0}; // r28: generation of the frame that is in flight
++inline std::atomic<size_t> g_vfFrameCamHash{0}; // r29: hash of the id of the camera that produced the frame in flight
+ 
+ // needed to pass shared_ptr via signals
+ Q_DECLARE_METATYPE(const std::shared_ptr<libcamera::Camera>)
+diff -ruN -x '*.orig' a/src/plasmacamera.cpp b/src/plasmacamera.cpp
+--- a/src/plasmacamera.cpp	2026-10-10 17:35:59.414223310 +0300
++++ b/src/plasmacamera.cpp	2026-10-10 17:35:51.230010462 +0300
+@@ -211,6 +211,11 @@
+     return m_cameraId;
+ }
+ 
++QString PlasmaCamera::realCameraId() const
++{
++    return m_camera ? QString::fromStdString(m_camera->id()) : QString();
++}
++
+ QCameraFormat PlasmaCamera::cameraFormat() const
+ {
+     return m_cameraFormat;
+diff -ruN -x '*.orig' a/src/plasmacamera.h b/src/plasmacamera.h
+--- a/src/plasmacamera.h	2026-10-10 17:35:59.414223310 +0300
++++ b/src/plasmacamera.h	2026-10-10 17:35:51.230010462 +0300
+@@ -140,6 +140,7 @@
+      * Returns the id of the current camera device.
+      */
+     QString cameraDevice() const;
++    QString realCameraId() const; // r29: the libcamera id of the camera that is really selected (also for the logical camera)
+     // m52xq: the 5th, "logical" entry of the camera list (main + ultrawide sensor behind one zoom)
+     bool logicalMode() const { return m_logical; }
+     // switch the real camera without leaving the logical mode
+diff -ruN -x '*.orig' a/src/plasmacameramanager.cpp b/src/plasmacameramanager.cpp
+--- a/src/plasmacameramanager.cpp	2026-10-10 17:35:59.418223413 +0300
++++ b/src/plasmacameramanager.cpp	2026-10-10 17:35:51.242010775 +0300
+@@ -2,6 +2,7 @@
+ // SPDX-FileCopyrightText: 2025 Devin Lin <devin@kde.org>
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
++#include <QHash>
+ #include "plasmacamera/worker.h"
+ #include <QSize>
+ 
+@@ -528,8 +529,8 @@
+ void PlasmaCameraManager::processViewfinderFrame(const QImage &image)
+ {
+     g_vfInFlight.store(0); // m52xq: this frame has been taken by the GUI thread, the worker may send the next one
+-    if (g_vfFrameGeneration.load() != g_camGeneration.load()) {
+-        return; // r28: a frame of the camera that has just been switched away (it was shown mirrored / with the wrong settings)
++    if (m_plasmaCamera && g_vfFrameCamHash.load() != qHash(m_plasmaCamera->realCameraId())) {
++        return; // r28/r29: a frame of the camera that has just been switched away (it was shown mirrored / with the wrong settings)
+     }
+     if (image.isNull()) {
+         return;
+diff -ruN -x '*.orig' a/src/sensorae.cpp b/src/sensorae.cpp
+--- a/src/sensorae.cpp	2026-10-10 17:35:59.418223413 +0300
++++ b/src/sensorae.cpp	2026-10-10 17:35:51.234010566 +0300
+@@ -492,6 +492,11 @@
+     }
+     const double mean = std::max(1.0, double(sum) / count);
+     const double clipFraction = double(clipped) / count;
++    if (m_prevFrameMean > 8.0 && mean < 0.4 * m_prevFrameMean) {
++        qWarning().nospace() << "SensorAe: DARK FRAME mean " << mean << " (before " << m_prevFrameMean << ") exposure " << m_expRaw << " gain " << m_gainRaw
++                             << " digital " << m_digital << " vblank " << m_vblank << " sinceApply " << m_sinceApply;
++    }
++    m_prevFrameMean = mean;
+ 
+     // m52xq r19: a change of exposure or gain reaches the pictures a few frames later. Judge again only when the
+     // brightness has stopped changing (or after a time-out): judging the old picture again and again made the exposure
+diff -ruN -x '*.orig' a/src/sensorae.h b/src/sensorae.h
+--- a/src/sensorae.h	2026-10-10 17:35:59.418223413 +0300
++++ b/src/sensorae.h	2026-10-10 17:35:51.234010566 +0300
+@@ -103,6 +103,7 @@
+     double m_meanBefore = 0.0;
+     bool m_raisedExposure = false;
+     double m_maxDigital = 1.0;
++    double m_prevFrameMean = 0.0; // r29: diagnostics, dark frames
+     bool m_learnCap = true; // r26: false for the rear sensor
+     double m_lineScale = 1.0; // real line time / nominal line time (the sensors run slower than their tables say)
+     double displayLineUs() const { return m_lineUs * m_lineScale; }

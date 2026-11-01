@@ -1,0 +1,12 @@
+#!/bin/sh
+# m52xq (в5): ath11k is built into the kernel, its WoW knobs (/sys/module/ath11k/parameters) are set at run time.
+# WMI_WOW_ENABLE flags 0x20 (system suspend) only: without 0x40 (mod DTIM) and 0x80 (forced DTIM) the firmware does not fall into the
+# deep CSS sleep it never wakes up from (25 min of 20 sleep/wake cycles and a 3 min sleep woken by the power key: no WPSS crash).
+# в44: m52xq_hw_filter=3 (firmware hw data filter during WoW also drops multicast except ICMPv6; default 1 passed e.g. the TV's
+# 224.0.0.7 multicast every ~2 s and the phone woke 2-4 s after every suspend). With 3: sleeps of 2-4 minutes, messages and calls still wake.
+P=/sys/module/ath11k/parameters
+i=0
+while [ ! -w $P/m52xq_wow_flags ] && [ $i -lt 30 ]; do sleep 1; i=$((i + 1)); done
+[ -w $P/m52xq_wow_flags ] && echo 32 > $P/m52xq_wow_flags
+[ -w $P/m52xq_hw_filter ] && echo 3 > $P/m52xq_hw_filter
+exit 0

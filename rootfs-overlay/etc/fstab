@@ -1,0 +1,8 @@
+# <file system> <mount point> <type> <options> <dump> <pass>
+UUID=88895074-937c-4713-be54-88d4b27fbb4b / ext4 defaults,nofail,x-systemd.device-timeout=5s 0 0
+UUID=5d0a2dbf-9347-401d-bf25-8f372267b858 /boot ext2 nodev,nosuid,noexec,nofail,x-systemd.device-timeout=5s 0 0
+/dev/disk/by-partlabel/userdata /mnt/userdata ext4 defaults,nofail,x-systemd.device-timeout=5s 0 0
+/mnt/userdata/varlog /var/log none bind,nofail,x-systemd.requires=mnt-userdata.mount,x-systemd.requires=m52xq-prep-userdata-varlog.service 0 0
+/mnt/userdata/coredumps /var/lib/systemd/coredump none bind,nofail,x-systemd.requires=mnt-userdata.mount,x-systemd.requires=m52xq-prep-userdata-varlog.service 0 0
+/mnt/userdata/home /home/user none bind,nofail,x-systemd.requires=mnt-userdata.mount,x-systemd.requires=m52xq-prep-userdata-varlog.service 0 0
+/mnt/userdata/apk-cache /var/cache/apk none bind,nofail,x-systemd.requires=mnt-userdata.mount,x-systemd.requires=m52xq-prep-userdata-varlog.service 0 0

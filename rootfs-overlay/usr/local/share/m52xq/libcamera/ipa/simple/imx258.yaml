@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: CC0-1.0
+# m52xq: tuning for imx258 (Galaxy M52 5G).
+# Copy of the plasma-camera tuning WITH Agc: used by the virtual camera bridge (m52xq-virtualcam) through
+# LIBCAMERA_IPA_CONFIG_PATH, because there is no SensorAe there.
+# blackLevel is on the 16 bit scale: sensor pedestal 64 of 1023 (10 bit) = 4096.
+%YAML 1.1
+---
+version: 1
+algorithms:
+  - BlackLevel:
+      blackLevel: 4096
+  - Awb:
+  - Ccm:
+      ccms:
+        - ct: 2701
+          ccm: [ 1.66951, -0.35271, -0.31679,
+                -0.33594,  1.69731, -0.36137,
+                 0.07843, -1.25185,  2.17341 ]
+        - ct: 3025
+          ccm: [ 1.71956, -0.37493, -0.34462,
+                -0.46994,  1.83453, -0.36459,
+                 0.01838, -1.03863,  2.02024 ]
+        - ct: 4021
+          ccm: [ 1.65286, -0.42348, -0.22938,
+                -0.34752,  1.63472, -0.28719,
+                -0.02119, -0.65164,  1.67283 ]
+        - ct: 6521
+          ccm: [ 1.64464, -0.50901, -0.13564,
+                -0.28189,  1.73169, -0.44979,
+                -0.02601, -0.51457,  1.54058 ]
+  - Adjust:
+  - Agc:
+...

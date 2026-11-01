@@ -1,0 +1,105 @@
+--- a/components/mobileshell/CMakeLists.txt	2026-10-04 18:37:58.220504235 +0300
++++ b/components/mobileshell/CMakeLists.txt	2026-10-04 18:37:58.412498095 +0300
+@@ -97,6 +97,8 @@
+ 
+     qml/statusbar/indicators/BatteryIndicator.qml
+     qml/statusbar/indicators/BluetoothIndicator.qml
++    qml/statusbar/indicators/CameraIndicator.qml
++    qml/statusbar/indicators/LocationIndicator.qml
+     qml/statusbar/indicators/InternetIndicator.qml
+     qml/statusbar/indicators/SignalStrengthIndicator.qml
+     qml/statusbar/indicators/VolumeIndicator.qml
+--- a/components/mobileshell/qml/statusbar/indicators/CameraIndicator.qml	1970-01-01 02:00:00.000000000 +0200
++++ b/components/mobileshell/qml/statusbar/indicators/CameraIndicator.qml	2026-10-04 18:37:58.396498606 +0300
+@@ -0,0 +1,35 @@
++/*
++    m52xq: camera-in-use indicator for the status bar, next to Bluetooth: visible while a camera is in use (virtual camera, plasma-camera, Megapixels)
++    SPDX-License-Identifier: LGPL-2.1-only OR LGPL-3.0-only OR LicenseRef-KDE-Accepted-LGPL
++*/
++
++import QtQuick
++
++import org.kde.kirigami as Kirigami
++import org.kde.plasma.plasma5support as P5Support
++
++Kirigami.Icon {
++    id: cameraIcon
++
++    property bool camOn: false
++
++    source: "camera-video-symbolic"
++    visible: camOn
++
++    P5Support.DataSource {
++        id: runner
++        engine: "executable"
++        onNewData: (source, data) => {
++            cameraIcon.camOn = ((data["stdout"] || "").trim() === "on")
++            disconnectSource(source)
++        }
++    }
++
++    Timer {
++        interval: 4000
++        running: true
++        repeat: true
++        triggeredOnStart: true
++        onTriggered: runner.connectSource("/usr/local/bin/m52xq-camera-active")
++    }
++}
+--- a/components/mobileshell/qml/statusbar/indicators/LocationIndicator.qml	1970-01-01 02:00:00.000000000 +0200
++++ b/components/mobileshell/qml/statusbar/indicators/LocationIndicator.qml	2026-10-04 18:37:58.392498734 +0300
+@@ -0,0 +1,36 @@
++/*
++    m52xq: location (GPS) indicator for the status bar, next to Bluetooth: visible while the "Location"
++    quick setting (m52xq-gps) has the GNSS receiver on.
++    SPDX-License-Identifier: LGPL-2.1-only OR LGPL-3.0-only OR LicenseRef-KDE-Accepted-LGPL
++*/
++
++import QtQuick
++
++import org.kde.kirigami as Kirigami
++import org.kde.plasma.plasma5support as P5Support
++
++Kirigami.Icon {
++    id: locationIcon
++
++    property bool gpsOn: false
++
++    source: "gps-symbolic"
++    visible: gpsOn
++
++    P5Support.DataSource {
++        id: runner
++        engine: "executable"
++        onNewData: (source, data) => {
++            locationIcon.gpsOn = ((data["stdout"] || "").trim() === "on")
++            disconnectSource(source)
++        }
++    }
++
++    Timer {
++        interval: 4000
++        running: true
++        repeat: true
++        triggeredOnStart: true
++        onTriggered: runner.connectSource("/usr/local/bin/m52xq-gps status")
++    }
++}
+--- a/components/mobileshell/qml/statusbar/StatusBar.qml	2026-10-04 18:37:58.220504235 +0300
++++ b/components/mobileshell/qml/statusbar/StatusBar.qml	2026-10-04 18:37:58.412498095 +0300
+@@ -134,6 +134,14 @@
+                         implicitHeight: mainRow.rowHeight
+                         Layout.preferredWidth: height
+                     }
++                    MobileShell.CameraIndicator {
++                        implicitHeight: mainRow.rowHeight
++                        Layout.preferredWidth: visible ? height : 0
++                    }
++                    MobileShell.LocationIndicator {
++                        implicitHeight: mainRow.rowHeight
++                        Layout.preferredWidth: visible ? height : 0
++                    }
+                     MobileShell.BluetoothIndicator {
+                         implicitHeight: mainRow.rowHeight
+                         Layout.preferredWidth: height

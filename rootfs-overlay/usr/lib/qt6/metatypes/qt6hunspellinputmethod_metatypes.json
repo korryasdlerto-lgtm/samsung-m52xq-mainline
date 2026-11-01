@@ -1,0 +1,211 @@
+[
+    {
+        "classes": [
+            {
+                "classInfos": [
+                    {
+                        "name": "QML.Element",
+                        "value": "DefaultInputMethod"
+                    },
+                    {
+                        "name": "QML.AddedInVersion",
+                        "value": "512"
+                    }
+                ],
+                "className": "HunspellInputMethod",
+                "lineNumber": 28,
+                "object": true,
+                "qualifiedClassName": "QtVirtualKeyboard::HunspellInputMethod",
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "name": "QVirtualKeyboardAbstractInputMethod"
+                    }
+                ]
+            }
+        ],
+        "inputFile": "hunspellinputmethod_p.h",
+        "outputRevision": 69
+    },
+    {
+        "classes": [
+            {
+                "className": "HunspellTask",
+                "lineNumber": 37,
+                "object": true,
+                "qualifiedClassName": "QtVirtualKeyboard::HunspellTask",
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "name": "QObject"
+                    }
+                ]
+            },
+            {
+                "className": "HunspellLoadDictionaryTask",
+                "lineNumber": 51,
+                "object": true,
+                "qualifiedClassName": "QtVirtualKeyboard::HunspellLoadDictionaryTask",
+                "signals": [
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "success",
+                                "type": "bool"
+                            }
+                        ],
+                        "index": 0,
+                        "lineNumber": 60,
+                        "name": "completed",
+                        "returnType": "void"
+                    }
+                ],
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "fullyQualifiedName": "QtVirtualKeyboard::HunspellTask",
+                        "name": "HunspellTask"
+                    }
+                ]
+            },
+            {
+                "className": "HunspellBuildSuggestionsTask",
+                "lineNumber": 68,
+                "object": true,
+                "qualifiedClassName": "QtVirtualKeyboard::HunspellBuildSuggestionsTask",
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "fullyQualifiedName": "QtVirtualKeyboard::HunspellTask",
+                        "name": "HunspellTask"
+                    }
+                ]
+            },
+            {
+                "className": "HunspellUpdateSuggestionsTask",
+                "lineNumber": 85,
+                "object": true,
+                "qualifiedClassName": "QtVirtualKeyboard::HunspellUpdateSuggestionsTask",
+                "signals": [
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "wordList",
+                                "type": "QSharedPointer<HunspellWordList>"
+                            },
+                            {
+                                "name": "tag",
+                                "type": "int"
+                            }
+                        ],
+                        "index": 0,
+                        "lineNumber": 94,
+                        "name": "updateSuggestions",
+                        "returnType": "void"
+                    }
+                ],
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "fullyQualifiedName": "QtVirtualKeyboard::HunspellTask",
+                        "name": "HunspellTask"
+                    }
+                ]
+            },
+            {
+                "className": "HunspellAddWordTask",
+                "lineNumber": 100,
+                "object": true,
+                "qualifiedClassName": "QtVirtualKeyboard::HunspellAddWordTask",
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "fullyQualifiedName": "QtVirtualKeyboard::HunspellTask",
+                        "name": "HunspellTask"
+                    }
+                ]
+            },
+            {
+                "className": "HunspellRemoveWordTask",
+                "lineNumber": 111,
+                "object": true,
+                "qualifiedClassName": "QtVirtualKeyboard::HunspellRemoveWordTask",
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "fullyQualifiedName": "QtVirtualKeyboard::HunspellTask",
+                        "name": "HunspellTask"
+                    }
+                ]
+            },
+            {
+                "className": "HunspellLoadWordListTask",
+                "lineNumber": 120,
+                "object": true,
+                "qualifiedClassName": "QtVirtualKeyboard::HunspellLoadWordListTask",
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "fullyQualifiedName": "QtVirtualKeyboard::HunspellTask",
+                        "name": "HunspellTask"
+                    }
+                ]
+            },
+            {
+                "className": "HunspellSaveWordListTask",
+                "lineNumber": 130,
+                "object": true,
+                "qualifiedClassName": "QtVirtualKeyboard::HunspellSaveWordListTask",
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "fullyQualifiedName": "QtVirtualKeyboard::HunspellTask",
+                        "name": "HunspellTask"
+                    }
+                ]
+            },
+            {
+                "className": "HunspellFilterWordTask",
+                "lineNumber": 140,
+                "object": true,
+                "qualifiedClassName": "QtVirtualKeyboard::HunspellFilterWordTask",
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "fullyQualifiedName": "QtVirtualKeyboard::HunspellTask",
+                        "name": "HunspellTask"
+                    }
+                ]
+            },
+            {
+                "className": "HunspellBoostWordTask",
+                "lineNumber": 156,
+                "object": true,
+                "qualifiedClassName": "QtVirtualKeyboard::HunspellBoostWordTask",
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "fullyQualifiedName": "QtVirtualKeyboard::HunspellTask",
+                        "name": "HunspellTask"
+                    }
+                ]
+            },
+            {
+                "className": "HunspellWorker",
+                "lineNumber": 170,
+                "object": true,
+                "qualifiedClassName": "QtVirtualKeyboard::HunspellWorker",
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "name": "QThread"
+                    }
+                ]
+            }
+        ],
+        "inputFile": "hunspellworker_p.h",
+        "outputRevision": 69
+    }
+]

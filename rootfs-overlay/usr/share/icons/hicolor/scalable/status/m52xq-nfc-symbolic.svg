@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <!-- m52xq: NFC symbol (rounded square with an "N"), made like the Breeze symbolic icons: the shell replaces the
+       current-color-scheme stylesheet with the theme colours, so the icon follows light/dark like the others -->
+  <defs id="defs3051">
+    <style type="text/css" id="current-color-scheme">
+      .ColorScheme-Text {
+        color:#232629;
+      }
+      </style>
+  </defs>
+  <path style="fill:currentColor;fill-opacity:1;stroke:none" class="ColorScheme-Text" d="M4 1C2.338 1 1 2.338 1 4v8c0 1.662 1.338 3 3 3h8c1.662 0 3-1.338 3-3V4c0-1.662-1.338-3-3-3zm0 1.5h8c.831 0 1.5.669 1.5 1.5v8c0 .831-.669 1.5-1.5 1.5H4c-.831 0-1.5-.669-1.5-1.5V4c0-.831.669-1.5 1.5-1.5z"/>
+  <path style="fill:currentColor;fill-opacity:1;stroke:none" class="ColorScheme-Text" d="M5 4.5h1.6L9.5 9V4.5H11v7H9.4L6.5 7v4.5H5z"/>
+</svg>

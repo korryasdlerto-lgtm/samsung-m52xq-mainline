@@ -1,0 +1,195 @@
+#!/bin/sh
+# M52XQ: SIM mode (root). Usage: m52xq-sim-mode dsds|sim1|sim2   (switch: save, modem subscriptions, restart MM)
+#                                m52xq-sim-mode data1|data2        (the SIM of the mobile data, used with dsds)
+#                                m52xq-sim-mode apply              (boot: subscriptions + data SIM of the saved mode)
+#                                m52xq-sim-mode status             (prints "<mode> <data SIM>", e.g. "dsds 1")
+# dsds - both SIMs active (dual standby, like the stock phone): ModemManager r7 (patches 0101, 0102) gets MM_QRTR_DSDS
+#        and makes a second modem object for SIM2 (QMI clients bound to subscription 1).
+# sim1 - only SIM1: plain single modem; the SIM2 provisioning session is deactivated (SIM2 leaves the network).
+# sim2 - only SIM2: MM_QRTR_SIM_ONLY=2, the single modem object (with mobile data and GPS) is SIM2; SIM1 deactivated.
+# data - with both SIMs active only one SIM carries the mobile data (/etc/m52xq/data-sim, default SIM1): the modem's
+#        data subscription (DDS) is switched with m52xq-dds and MM_QRTR_DATA_SIM=2 gives the data port to the SIM2
+#        modem object. "Only SIM1" / "only SIM2" always use their own SIM for the data.
+# The SIMs stay in their slots: SIM1 = slot 1 = primary GW session, SIM2 = slot 2 = secondary GW session.
+# NetworkManager: the mobile connection is bound to the modem of the data SIM (connection.interface-name qrtr0 = SIM1,
+# qrtr0-sim2 = SIM2, also "only SIM2"), otherwise after the airplane switch in the shade (NM radio wwan off/on) NM gave
+# it to the first modem that came back, often the SIM without the data port, and the data never came up.
+CONF=/etc/m52xq/sim-mode
+DATA=/etc/m52xq/data-sim
+DROPIN=/etc/systemd/system/ModemManager.service.d/m52xq-sim-mode.conf
+Q="timeout 15 qmicli -d qrtr://0"
+
+# v40: cards really inserted: "1", "2", "12" ("" = unknown). With ONE card the phone runs on that SIM only: ModemManager
+# then makes no modem object for the empty slot (the shade and the dialer count the modem objects: two signal bars and
+# two call buttons for one card). The saved mode (/etc/m52xq/sim-mode) stays: it applies again when both cards are in.
+cards_present() {
+	$Q --uim-get-card-status 2>/dev/null | awk '
+		/^Slot \[/ { s = $2; gsub(/[^0-9]/, "", s); next }
+		s != "" && /Card state:/ { if ($0 ~ /present/) p = p s; s = "" }
+		END { print p }'
+}
+effective_mode() {	# $1 = saved mode
+	case $(cards_present) in
+	1) echo sim1 ;;
+	2) echo sim2 ;;
+	*) echo $1 ;;
+	esac
+}
+
+mode=$(cat $CONF 2>/dev/null || echo dsds)
+data=$(cat $DATA 2>/dev/null || echo 1)
+case $1 in
+apply) ;;
+status) echo "$mode $data $([ -f /etc/m52xq/flight ] && echo flight)"; exit 0 ;;
+dsds | sim1 | sim2) mode=$1 ;;
+data1 | data2) data=${1#data} ;;
+*) echo "usage: $0 dsds|sim1|sim2|data1|data2|apply|status" >&2; exit 2 ;;
+esac
+# the SIM that carries the mobile data in this mode
+case $mode in
+sim1) dds=1 ;;
+sim2) dds=2 ;;
+*) dds=$data ;;
+esac
+
+# bind every NM mobile (gsm) connection to the modem of the data SIM
+nm_bind() {
+	if [ "$dds" = 2 ]; then dev=qrtr0-sim2; else dev=qrtr0; fi
+	for c in $(nmcli -g UUID,TYPE connection show 2>/dev/null | awk -F: '$2 == "gsm" { print $1 }'); do
+		[ "$(nmcli -g connection.interface-name connection show "$c")" = "$dev" ] && continue
+		nmcli connection modify "$c" connection.interface-name "$dev"
+		echo "m52xq-sim-mode: mobile connection $c -> $dev: $?"
+	done
+}
+
+# AID of the first application on a card slot ("" for a 2G SIM)
+aid() {
+	$Q --uim-get-card-status 2>/dev/null | awk -v slot="Slot [$1]:" '
+		$0 ~ /^Slot \[/ { on = ($0 == slot) }
+		on && /Application ID:/ { getline; gsub(/[ \t]/, ""); if ($0 ~ /^[0-9A-F:]+$/) print; exit }'
+}
+
+# session primary|secondary, slot, yes|no
+session() {
+	st=$($Q --uim-get-card-status 2>/dev/null | grep -i "^[[:space:]]*$1 GW:")
+	case "$3:$st" in
+	yes:*"slot '$2'"*) return 0 ;;
+	no:*"doesn't exist"*) return 0 ;;
+	esac
+	if [ "$3" = yes ]; then
+		a=$(aid $2)
+		$Q --uim-change-provisioning-session="session-type=$1-gw-provisioning,activate=yes,slot=$2${a:+,aid=$a}"
+	else
+		$Q --uim-change-provisioning-session="session-type=$1-gw-provisioning,activate=no"
+	fi
+	echo "m52xq-sim-mode: $1 GW session (slot $2) activate=$3: $?"
+}
+
+# v40: flight mode (m52xq-flight-mode) keeps the SIMs and the modem radio off: only remember the choice
+FLIGHT=/etc/m52xq/flight
+if [ -f $FLIGHT ]; then
+	if [ "$1" = apply ]; then
+		/usr/local/sbin/m52xq-flight-mode apply
+		exit 0
+	fi
+	mkdir -p ${CONF%/*}
+	echo $mode > $CONF
+	echo $data > $DATA
+	echo "m52xq-sim-mode: flight mode is on: $mode, data SIM$data saved, used when flight mode is turned off"
+	exit 0
+fi
+
+# wait for the modem UIM service (boot)
+for i in $(seq 60); do
+	$Q --uim-get-card-status >/dev/null 2>&1 && break
+	sleep 2
+done
+
+emode=$(effective_mode $mode)
+case $emode in
+sim1) dds=1 ;;
+sim2) dds=2 ;;
+*) dds=$data ;;
+esac
+[ "$emode" != "$mode" ] && echo "m52xq-sim-mode: one card inserted: $mode -> $emode (the saved mode is kept)"
+case $emode in
+dsds) session primary 1 yes; session secondary 2 yes ;;
+sim1) session primary 1 yes; session secondary 2 no ;;
+sim2) session secondary 2 yes; session primary 1 no ;;
+esac
+if [ "$(timeout 15 /usr/local/bin/m52xq-dds get 2>/dev/null)" != "$dds" ]; then
+	timeout 20 /usr/local/bin/m52xq-dds set $dds
+	echo "m52xq-sim-mode: data SIM (DDS) -> SIM$dds: $?"
+fi
+
+nm_bind
+
+# the ModemManager environment of the effective mode; returns 0 when the drop-in changed
+write_dropin() {
+	mkdir -p ${DROPIN%/*}
+	case $emode in
+	dsds)
+		want=$(printf '[Service]\n# m52xq-sim-mode: both SIMs active, mobile data on SIM%s\nEnvironment=MM_QRTR_DSDS=1' $data
+			[ "$data" = 2 ] && printf '\nEnvironment=MM_QRTR_DATA_SIM=2') ;;
+	# MM_QRTR_DSDS next to MM_QRTR_SIM_ONLY changes nothing for the modem objects (SIM_ONLY wins), but turns on the ModemManager
+	# patch 0103 (a refused explicit packet service attach does not abort the connection): without it "only SIM2" has no data
+	sim2) want=$(printf '[Service]\n# m52xq-sim-mode: only SIM2\nEnvironment=MM_QRTR_SIM_ONLY=2\nEnvironment=MM_QRTR_DSDS=1') ;;
+	*) want= ;;
+	esac
+	if [ -z "$want" ]; then
+		[ -e $DROPIN ] || return 1
+		rm -f $DROPIN
+		return 0
+	fi
+	[ "$(cat $DROPIN 2>/dev/null)" = "$want" ] && return 1
+	printf '%s\n' "$want" > $DROPIN
+	return 0
+}
+
+if [ "$1" = apply ]; then
+	# ModemManager is already running (multi-user.target): restart it only if the cards changed what it needs
+	if write_dropin; then
+		sync
+		systemctl daemon-reload
+		systemctl reset-failed ModemManager 2>/dev/null
+		systemctl restart ModemManager
+		echo "m52xq-sim-mode: ModemManager restarted for $emode"
+	else
+		systemctl start ModemManager
+	fi
+	[ "$emode" = sim1 ] && exit 0
+	mm_stable_boot=1
+fi
+
+if [ -z "$mm_stable_boot" ]; then
+
+mkdir -p ${CONF%/*} ${DROPIN%/*}
+echo $mode > $CONF
+echo $data > $DATA
+write_dropin
+sync
+systemctl daemon-reload
+systemctl reset-failed ModemManager 2>/dev/null
+systemctl restart ModemManager
+echo "m52xq-sim-mode: $emode (saved: $mode), data SIM$dds"
+[ "$emode" = sim1 ] && exit 0
+fi
+
+# Safety net: if ModemManager crashes (its MainPID changes) or shows no modem within 90 s, go back to "only SIM1",
+# so that a broken dual-SIM build never leaves the phone without any SIM (also checked at boot)
+mm_stable() {
+	pid=$(systemctl show -P MainPID ModemManager)
+	ok=""
+	for i in $(seq 45); do
+		sleep 2
+		[ "$(systemctl show -P MainPID ModemManager)" != "$pid" ] && return 1
+		mmcli -L 2>/dev/null | grep -q "Modem/" && ok=1 && break
+	done
+	[ -n "$ok" ] || return 1
+	sleep 20	# the modems come up one after another: stable means the same process meanwhile
+	[ "$(systemctl show -P MainPID ModemManager)" = "$pid" ]
+}
+mm_stable && exit 0
+echo "m52xq-sim-mode: ModemManager failed in mode $mode, back to sim1" >&2
+"$0" sim1
+exit 1

@@ -1,0 +1,18 @@
+--- a/src/plasmacameramanager.cpp	2026-10-03 20:44:38.600184580 +0300
++++ b/src/plasmacameramanager.cpp	2026-10-03 20:54:04.244469257 +0300
+@@ -512,7 +512,14 @@
+     // Do software rotation
+     // From testing, most drivers don't seem to implement hardware orientation correctly (CameraConfiguration::orientation),
+     // it either isn't supported or just crashes. So we will just use software rotation for best hardware compatibility.
+-    switch (m_plasmaCamera->softwareRotationDegrees()) {
++    // The viewfinder must follow the device orientation just like the saved photo does (camera rotation + orientation sensor).
++    // The still image is mirrored vertically and then rotated, the viewfinder is rotated and then mirrored horizontally:
++    // for a mirrored (front) camera the equivalent viewfinder rotation is 180 - total.
++    int viewfinderDegrees = (static_cast<int>(outputOrientationDegrees()) % 360 + 360) % 360;
++    if (m_plasmaCamera->mirrorOutput()) {
++        viewfinderDegrees = (180 - viewfinderDegrees + 360) % 360;
++    }
++    switch (viewfinderDegrees) {
+     case 0:
+         break;
+     case 90:

@@ -1,0 +1,967 @@
+Files of the v44 installer overlay (mainline-extras/rootfs-files) that are NOT in this repository.
+Proprietary firmware and sensor configs come from the phone itself or from the stock firmware;
+binaries are built from packages/ (pmaports recipes with our patches) or are unmodified upstream builds.
+
+etc/m52xq-touch-inhibit	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+home/user/Music/.keep	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+lib/firmware/a660_gmu.bin	proprietary firmware / sensor config / kernel module	55256	179caf2e3b7d5481c3567c2987f5be32
+lib/firmware/a660_sqe.fw	proprietary firmware / sensor config / kernel module	40496	08b7662ccd6815333aed6bce9bd69bd7
+lib/firmware/a660_zap.b00	proprietary firmware / sensor config / kernel module	148	61aa5785be8a4f16715395e740847347
+lib/firmware/a660_zap.b01	proprietary firmware / sensor config / kernel module	6560	83ed1481ae9d3b8b6d72e09b11cfe0be
+lib/firmware/a660_zap.b02	proprietary firmware / sensor config / kernel module	1976	e1341c9fa6f3b4d55ec0ecca0980198f
+lib/firmware/a660_zap.mdt	proprietary firmware / sensor config / kernel module	6708	b997f86a3316f666d198d75a87661b51
+lib/firmware/adsp.b00	proprietary firmware / sensor config / kernel module	1204	949898161b34f34c153f0e99f46f8716
+lib/firmware/adsp.b01	proprietary firmware / sensor config / kernel module	8144	4fdc0ac2444c6b83ddb3cc8b6d881b14
+lib/firmware/adsp.b02	proprietary firmware / sensor config / kernel module	7496	15d33e8159ed2e26f884534eba072e96
+lib/firmware/adsp.b03	proprietary firmware / sensor config / kernel module	2663560	8e58c8f40ed4f573eaee319db9a3ca56
+lib/firmware/adsp.b04	proprietary firmware / sensor config / kernel module	26876	a2a5701d62682f9ed5a60fd7cb4ebc4e
+lib/firmware/adsp.b05	proprietary firmware / sensor config / kernel module	28512	9cd6a97395a2aa4a4ffd8757b58a3f92
+lib/firmware/adsp.b06	proprietary firmware / sensor config / kernel module	1096	be1fe07c15d077ee2b2c3f083ab75b3a
+lib/firmware/adsp.b07	proprietary firmware / sensor config / kernel module	409600	0c9e54f364937fc38a46c51750e7cd81
+lib/firmware/adsp.b08	proprietary firmware / sensor config / kernel module	1092	b3bd8419f1dff94efb6d20143fdda0d3
+lib/firmware/adsp.b09	proprietary firmware / sensor config / kernel module	2660	b7a6dc8b1045beee6c73cee38c829f38
+lib/firmware/adsp.b10	proprietary firmware / sensor config / kernel module	2045192	acbb76e8a635b302fcf6f331093986f5
+lib/firmware/adsp.b11	proprietary firmware / sensor config / kernel module	174048	5e913299e4674633a40c40bbf15e6dcb
+lib/firmware/adsp.b12	proprietary firmware / sensor config / kernel module	3056	079e3800aaf5e0aa45a23427f8d52614
+lib/firmware/adsp.b13	proprietary firmware / sensor config / kernel module	5548	43cc696081c5bdce8e1ff42d3fcacc3e
+lib/firmware/adsp.b14	proprietary firmware / sensor config / kernel module	101792	385f4450cc184c3ef2669f60aa81dba7
+lib/firmware/adsp.b15	proprietary firmware / sensor config / kernel module	81320	7c5448d5b7353cdb003e21e07e0c59fb
+lib/firmware/adsp.b16	proprietary firmware / sensor config / kernel module	774144	cb5558e9f01585f52f67b98ad8c17182
+lib/firmware/adsp.b17	proprietary firmware / sensor config / kernel module	1462776	a0c12f53fb1cbc66a4af143ad9f4dcb4
+lib/firmware/adsp.b18	proprietary firmware / sensor config / kernel module	278532	5345d8fa06f63a1be76457e76ff8008b
+lib/firmware/adsp.b19	proprietary firmware / sensor config / kernel module	15587	aba1916fc092f21f8c297dd3c72eee86
+lib/firmware/adsp.b20	proprietary firmware / sensor config / kernel module	13224	03d81330cd0118fa7f91ea1baac5751f
+lib/firmware/adsp.b21	proprietary firmware / sensor config / kernel module	1572	a304628087169edb4d629ba72405d805
+lib/firmware/adsp.b22	proprietary firmware / sensor config / kernel module	38944	1c325bd464436bcacbbd5017defbbfba
+lib/firmware/adsp.b23	proprietary firmware / sensor config / kernel module	50276	78481e4867b5bc7b8c04418a98ae8683
+lib/firmware/adsp.b24	proprietary firmware / sensor config / kernel module	353580	037b5c101068de60f1ec16ceca4c8a67
+lib/firmware/adsp.b25	proprietary firmware / sensor config / kernel module	207480	081e1bdf8c7aac26525dee4631012458
+lib/firmware/adsp.b26	proprietary firmware / sensor config / kernel module	9598320	8c50eaa8816b65fb453abf8b5077c7bb
+lib/firmware/adsp.b27	proprietary firmware / sensor config / kernel module	964280	ade4185e3ab2c78124669184a20c73cd
+lib/firmware/adsp.b29	proprietary firmware / sensor config / kernel module	8088	89f5c0eac206f70378bb61608c5b20fb
+lib/firmware/adsp.b30	proprietary firmware / sensor config / kernel module	220936	cea1ad5343af696f99ad361f390ad119
+lib/firmware/adsp.b31	proprietary firmware / sensor config / kernel module	8020	475ec261195f7d6d13427c320316e3cb
+lib/firmware/adsp.b32	proprietary firmware / sensor config / kernel module	1477	87381add68fb5499912b3480d44d8afb
+lib/firmware/adsp.b33	proprietary firmware / sensor config / kernel module	40989	cb9691c0411bd30d5cff569e9cfb020f
+lib/firmware/adsp.b34	proprietary firmware / sensor config / kernel module	371408	4cda7b3c9983ec054092fe149fa624e6
+lib/firmware/adsp.mdt	proprietary firmware / sensor config / kernel module	9348	7c486c09dcd3114240ce74c3a84c5945
+lib/firmware/adspr.jsn	proprietary firmware / sensor config / kernel module	513	5d262bb7661402a8d7ca9724bbb45d46
+lib/firmware/adsps.jsn	proprietary firmware / sensor config / kernel module	515	cddb328503f04c634cc3251b89dad765
+lib/firmware/adspua.jsn	proprietary firmware / sensor config / kernel module	703	a43d66d0549e33cf421e25be06260ce0
+lib/firmware/ath11k/WCN6750/hw1.0/board-2.bin	proprietary firmware / sensor config / kernel module	928004	b5e5ed0a28ee415682e741789bc781f1
+lib/firmware/qca/msbtfw11.mbn	proprietary firmware / sensor config / kernel module	184620	b44f10e137755899a6aa29dc1320c870
+lib/firmware/qca/msbtfw11.tlv	proprietary firmware / sensor config / kernel module	172044	050dab288e34c179fe9c50b2f07be295
+lib/firmware/qca/msnv11.bin	proprietary firmware / sensor config / kernel module	6213	3e92b545e48838bc72e49e408217607e
+lib/firmware/qcom/sm7325/samsung/m52xq/Global_cal.acdb	proprietary firmware / sensor config / kernel module	41132	96c04a80f89088a18d4c6cec736ce5eb
+lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_16k.bin	proprietary firmware / sensor config / kernel module	4972	d857ad33993a0409c8bf82f7272a97ad
+lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_48k.bin	proprietary firmware / sensor config / kernel module	4972	c71043d5c09986d6b1e76f6c07bdf163
+lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_8k.bin	proprietary firmware / sensor config / kernel module	4972	d46d1e07c8941a3c8ad2dc8b875c0711
+lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_bt_16k.bin	proprietary firmware / sensor config / kernel module	4912	a45aac7723052b6c8f71525aa47700bd
+lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_bt_48k.bin	proprietary firmware / sensor config / kernel module	5012	6676dee0755a36c5c06b70187799859a
+lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_bt_8k.bin	proprietary firmware / sensor config / kernel module	4956	28a1dba996b189f51698804e7faad6ea
+lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_handset_16k.bin	proprietary firmware / sensor config / kernel module	4972	d857ad33993a0409c8bf82f7272a97ad
+lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_handset_48k.bin	proprietary firmware / sensor config / kernel module	4972	c71043d5c09986d6b1e76f6c07bdf163
+lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_handset_8k.bin	proprietary firmware / sensor config / kernel module	4972	d46d1e07c8941a3c8ad2dc8b875c0711
+lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_headset_16k.bin	proprietary firmware / sensor config / kernel module	4888	a2dfd67d2bdb0f9dcbf9953ac6704faa
+lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_headset_48k.bin	proprietary firmware / sensor config / kernel module	4888	329c4b606a333580d74391294d5f6b27
+lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_headset_8k.bin	proprietary firmware / sensor config / kernel module	4888	190ad6a39de450d5eb279eaad38052f5
+lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_speaker_16k.bin	proprietary firmware / sensor config / kernel module	4972	0d44cf969ebfb7f67e500c532f1ef58d
+lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_speaker_48k.bin	proprietary firmware / sensor config / kernel module	4972	65f5e108538a84d51a2c73e967cdde9d
+lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_speaker_8k.bin	proprietary firmware / sensor config / kernel module	4972	eff4ccf88d6c5a6df80e0ec631f4a7fb
+lib/firmware/wpss.b00	proprietary firmware / sensor config / kernel module	340	74b8a6f8da0f89be113b6ee55967d031
+lib/firmware/wpss.b01	proprietary firmware / sensor config / kernel module	6848	e2d0f978dccbd5cc8148e17826af4f36
+lib/firmware/wpss.b02	proprietary firmware / sensor config / kernel module	10300	59537fe0920858bc49ffcbc5df9f0bc5
+lib/firmware/wpss.b03	proprietary firmware / sensor config / kernel module	4096	d3c62384206e7c823a67b5dfccf21928
+lib/firmware/wpss.b04	proprietary firmware / sensor config / kernel module	5753591	3e2905fd71874e35cb2edbbc08fe8ad9
+lib/firmware/wpss.b05	proprietary firmware / sensor config / kernel module	232432	61e7501e9c1ad372cef7eab55a28aff4
+lib/firmware/wpss.b06	proprietary firmware / sensor config / kernel module	266684	b7349153a65e950d923f75ce21bdbbc1
+lib/firmware/wpss.b07	proprietary firmware / sensor config / kernel module	1176368	ab56807567cec6891cc7f407d0702e95
+lib/firmware/wpss.mdt	proprietary firmware / sensor config / kernel module	7188	4c4c5e4f58cb4d10dbee68be801008a1
+lib/firmware/yupik_ipa_fws.b00	proprietary firmware / sensor config / kernel module	212	942e702e212f0dc36cba2d2aa917a543
+lib/firmware/yupik_ipa_fws.b01	proprietary firmware / sensor config / kernel module	6656	7a990dff9006b58d7df6fdeb27a703c3
+lib/firmware/yupik_ipa_fws.b02	proprietary firmware / sensor config / kernel module	15360	fcd628f07ef2cb759e00a432f2927c22
+lib/firmware/yupik_ipa_fws.b03	proprietary firmware / sensor config / kernel module	128	f012db03ebbde9ce8650993112ee430b
+lib/firmware/yupik_ipa_fws.b04	proprietary firmware / sensor config / kernel module	840	2f27bb0f29d7aff232444f9e93b42e95
+lib/firmware/yupik_ipa_fws.mdt	proprietary firmware / sensor config / kernel module	6868	e884b4c56f12fecf5970124fd385b702
+lib/modules/7.1.2/extra/v4l2loopback.ko	proprietary firmware / sensor config / kernel module	586016	4a2fcb0bb3f7ff07796f3c3f46043366
+lib/modules/7.1.2/kernel/drivers/net/wireless/ath/ath11k/ath11k_ahb.ko	proprietary firmware / sensor config / kernel module	675360	0eb4cbdfd20d497dce87f50e3d787bb9
+lib/modules/7.1.2/modules.alias	proprietary firmware / sensor config / kernel module	397	5d9bf2d5dc67dce5e93a628984d14ca6
+lib/modules/7.1.2/modules.alias.bin	proprietary firmware / sensor config / kernel module	337	bf9bc8c1d4b2dbd7efec76956d19b7ac
+lib/modules/7.1.2/modules.builtin	proprietary firmware / sensor config / kernel module	18936	2735b4618f1d4e8a66d5d577bae36b65
+lib/modules/7.1.2/modules.builtin.alias.bin	proprietary firmware / sensor config / kernel module	178860	bad5953d30724162f8f12d99c59d0200
+lib/modules/7.1.2/modules.builtin.bin	proprietary firmware / sensor config / kernel module	20565	a38ce27ca5675793975f27240004b77b
+lib/modules/7.1.2/modules.builtin.modinfo	proprietary firmware / sensor config / kernel module	284400	1d5a6a346efc45140033c1c9c961d3b9
+lib/modules/7.1.2/modules.dep	proprietary firmware / sensor config / kernel module	54	d4996110b3ff802266b8c13089b08994
+lib/modules/7.1.2/modules.dep.bin	proprietary firmware / sensor config / kernel module	90	a5092ba346f446cdddbd042477044070
+lib/modules/7.1.2/modules.devname	proprietary firmware / sensor config / kernel module	0	d41d8cd98f00b204e9800998ecf8427e
+lib/modules/7.1.2/modules.order	proprietary firmware / sensor config / kernel module	699	884f3366b7273b5328cfc1c9d3bea23e
+lib/modules/7.1.2/modules.softdep	proprietary firmware / sensor config / kernel module	55	ccf8f3611141656ba5594771bec06202
+lib/modules/7.1.2/modules.symbols	proprietary firmware / sensor config / kernel module	49	a2b0c03df45bdcdacac346982b20562c
+lib/modules/7.1.2/modules.symbols.bin	proprietary firmware / sensor config / kernel module	12	fd92b549ca8d27dd7db6666f3695558a
+lib/modules/7.1.2/modules.weakdep	proprietary firmware / sensor config / kernel module	55	484a00a83a3e88ae47b55d84647b9c1e
+usr/bin/ModemManager	binary built from the recipes in packages/ or upstream	2099064	adb14cd9533c31d54c8b1266592368b6
+usr/bin/cec-compliance	binary built from the recipes in packages/ or upstream	266280	adb5cd16e7ad63cbe02b7781c7f1340a
+usr/bin/cec-ctl	binary built from the recipes in packages/ or upstream	271704	2b716ada05102c834bca596a019e0b11
+usr/bin/cec-follower	binary built from the recipes in packages/ or upstream	133792	0709021f351f960426480d01ed91d68a
+usr/bin/cx18-ctl	binary built from the recipes in packages/ or upstream	67624	d8011ccaa0d953fc82873a82e47aeead
+usr/bin/decode_tm6000	binary built from the recipes in packages/ or upstream	67768	77a3e33f46666d1f754b98c5ab7be2f7
+usr/bin/edid-decode	binary built from the recipes in packages/ or upstream	335720	a6146f9889e517b9a4dfe6a08369f347
+usr/bin/gst-inspect-1.0	binary built from the recipes in packages/ or upstream	67496	0f082dbc6bb16089afd456be086a111b
+usr/bin/gst-launch-1.0	binary built from the recipes in packages/ or upstream	67328	a3735d12a8858692fdd470e77b7186f3
+usr/bin/gst-stats-1.0	binary built from the recipes in packages/ or upstream	67392	052aee7ff559a3e0427f3cd1015bf5f0
+usr/bin/gst-typefind-1.0	binary built from the recipes in packages/ or upstream	67320	a13160809ff7c0389ed76d14679c69f6
+usr/bin/hexagonrpcd	binary built from the recipes in packages/ or upstream	67560	25f8c16668071e8ede872f018ccfb918
+usr/bin/hostapd	binary built from the recipes in packages/ or upstream	1382952	0a5573128782a6a02a755309fe1a1490
+usr/bin/hostapd_cli	binary built from the recipes in packages/ or upstream	67456	da829b107d6484f12dc163ae0a05db7d
+usr/bin/ir-ctl	binary built from the recipes in packages/ or upstream	133032	4c575d31e1fbecf2ec35f01078c0b4d1
+usr/bin/ivtv-ctl	binary built from the recipes in packages/ or upstream	67696	c1cd709de7f394b3027e48365c785e48
+usr/bin/iw	binary built from the recipes in packages/ or upstream	277920	17fee37d335dadf5641a22cc3ef2fea4
+usr/bin/kalk	binary built from the recipes in packages/ or upstream	790920	3f9d66471b52b784fe87deac76b695fe
+usr/bin/media-ctl	binary built from the recipes in packages/ or upstream	68264	23be95b6cc3a7b395b79b09a1569c06a
+usr/bin/megapixels	binary built from the recipes in packages/ or upstream	332016	c2574c7257cd1f170ef3ccb278ad0d95
+usr/bin/mmcli	binary built from the recipes in packages/ or upstream	271856	2086d6953249564424ed88d20b44c2a0
+usr/bin/nt_password_hash	binary built from the recipes in packages/ or upstream	67544	8cafadfc5260326bf3cc300466d50489
+usr/bin/plasma-camera	binary built from the recipes in packages/ or upstream	529632	74b7ccc91b6c17fb940d23d62e002711
+usr/bin/plasma-dialer	binary built from the recipes in packages/ or upstream	921552	836d009630833be5a4eeb9ae6ba694c5
+usr/bin/plasma-dialer-fakeserver	binary built from the recipes in packages/ or upstream	332392	eb058b199aac4e3f48a4eda61d21182e
+usr/bin/plasma-keyboard	binary built from the recipes in packages/ or upstream	598976	6d9d29fcf45a317cb619ac2a01f17b63
+usr/bin/qmi-firmware-update	binary built from the recipes in packages/ or upstream	200128	584dea3508dd6c8ecf9d9d6464ec93e6
+usr/bin/qmicli	binary built from the recipes in packages/ or upstream	605360	079f0de1176a7b3d0bf6a67542d78ccf
+usr/bin/qrtr-cfg	binary built from the recipes in packages/ or upstream	67312	3d6eca1edd9b3fa3a807be89578dddab
+usr/bin/qrtr-lookup	binary built from the recipes in packages/ or upstream	67392	abcc3bc7a778ae551ec85ef7a45b0206
+usr/bin/rds-ctl	binary built from the recipes in packages/ or upstream	68520	3d85c4c4dddc3ac0811225611c73cfe1
+usr/bin/rmtfs	binary built from the recipes in packages/ or upstream	69192	4cc49792ff7758cfb61ef3260c5bf9ae
+usr/bin/spacebar	binary built from the recipes in packages/ or upstream	661880	8583441eeaba8c01e188757ffcb60605
+usr/bin/tqftpserv	binary built from the recipes in packages/ or upstream	67344	4e88f6150f6b26c4b78a874d7f726fae
+usr/bin/v4l2-compliance	binary built from the recipes in packages/ or upstream	462048	49842e2b132f4527de01a7fc4d0eeecc
+usr/bin/v4l2-ctl	binary built from the recipes in packages/ or upstream	405656	ad0819e4f07c1e5e1e7ba808e83c06bb
+usr/bin/v4l2-dbg	binary built from the recipes in packages/ or upstream	133832	45c71c10747a41d6e9ab0eafbc2a463c
+usr/bin/v4l2-sysfs-path	binary built from the recipes in packages/ or upstream	67552	b0d0679d4b24615b81631722833474fd
+usr/bin/v4l2-tracer	binary built from the recipes in packages/ or upstream	395584	eb33d2724a3f3d25fca0dd248e3c73eb
+usr/lib/ModemManager/libmm-plugin-altair-lte.so	binary built from the recipes in packages/ or upstream	67312	9bf4e21d50194e4a4e9df7cb45a42ff9
+usr/lib/ModemManager/libmm-plugin-anydata.so	binary built from the recipes in packages/ or upstream	67224	546b9f0ba8ecb12123c241878333bca7
+usr/lib/ModemManager/libmm-plugin-broadmobi.so	binary built from the recipes in packages/ or upstream	67224	324a22d98693cbd3dfa6da126da38d31
+usr/lib/ModemManager/libmm-plugin-cellient.so	binary built from the recipes in packages/ or upstream	67232	d42833ba782e75a0749f60d12a552db7
+usr/lib/ModemManager/libmm-plugin-cinterion.so	binary built from the recipes in packages/ or upstream	132864	f3335aba1868ee1152767da7bd8cd65f
+usr/lib/ModemManager/libmm-plugin-dell.so	binary built from the recipes in packages/ or upstream	67296	e30f10a6ffdd73f1ab359a707915b674
+usr/lib/ModemManager/libmm-plugin-dlink.so	binary built from the recipes in packages/ or upstream	67216	e0711765863495040bef888a1cc27f5c
+usr/lib/ModemManager/libmm-plugin-ericsson-mbm.so	binary built from the recipes in packages/ or upstream	67320	9a29c1acc80f87f2d8d7773ff7a4074e
+usr/lib/ModemManager/libmm-plugin-fibocom.so	binary built from the recipes in packages/ or upstream	67224	5a4ab06453edc46b05fbed8a6821f9e5
+usr/lib/ModemManager/libmm-plugin-foxconn.so	binary built from the recipes in packages/ or upstream	67232	198c009a0495e31a43749fbece87e018
+usr/lib/ModemManager/libmm-plugin-generic.so	binary built from the recipes in packages/ or upstream	67232	6538526481b6d03f7a86df5561d25b3b
+usr/lib/ModemManager/libmm-plugin-gosuncn.so	binary built from the recipes in packages/ or upstream	67248	51995e2aaf9fa331556dcbca344258e8
+usr/lib/ModemManager/libmm-plugin-haier.so	binary built from the recipes in packages/ or upstream	67200	1e44dadb74ca1b599683f1bf7e7df390
+usr/lib/ModemManager/libmm-plugin-huawei.so	binary built from the recipes in packages/ or upstream	133568	33ae08b9b85bbf1899f050def1d8eecb
+usr/lib/ModemManager/libmm-plugin-intel.so	binary built from the recipes in packages/ or upstream	133016	02ce88a6fc15a133ce08aa3744c84455
+usr/lib/ModemManager/libmm-plugin-iridium.so	binary built from the recipes in packages/ or upstream	67328	953e0e8568ba66c3259c17f9e9c3c06a
+usr/lib/ModemManager/libmm-plugin-linktop.so	binary built from the recipes in packages/ or upstream	67208	d24f05e7a19a8a92d7b15cac7769c59a
+usr/lib/ModemManager/libmm-plugin-longcheer.so	binary built from the recipes in packages/ or upstream	67296	b615cda6a6f47b16455b5f9afa1a8a5f
+usr/lib/ModemManager/libmm-plugin-motorola.so	binary built from the recipes in packages/ or upstream	67208	6c4e3a50c5898867bfd4d882d7df189b
+usr/lib/ModemManager/libmm-plugin-mtk-legacy.so	binary built from the recipes in packages/ or upstream	67304	451c326efc14c4e198d32df688fb1411
+usr/lib/ModemManager/libmm-plugin-mtk.so	binary built from the recipes in packages/ or upstream	67224	20b118bddfa12f415b23109d271810eb
+usr/lib/ModemManager/libmm-plugin-netprisma.so	binary built from the recipes in packages/ or upstream	67232	85ea2021d6f2634fdf86d1d26f8b981d
+usr/lib/ModemManager/libmm-plugin-nokia-icera.so	binary built from the recipes in packages/ or upstream	67296	68566c3a8a370501709539a6da3c0c42
+usr/lib/ModemManager/libmm-plugin-nokia.so	binary built from the recipes in packages/ or upstream	67352	233b55328c18760be7e7051ab9810fc3
+usr/lib/ModemManager/libmm-plugin-novatel-lte.so	binary built from the recipes in packages/ or upstream	67424	c20db012f69a9b86fd938ed0f448c197
+usr/lib/ModemManager/libmm-plugin-novatel.so	binary built from the recipes in packages/ or upstream	67296	9018320919bcd4aa1ad602de56013956
+usr/lib/ModemManager/libmm-plugin-option-hso.so	binary built from the recipes in packages/ or upstream	67312	635f346e592079754b82659d609c35dd
+usr/lib/ModemManager/libmm-plugin-option.so	binary built from the recipes in packages/ or upstream	67240	d334465b42e97d441bb323304f1233f2
+usr/lib/ModemManager/libmm-plugin-pantech.so	binary built from the recipes in packages/ or upstream	67296	6b75c42f4bdcb3988855494cf759085c
+usr/lib/ModemManager/libmm-plugin-qcom-soc.so	binary built from the recipes in packages/ or upstream	67248	e1207e77919a67cdbb9e6ab75c43a93d
+usr/lib/ModemManager/libmm-plugin-quectel.so	binary built from the recipes in packages/ or upstream	67248	31cf35e92be34932ed833ff0821395a8
+usr/lib/ModemManager/libmm-plugin-rolling.so	binary built from the recipes in packages/ or upstream	67224	9016a3a51e1afa4547f1eeebcbd40aa7
+usr/lib/ModemManager/libmm-plugin-samsung.so	binary built from the recipes in packages/ or upstream	67216	31e775966386a767cfd46f8b9d6d0b48
+usr/lib/ModemManager/libmm-plugin-sierra-legacy.so	binary built from the recipes in packages/ or upstream	67344	f4a8b448f79c95a253e86317d407c32c
+usr/lib/ModemManager/libmm-plugin-sierra.so	binary built from the recipes in packages/ or upstream	67264	2c456a62c4d6a023c158b6e8aa91ae47
+usr/lib/ModemManager/libmm-plugin-simtech.so	binary built from the recipes in packages/ or upstream	67224	236ea023fb408ae35fdb7d3e19dc4bad
+usr/lib/ModemManager/libmm-plugin-telit.so	binary built from the recipes in packages/ or upstream	67320	e537b83d96aa1adc9996f780e9ffb61e
+usr/lib/ModemManager/libmm-plugin-thuraya.so	binary built from the recipes in packages/ or upstream	67208	21c00bdfaf3e116602ae740fb8c4ed35
+usr/lib/ModemManager/libmm-plugin-tplink.so	binary built from the recipes in packages/ or upstream	67224	8fb01858bb4d57d26cdafb2a267a0339
+usr/lib/ModemManager/libmm-plugin-ublox.so	binary built from the recipes in packages/ or upstream	132840	8446c774c109fff6a63e2ed0b07c3db8
+usr/lib/ModemManager/libmm-plugin-via.so	binary built from the recipes in packages/ or upstream	67280	f10c89b2b89ded7117afe5ad2f1f866a
+usr/lib/ModemManager/libmm-plugin-wavecom.so	binary built from the recipes in packages/ or upstream	67224	e6f8dc582e2ef7564345bb9c487c0b06
+usr/lib/ModemManager/libmm-plugin-x22x.so	binary built from the recipes in packages/ or upstream	67312	61d5d3e71a77ba91be82041381488fe2
+usr/lib/ModemManager/libmm-plugin-zte.so	binary built from the recipes in packages/ or upstream	67296	66ee96b9a3c0fbb7ffabfa70173eaa66
+usr/lib/ModemManager/libmm-shared-fibocom.so	binary built from the recipes in packages/ or upstream	67200	b5769513d9cdd988e8924588f7a498ad
+usr/lib/ModemManager/libmm-shared-foxconn.so	binary built from the recipes in packages/ or upstream	67200	d43f975b770fe96564efec33ffc47b9e
+usr/lib/ModemManager/libmm-shared-icera.so	binary built from the recipes in packages/ or upstream	67272	cab69f9d9cd731848e82c89598203ff8
+usr/lib/ModemManager/libmm-shared-mtk.so	binary built from the recipes in packages/ or upstream	67192	2fe766666ee4dece82a91106d1634bb0
+usr/lib/ModemManager/libmm-shared-novatel.so	binary built from the recipes in packages/ or upstream	67200	eef6c1e14c5b11657553ea2f46c713c5
+usr/lib/ModemManager/libmm-shared-option.so	binary built from the recipes in packages/ or upstream	67272	094bcf089d4fcbaa4930b7d3a36d85e9
+usr/lib/ModemManager/libmm-shared-quectel.so	binary built from the recipes in packages/ or upstream	67272	af767ffb0a207588daf9ca635b3dfbd2
+usr/lib/ModemManager/libmm-shared-sierra.so	binary built from the recipes in packages/ or upstream	67272	81e9ec66d1ea022f8a1bad64250e4643
+usr/lib/ModemManager/libmm-shared-telit.so	binary built from the recipes in packages/ or upstream	132808	4d062902da81b180fd66a5506591a3ef
+usr/lib/ModemManager/libmm-shared-xmm.so	binary built from the recipes in packages/ or upstream	67192	6dd49cd8b2380a45f1c07e883c0f394e
+usr/lib/firmware/qcom/vpu-2.0/venus.b00	proprietary firmware / sensor config / kernel module	692	86a9e18d8320043a2f58ee0f6af0fe17
+usr/lib/firmware/qcom/vpu-2.0/venus.b01	proprietary firmware / sensor config / kernel module	7376	b0abb53e8ddf41fd0545e941a012191a
+usr/lib/firmware/qcom/vpu-2.0/venus.b02	proprietary firmware / sensor config / kernel module	300	b0f069bbecdeba4a23d0d65c96ce9367
+usr/lib/firmware/qcom/vpu-2.0/venus.b03	proprietary firmware / sensor config / kernel module	20	cb24261b83d97279f0dbfa45c42c01c2
+usr/lib/firmware/qcom/vpu-2.0/venus.b04	proprietary firmware / sensor config / kernel module	20	f3b3bb898b95440b391d0f7c25086397
+usr/lib/firmware/qcom/vpu-2.0/venus.b05	proprietary firmware / sensor config / kernel module	20	f05c4f03a9283589091c31be065c6fed
+usr/lib/firmware/qcom/vpu-2.0/venus.b06	proprietary firmware / sensor config / kernel module	20	d81a5c71adbe6aae61e4b4a8e121e446
+usr/lib/firmware/qcom/vpu-2.0/venus.b07	proprietary firmware / sensor config / kernel module	24	eb667b725e1602ba8b9300293a4a2272
+usr/lib/firmware/qcom/vpu-2.0/venus.b08	proprietary firmware / sensor config / kernel module	16	ec2d6ced2030acafa2b680b83eb3ab63
+usr/lib/firmware/qcom/vpu-2.0/venus.b09	proprietary firmware / sensor config / kernel module	939472	4ea414b0867e1c98dfb2cb82f5c9f3df
+usr/lib/firmware/qcom/vpu-2.0/venus.b10	proprietary firmware / sensor config / kernel module	43120	7a667e5dbf60ce5b2f0fcef90f23221d
+usr/lib/firmware/qcom/vpu-2.0/venus.b19	proprietary firmware / sensor config / kernel module	32	0d68af0904dd698b16ffc9cd28b9b0c8
+usr/lib/firmware/qcom/vpu-2.0/venus.mbn	proprietary firmware / sensor config / kernel module	8068	e092b4f8671c174dd3a773ea894ac96f
+usr/lib/firmware/qcom/vpu-2.0/venus.mdt	proprietary firmware / sensor config / kernel module	8068	e092b4f8671c174dd3a773ea894ac96f
+usr/lib/girepository-1.0/ModemManager-1.0.typelib	binary built from the recipes in packages/ or upstream	353144	6d9b061d586c2d035e30b3599e84266d
+usr/lib/gstreamer-1.0/libgstlibcamera.so	binary built from the recipes in packages/ or upstream	198952	5ecbd98ed3e116358142560e600e8c1b
+usr/lib/libKirigami.so.6.30.0	binary built from the recipes in packages/ or upstream	266672	f786d504b7b22e80919ead4bc60e5957
+usr/lib/libKirigamiAddonsComponents.so.1.15.0	binary built from the recipes in packages/ or upstream	67488	3f3101ed3555e02d873f958b38b2deeb
+usr/lib/libKirigamiAddonsComponents.so.6	binary built from the recipes in packages/ or upstream	67488	3f3101ed3555e02d873f958b38b2deeb
+usr/lib/libKirigamiAddonsStatefulApp.so.1.15.0	binary built from the recipes in packages/ or upstream	400400	09300d10a6f3dfd7ac37df7f15cf81d7
+usr/lib/libKirigamiAddonsStatefulApp.so.6	binary built from the recipes in packages/ or upstream	400400	09300d10a6f3dfd7ac37df7f15cf81d7
+usr/lib/libKirigamiApp.so.1.15.0	binary built from the recipes in packages/ or upstream	67568	b2b83820cf5aa51a423999b7d95981b9
+usr/lib/libKirigamiApp.so.6	binary built from the recipes in packages/ or upstream	67568	b2b83820cf5aa51a423999b7d95981b9
+usr/lib/libKirigamiControls.so.6.30.0	binary built from the recipes in packages/ or upstream	2232080	90fa271f9e3f106dc37ca5e539a6ce20
+usr/lib/libKirigamiDelegates.so.6.30.0	binary built from the recipes in packages/ or upstream	199120	341f04358bc79ed980fbfd281c8ea911
+usr/lib/libKirigamiDialogs.so.6.30.0	binary built from the recipes in packages/ or upstream	264208	9ac429b80638ff7d404ff6095e2e700d
+usr/lib/libKirigamiForms.so.6.30.0	binary built from the recipes in packages/ or upstream	68160	e02fbf2c1cb57b95c4780345768b77b5
+usr/lib/libKirigamiFormsPrivateCards.so.6.30.0	binary built from the recipes in packages/ or upstream	198784	e9bdf2eecdae950a4758894a93ba56b3
+usr/lib/libKirigamiFormsPrivateFlat.so.6.30.0	binary built from the recipes in packages/ or upstream	199120	7f4d811c39deec8f3e50d55220f5feea
+usr/lib/libKirigamiFormsPrivateTemplates.so.6.30.0	binary built from the recipes in packages/ or upstream	133024	7c8915f9512fc3709ab403e2dfc4b3ed
+usr/lib/libKirigamiLayouts.so.6.30.0	binary built from the recipes in packages/ or upstream	531840	01c49f45e310d17959d4dfa34ad000b1
+usr/lib/libKirigamiLayoutsPrivate.so.6.30.0	binary built from the recipes in packages/ or upstream	67488	9aa22663948bf34505d44a91891603cd
+usr/lib/libKirigamiPlatform.so.6.30.0	binary built from the recipes in packages/ or upstream	399536	acc90a2ceb22a3e8739b26e63b2b6128
+usr/lib/libKirigamiPolyfill.so.6.30.0	binary built from the recipes in packages/ or upstream	67416	ce4847ae7cdfbe5839791defcdf67257
+usr/lib/libKirigamiPrimitives.so.6.30.0	binary built from the recipes in packages/ or upstream	398864	88c1a833cc9a5206ccc3bfcaf4649497
+usr/lib/libKirigamiPrivate.so.6.30.0	binary built from the recipes in packages/ or upstream	68272	c7ca3bb2a8eef67ae41ca621b14d0471
+usr/lib/libKirigamiTemplates.so.6.30.0	binary built from the recipes in packages/ or upstream	657648	826a82735fedf848dae85b1e136c8042
+usr/lib/libQt6HunspellInputMethod.so.6.11.1	binary built from the recipes in packages/ or upstream	135008	b36d34c5e8620743a2cf8e5042ead85c
+usr/lib/libQt6VirtualKeyboard.so.6.11.1	binary built from the recipes in packages/ or upstream	536064	80f7d53c30578069357c8f3739d52739
+usr/lib/libQt6VirtualKeyboardQml.so.6.11.1	binary built from the recipes in packages/ or upstream	133440	050c574a918144777ef99b3a060a8a2f
+usr/lib/libQt6VirtualKeyboardSettings.so.6.11.1	binary built from the recipes in packages/ or upstream	68352	1b2ecdb1f7cb966c3f01a5cbf277ade9
+usr/lib/libcamera-base.so.0.7	binary built from the recipes in packages/ or upstream	198496	42380f1cae20d3ca2e8beef5dde150c0
+usr/lib/libcamera-base.so.0.7.2	binary built from the recipes in packages/ or upstream	198496	42380f1cae20d3ca2e8beef5dde150c0
+usr/lib/libcamera.so.0.7	binary built from the recipes in packages/ or upstream	2365096	238dd6179fbefca498f16450ddf03f26
+usr/lib/libcamera.so.0.7.2	binary built from the recipes in packages/ or upstream	2365096	238dd6179fbefca498f16450ddf03f26
+usr/lib/libcamera/ipa/ipa_mali_c55.so	binary built from the recipes in packages/ or upstream	329640	260540e3af880561857123185575d20f
+usr/lib/libcamera/ipa/ipa_mali_c55.so.sign	binary built from the recipes in packages/ or upstream	256	fbca5cfc084b04b45d25b3f94fbca51c
+usr/lib/libcamera/ipa/ipa_rkisp1.so	binary built from the recipes in packages/ or upstream	526248	0cdd10a573b28a2c41c3792bbc0f51af
+usr/lib/libcamera/ipa/ipa_rkisp1.so.sign	binary built from the recipes in packages/ or upstream	256	48aae95707d6f494c1918f96ee91c458
+usr/lib/libcamera/ipa/ipa_rpi_pisp.so	binary built from the recipes in packages/ or upstream	591784	39c634ad563c25c2e559e6e0fd37a12b
+usr/lib/libcamera/ipa/ipa_rpi_pisp.so.sign	binary built from the recipes in packages/ or upstream	256	d36819ac3e8b7594cbc105c6125d0b81
+usr/lib/libcamera/ipa/ipa_rpi_vc4.so	binary built from the recipes in packages/ or upstream	591784	251ad7edd94c64174b81ea18a5155575
+usr/lib/libcamera/ipa/ipa_rpi_vc4.so.sign	binary built from the recipes in packages/ or upstream	256	be1df97c9ba1c0e51f2e5db6ce647513
+usr/lib/libcamera/ipa/ipa_soft_simple.so	binary built from the recipes in packages/ or upstream	198576	c30bbbdb29849a620cbd762c497554f6
+usr/lib/libcamera/ipa/ipa_soft_simple.so.sign	binary built from the recipes in packages/ or upstream	256	999cadfc0ca8645f73359a12adacb914
+usr/lib/libdng.so.1.2.0	binary built from the recipes in packages/ or upstream	67400	3edcb13477640b5e085ed4697cda48b2
+usr/lib/libexec/kde-telephony-daemon	binary built from the recipes in packages/ or upstream	267640	282cbcf0635dad271099364183eb9e58
+usr/lib/libexec/modem-daemon	binary built from the recipes in packages/ or upstream	266520	54404a7212016986d734d971dfb6cea1
+usr/lib/libexec/spacebar-daemon	binary built from the recipes in packages/ or upstream	659432	996db0457b7fa3c4ba667dda33756e9a
+usr/lib/libhexagonrpc.so.0.4	binary built from the recipes in packages/ or upstream	67240	aeb5043c0aae3c10a1250a00979c9b0d
+usr/lib/libktelephonymetatypes.a	binary built from the recipes in packages/ or upstream	1012544	b0624fa10c8e884c898b56745250736d
+usr/lib/libmegapixels.so.1.1.0	binary built from the recipes in packages/ or upstream	67280	9fc9f6055c3b41bb040c2208c7b4dafc
+usr/lib/libmm-glib.so	binary built from the recipes in packages/ or upstream	1246904	78a61781dead88d82fb2158425c67edf
+usr/lib/libmm-glib.so.0	binary built from the recipes in packages/ or upstream	1246904	78a61781dead88d82fb2158425c67edf
+usr/lib/libmm-glib.so.0.11.0	binary built from the recipes in packages/ or upstream	1246904	78a61781dead88d82fb2158425c67edf
+usr/lib/libplasmanm_cellular.so	binary built from the recipes in packages/ or upstream	333328	765e3908161b5e875a3e352c12c059ed
+usr/lib/libqrtr.so.1	binary built from the recipes in packages/ or upstream	67376	324c15d97f6477aad5f42b92db5d69c2
+usr/lib/libqrtr.so.1.2	binary built from the recipes in packages/ or upstream	67376	324c15d97f6477aad5f42b92db5d69c2
+usr/lib/libssc.so.2	binary built from the recipes in packages/ or upstream	133016	e21b1925bfeb1bf2c063150d233cf669
+usr/lib/m52xq/libssc.so.2	binary built from the recipes in packages/ or upstream	133016	e828fb6ca0fb2ddc1df5a7ac4a39c202
+usr/lib/modules/7.1.2/extra/venus/v4l2-mem2mem.ko	proprietary firmware / sensor config / kernel module	474392	2acc116a0221aa946f898634c828e6bf
+usr/lib/modules/7.1.2/extra/venus/venus-core.ko	proprietary firmware / sensor config / kernel module	3708432	048cfb6472f7ea4abbc0aec771154c20
+usr/lib/modules/7.1.2/extra/venus/venus-dec.ko	proprietary firmware / sensor config / kernel module	764088	833581c61e29ec1c9e599723827b06cd
+usr/lib/modules/7.1.2/extra/venus/venus-enc.ko	proprietary firmware / sensor config / kernel module	766608	339b578b1911f28842daeff3270174e7
+usr/lib/modules/7.1.2/extra/venus/videobuf2-dma-contig.ko	proprietary firmware / sensor config / kernel module	326472	c9c31988ca58ed718f66994d22955ce0
+usr/lib/qt6/plugins/plasma/applets/org.kde.plasma.mobile.homescreen.folio.so	binary built from the recipes in packages/ or upstream	1715160	d80d2e4b4733210566efd5d32d4afb46
+usr/lib/qt6/plugins/plasma/kcms/systemsettings/kcm_plasmakeyboard.so	binary built from the recipes in packages/ or upstream	68024	4e5a8c66ef8d301808f6a454dc62c6c9
+usr/lib/qt6/plugins/platforminputcontexts/libqtvirtualkeyboardplugin.so	binary built from the recipes in packages/ or upstream	67768	4f4d846a0a61543d1ddae9a5cbc63188
+usr/lib/qt6/qml/QtQuick/VirtualKeyboard/Components/libqtvkbcomponentsplugin.so	binary built from the recipes in packages/ or upstream	789224	22130b6b64087a2893236b3ad5ca486f
+usr/lib/qt6/qml/QtQuick/VirtualKeyboard/Core/libvirtualkeyboardplugin.so	binary built from the recipes in packages/ or upstream	67768	419eb8dfceaf87f8a97303a9a559307d
+usr/lib/qt6/qml/QtQuick/VirtualKeyboard/Layouts/libqtvkblayoutsplugin.so	binary built from the recipes in packages/ or upstream	67768	231a2d5f9b552ef1de05d84486ddb622
+usr/lib/qt6/qml/QtQuick/VirtualKeyboard/Plugins/Hangul/libqtvkbhangulplugin.so	binary built from the recipes in packages/ or upstream	68328	5db9e1a19ff3efa28c357800ca9549be
+usr/lib/qt6/qml/QtQuick/VirtualKeyboard/Plugins/Hunspell/libqtvkbhunspellplugin.so	binary built from the recipes in packages/ or upstream	67768	d4e3bbb426e6f16df3f30d0e6163e0b9
+usr/lib/qt6/qml/QtQuick/VirtualKeyboard/Plugins/OpenWNN/libqtvkbopenwnnplugin.so	binary built from the recipes in packages/ or upstream	1621488	623e673051bee99c35f5e2490c14ac58
+usr/lib/qt6/qml/QtQuick/VirtualKeyboard/Plugins/Pinyin/libqtvkbpinyinplugin.so	binary built from the recipes in packages/ or upstream	1182592	ae2a51bb48c3f6b602f5dcd085ddf341
+usr/lib/qt6/qml/QtQuick/VirtualKeyboard/Plugins/TCIme/libqtvkbtcimeplugin.so	binary built from the recipes in packages/ or upstream	330472	f364a3a32c7a9af646af2a74d19786e9
+usr/lib/qt6/qml/QtQuick/VirtualKeyboard/Plugins/Thai/libqtvkbthaiplugin.so	binary built from the recipes in packages/ or upstream	68104	40e4ff19f5188cd109662b73382d562d
+usr/lib/qt6/qml/QtQuick/VirtualKeyboard/Plugins/libqtvkbpluginsplugin.so	binary built from the recipes in packages/ or upstream	67768	8957fe56af0b0b473c7f5c962c4b2e6d
+usr/lib/qt6/qml/QtQuick/VirtualKeyboard/Settings/libqtvkbsettingsplugin.so	binary built from the recipes in packages/ or upstream	67768	dbdf3e07a8553972c1b711adb159d500
+usr/lib/qt6/qml/QtQuick/VirtualKeyboard/Styles/Breeze/libbreezestyle.so	binary built from the recipes in packages/ or upstream	264632	fb1b79eaf0fcbec67b7d8cb6a9cb3beb
+usr/lib/qt6/qml/QtQuick/VirtualKeyboard/Styles/Builtin/libqtvkbbuiltinstylesplugin.so	binary built from the recipes in packages/ or upstream	395448	c2edce41baf59d7c8bf3037c24a42860
+usr/lib/qt6/qml/QtQuick/VirtualKeyboard/Styles/libqtvkbstylesplugin.so	binary built from the recipes in packages/ or upstream	133640	5a1049622fb875bd457688a17b2fc554
+usr/lib/qt6/qml/QtQuick/VirtualKeyboard/libqtvkbplugin.so	binary built from the recipes in packages/ or upstream	67768	eaf3a47d2c53ed7361604bf5bff4c1c5
+usr/lib/qt6/qml/org/kde/kirigami/controls/libKirigamiControlsplugin.so	binary built from the recipes in packages/ or upstream	67800	770f4c55ca92de07627bc9e00b590835
+usr/lib/qt6/qml/org/kde/kirigami/delegates/libKirigamiDelegatesplugin.so	binary built from the recipes in packages/ or upstream	67688	ab886cff100de4172ab02c3c771a694d
+usr/lib/qt6/qml/org/kde/kirigami/dialogs/libKirigamiDialogsplugin.so	binary built from the recipes in packages/ or upstream	67688	48dbf21e21e7f78ecc0f8c1eabc65055
+usr/lib/qt6/qml/org/kde/kirigami/forms/libKirigamiFormsplugin.so	binary built from the recipes in packages/ or upstream	67688	ede2681bf249bc886f6d7688a5d3fbdb
+usr/lib/qt6/qml/org/kde/kirigami/forms/private/cards/libKirigamiFormsPrivateCardsplugin.so	binary built from the recipes in packages/ or upstream	67688	81f634a8e43d833e669963c5db34350f
+usr/lib/qt6/qml/org/kde/kirigami/forms/private/flat/libKirigamiFormsPrivateFlatplugin.so	binary built from the recipes in packages/ or upstream	67688	749032da79282baecf702eda3c77dc0c
+usr/lib/qt6/qml/org/kde/kirigami/forms/private/templates/libKirigamiFormsPrivateTemplatesplugin.so	binary built from the recipes in packages/ or upstream	67688	31f215ea96b568e2dacfa56203b53c9b
+usr/lib/qt6/qml/org/kde/kirigami/layouts/libKirigamiLayoutsplugin.so	binary built from the recipes in packages/ or upstream	67688	e79872d9ad75338a0a2074c7958b0319
+usr/lib/qt6/qml/org/kde/kirigami/layouts/private/libKirigamiLayoutsPrivateplugin.so	binary built from the recipes in packages/ or upstream	67688	12c777a649b3500b23302d6a86365fb4
+usr/lib/qt6/qml/org/kde/kirigami/libKirigamiplugin.so	binary built from the recipes in packages/ or upstream	67800	023701b83c1e37e5928faf9025741799
+usr/lib/qt6/qml/org/kde/kirigami/platform/libKirigamiPlatformplugin.so	binary built from the recipes in packages/ or upstream	67688	76e52238aa976afc0eac231465f17573
+usr/lib/qt6/qml/org/kde/kirigami/primitives/libKirigamiPrimitivesplugin.so	binary built from the recipes in packages/ or upstream	67688	95a652d1e94c8a6dc56338acba75e9c4
+usr/lib/qt6/qml/org/kde/kirigami/private/libKirigamiPrivateplugin.so	binary built from the recipes in packages/ or upstream	67688	e613b32cd137b4c631eeaba6f69d7d70
+usr/lib/qt6/qml/org/kde/kirigami/private/polyfill/libKirigamiPolyfillplugin.so	binary built from the recipes in packages/ or upstream	67688	2836b3809cf6080adc75f3fd8e2e6cfb
+usr/lib/qt6/qml/org/kde/kirigami/templates/libKirigamiTemplatesplugin.so	binary built from the recipes in packages/ or upstream	67688	c995c27441cf51e65c12ac62483be32e
+usr/lib/qt6/qml/org/kde/kirigamiaddons/actions/labs/libactionslabsplugin.so	binary built from the recipes in packages/ or upstream	67760	6ae67a1f885a0becbd9e450889df5966
+usr/lib/qt6/qml/org/kde/kirigamiaddons/actions/libKirigamiAddonsActionsQml.so	binary built from the recipes in packages/ or upstream	67760	e700fe7127eff3d805bf186402eaac84
+usr/lib/qt6/qml/org/kde/kirigamiaddons/components/libcomponentsplugin.so	binary built from the recipes in packages/ or upstream	658592	d5bea7b4156a25ad8429a698c36f5fd9
+usr/lib/qt6/qml/org/kde/kirigamiaddons/dateandtime/libdateandtimeplugin.so	binary built from the recipes in packages/ or upstream	331584	9e1a84d00b1dd39406c59316e08a1869
+usr/lib/qt6/qml/org/kde/kirigamiaddons/delegates/libdelegatesplugin.so	binary built from the recipes in packages/ or upstream	264480	ecda2a9eaed4c8658db06d3877fb03d6
+usr/lib/qt6/qml/org/kde/kirigamiaddons/formcard/libformcardplugin.so	binary built from the recipes in packages/ or upstream	3084544	dd76522fc82244d459665fb5b1e389af
+usr/lib/qt6/qml/org/kde/kirigamiaddons/labs/components/libcomponentslabsplugin.so	binary built from the recipes in packages/ or upstream	461312	81b39b876dc540fe6a7a3ab85b309bc1
+usr/lib/qt6/qml/org/kde/kirigamiaddons/onboarding/libonboardingplugin.so	binary built from the recipes in packages/ or upstream	199504	7c845459ad0768373f2da80d15584da1
+usr/lib/qt6/qml/org/kde/kirigamiaddons/settings/libsettingsplugin.so	binary built from the recipes in packages/ or upstream	133632	b20d52f8c86fc22c8871520838e3626a
+usr/lib/qt6/qml/org/kde/kirigamiaddons/settings/private/libsettingsprivateplugin.so	binary built from the recipes in packages/ or upstream	133632	558b49153bf2f4c31d96951fcbb0751a
+usr/lib/qt6/qml/org/kde/kirigamiaddons/sounds/libsoundsplugin.so	binary built from the recipes in packages/ or upstream	68544	53530a6a4d4647a175f0f4ba7da13ca6
+usr/lib/qt6/qml/org/kde/kirigamiaddons/statefulapp/labs/libstatefulapplabsplugin.so	binary built from the recipes in packages/ or upstream	67760	e2cc46cd87f56b8a8cd0ecedd6258cf9
+usr/lib/qt6/qml/org/kde/kirigamiaddons/statefulapp/libKirigamiAddonsStatefulAppplugin.so	binary built from the recipes in packages/ or upstream	67760	f5993ed78d3d8dec4d9ccfd66c26f7e5
+usr/lib/qt6/qml/org/kde/kirigamiaddons/statefulapp/private/libstatefulappprivateplugin.so	binary built from the recipes in packages/ or upstream	200848	3d38a27bbe2a8b2b3f122ebfce9d8c54
+usr/lib/qt6/qml/org/kde/kirigamiaddons/tableview/libtableviewplugin.so	binary built from the recipes in packages/ or upstream	199168	6362a9ff220fed61c1e46825944d1358
+usr/lib/qt6/qml/org/kde/kirigamiaddons/treeview/libtreeviewplugin.so	binary built from the recipes in packages/ or upstream	133296	1fa849d835cae7789c64d39493ea6857
+usr/lib/qt6/qml/org/kde/plasma/keyboard/lib/libkeyboardlib.so	binary built from the recipes in packages/ or upstream	133560	0495b2808e29a92236ae613de3fd5cb5
+usr/lib/qt6/qml/org/kde/plasma/private/mobileshell/dpmsplugin/libdpmsplugin.so	binary built from the recipes in packages/ or upstream	68232	3121ed0ba53b9934e44100822dd6ee5b
+usr/lib/qt6/qml/org/kde/plasma/private/mobileshell/hapticsplugin/libhapticsplugin.so	binary built from the recipes in packages/ or upstream	68800	e1374fd2b39c3e992c3ce9e544450a90
+usr/lib/qt6/qml/org/kde/plasma/private/mobileshell/libmobileshellplugin.so	binary built from the recipes in packages/ or upstream	3217312	a190b598e68adc6d1490410ebc7cd0c3
+usr/lib/qt6/qml/org/kde/plasma/private/mobileshell/quicksettingsplugin/libquicksettingsplugin.so	binary built from the recipes in packages/ or upstream	201776	52b32a99a9f8a4845722af20cf1c3488
+usr/lib/qt6/qml/org/kde/plasma/private/mobileshell/raiselockscreenplugin/libraiselockscreenplugin.so	binary built from the recipes in packages/ or upstream	68360	8effa7baa5779476d8bb5f72c53b913d
+usr/lib/qt6/qml/org/kde/plasma/private/mobileshell/rotationplugin/librotationplugin.so	binary built from the recipes in packages/ or upstream	68120	7965973679ee45e59eeb0291b201e1db
+usr/lib/qt6/qml/org/kde/plasma/private/mobileshell/screenbrightnessplugin/libscreenbrightnessplugin.so	binary built from the recipes in packages/ or upstream	68576	a34d135d5c0c2b0e728ea7730c45cb62
+usr/lib/qt6/qml/org/kde/plasma/private/mobileshell/shellsettingsplugin/libshellsettingsplugin.so	binary built from the recipes in packages/ or upstream	68464	5ea51421867af35783478a6e0bf2727a
+usr/lib/qt6/qml/org/kde/plasma/private/mobileshell/state/libmobileshellstateplugin.so	binary built from the recipes in packages/ or upstream	268656	7e193428aa65ac47f41978307dae8e94
+usr/lib/qt6/qml/org/kde/plasma/private/mobileshell/taskswitcherplugin/libmobiletaskswitcherplugin.so	binary built from the recipes in packages/ or upstream	136024	242a8c7ad4dbad275203702f4f236ba1
+usr/lib/qt6/qml/org/kde/plasma/private/mobileshell/wallpaperimageplugin/libwallpaperimageplugin.so	binary built from the recipes in packages/ or upstream	134000	f1ebb04fb31fdf46b02013c51d5ade19
+usr/lib/qt6/qml/org/kde/plasma/private/mobileshell/windowplugin/libwindowplugin.so	binary built from the recipes in packages/ or upstream	134328	bf08fe1b312236a43ac2a87e2bcba01d
+usr/lib/qt6/qml/org/kde/telephony/libKTelephonyPluginDeclarative.so	binary built from the recipes in packages/ or upstream	268776	d5bb2680d802fd99b61aa57d2c60ff68
+usr/libexec/hexagonrpc/chrecd	binary built from the recipes in packages/ or upstream	67312	76d05be632c22ea300cf1f9aa1bd24d2
+usr/libexec/libcamera/mali-c55_ipa_proxy	binary built from the recipes in packages/ or upstream	133112	1358c1ef3a812eff334412c5003f5965
+usr/libexec/libcamera/rkisp1_ipa_proxy	binary built from the recipes in packages/ or upstream	133104	e53b11df1a7ee6564e3019e027025956
+usr/libexec/libcamera/soft_ipa_proxy	binary built from the recipes in packages/ or upstream	67568	4092f663365275fc51be389156e7d906
+usr/libexec/libcamera/v4l2-compat.so	binary built from the recipes in packages/ or upstream	133104	dd7b1c1d2f0839296e31e8553e32497a
+usr/libexec/megapixels/movie_audio_rec	binary built from the recipes in packages/ or upstream	67416	1ff06dbf3642d6ea6ccb01bb38600a22
+usr/share/icons/hicolor/22x22/apps/ModemManager.png	binary built from the recipes in packages/ or upstream	817	c42aad1aec42bc4cd53a03613b43bda6
+usr/share/kdevappwizard/templates/kirigamiaddons6.tar.bz2	binary built from the recipes in packages/ or upstream	69279	e5516d6c29b8d917b87f9130a89ecd38
+usr/share/kdevappwizard/templates/librarymanager6.tar.bz2	binary built from the recipes in packages/ or upstream	149095	1c688ab6f0b8dfee998b5ae66a239d0d
+usr/share/locale/ar/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3471	1dea1c0705f3932003fad1376292040f
+usr/share/locale/ar/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2590	1bd7c599dfd5095d0f036ca06b378a16
+usr/share/locale/ar/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	798	ee7f81ec1fec3d98e0be4ec72ebecc76
+usr/share/locale/ar/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	4032	356c14a3d592b6bd848e535dd3bac6a3
+usr/share/locale/ar/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	3863	fe3a850a3a0e5ac3092202b24997fb66
+usr/share/locale/ar/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4589	83612104ee80b3a6009f1839840aa7ae
+usr/share/locale/ar/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1532	1058cbe40997635b009ade590ad586ae
+usr/share/locale/ast/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	1456	4499588e75aa6cf263754c0c75d7e464
+usr/share/locale/ast/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	622	9991bf79fcf7e1a35edf0f49ed85ee94
+usr/share/locale/ast/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	1156	06b01c827281facb9fa6d9e653e49a19
+usr/share/locale/ast/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	597	9d5b95922d66bf48a499bbd04fd333ab
+usr/share/locale/az/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	982	654ebeed66aa1a7d7ac303e20e274387
+usr/share/locale/az/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	763	729127e90e7a63165e832770528425e0
+usr/share/locale/az/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	1952	0f4ebb73714530ee8d2049acf40d602a
+usr/share/locale/az/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	1732	1e180bd2710e785e0b1da5957cf43cec
+usr/share/locale/az/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	3743	2efe4fa85570a78e1edbfd523f82a74e
+usr/share/locale/bg/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	5340	4e766f2e583865c5b8ee2f610708472a
+usr/share/locale/bg/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2808	b151a24c29f36f5ced4e49d637eb0eba
+usr/share/locale/bg/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	4301	d2ec2731ff02ee147f23deae17f76026
+usr/share/locale/bg/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	4311	e41407c0bfee4eef3e0b96c6177bc2a8
+usr/share/locale/bg/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1452	0ed199848bee1b81ab4e2186709aceb5
+usr/share/locale/ca/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	3285	581a9c692ae2edae27d1bbfe2ad8a667
+usr/share/locale/ca/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3280	a8ffffa8e72a67a539bb7b1454f6264b
+usr/share/locale/ca/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2242	df99a568d6a0816a6ef2da3278571705
+usr/share/locale/ca/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	737	91f9a3ad718abdee585becf165ef3f61
+usr/share/locale/ca/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	4140	04af635c4d93d85d11e6279bff015254
+usr/share/locale/ca/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	3729	d7799d09b02b916e9b70143b0c776c33
+usr/share/locale/ca/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4230	4f5527a4ae3497c65af04ab8314c322f
+usr/share/locale/ca/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1295	558a088fb6ddf71db062a233b717d3f1
+usr/share/locale/ca@valencia/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3298	14e7e451c4ff42b8c9d45ad0d791aed5
+usr/share/locale/ca@valencia/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2259	c3395786888d3eaab3d5eeee7d1a81f9
+usr/share/locale/ca@valencia/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	742	98d9b335781bfb7f75b829fee2f2d35a
+usr/share/locale/ca@valencia/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	4251	8f2b03d9800f0ac168e8767d90d78a6e
+usr/share/locale/ca@valencia/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	3679	4f24947ef2f3d7fc9a7c40f34424cef0
+usr/share/locale/ca@valencia/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4240	a8697b9d4bcf3071f912935bd9951d0a
+usr/share/locale/ca@valencia/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1304	06b08f0e3ff4eed7f3d168b634dca880
+usr/share/locale/cs/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	3174	6251cf019e7212875fef11b094034fa3
+usr/share/locale/cs/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3324	26f5c0280b0c4e75ca4a69cca6d7faab
+usr/share/locale/cs/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2253	04c18f873c335d13b0dec5a68c04ee91
+usr/share/locale/cs/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	786	7e6d5f0b66f0e71309806a35c87c92ae
+usr/share/locale/cs/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	4045	1d4a6f88b89b7ade22a8ba3a236f9ff8
+usr/share/locale/cs/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	1425	a413aa87188195c46fd0308561044419
+usr/share/locale/cs/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4230	e6ad2eb558f398059063d4100d5ad6b2
+usr/share/locale/cs/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1368	b714bca9a4da15f2ba0a35022b61f378
+usr/share/locale/da/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	2867	2811184db3421fc8ffa7d6447f7e8db7
+usr/share/locale/da/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	2782	2e04aba569f772b55f645476ba262c6f
+usr/share/locale/da/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	2692	3fc7cc1201a24cc2772b6c71df4b8b14
+usr/share/locale/da/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	2056	a5b9c30aba1cff8e117707a4d05aa694
+usr/share/locale/de/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	3279	02e1ea0ba1ccfb5961f4edef66be81c6
+usr/share/locale/de/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3337	8ee5f64c9737c9e2d15bbb45d7d5f546
+usr/share/locale/de/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2196	940e8200567755241faf73a4f7ea0f13
+usr/share/locale/de/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	751	06df7498e703ab5212fa3e8d59bb5a25
+usr/share/locale/de/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3869	0cac63d00ee3b537f86a82b7318fcf96
+usr/share/locale/de/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	3648	2b649351cd0b645b5690f7577d9ff8f8
+usr/share/locale/de/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4164	b0b2fa6f8b740c51b85c67f9355ca3d7
+usr/share/locale/de/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1309	57af9d9d9418628edad9a207fd2a1680
+usr/share/locale/el/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	1094	1ba90e8e7ecdf37ecbaa75abf9fb1f26
+usr/share/locale/el/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	1892	3576455304766c4df765d94edffa664e
+usr/share/locale/el/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	1995	220de91e1953c9e8e32945aa7f2fdae2
+usr/share/locale/en_GB/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	2716	0635a0475ada4a97be958c52f19fabe3
+usr/share/locale/en_GB/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	717	63857fa6cfc9229401e92e481edee8e5
+usr/share/locale/en_GB/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	33	5a7679a380f3bf4416f593aff0062c81
+usr/share/locale/en_GB/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	1668	64599224d40ed25754c9e7a4c1538655
+usr/share/locale/en_GB/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	3470	83e80f03ecc605b86f83066aa6f44fca
+usr/share/locale/eo/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	2731	c950fea8292aef379de6cfe1e001ce61
+usr/share/locale/eo/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	714	d2e45d348c49d0738f44a29db9e34225
+usr/share/locale/eo/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3084	7e9cc5da111541d17ea04374259b72ba
+usr/share/locale/eo/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	1739	9ae6849029b7a752592f02f3bc55f6f5
+usr/share/locale/eo/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	3538	b9b7ef8823c21db9ca4876cf8d1bb3a7
+usr/share/locale/es/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3292	3a0f384bae33cef17704a7cc254b0a11
+usr/share/locale/es/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2292	a871014242176d2cdaee12b879dd2bfe
+usr/share/locale/es/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	780	cc6ef6698ffd59a22a9dc3fd5e02e74d
+usr/share/locale/es/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3987	a7c44b1adf4d056d29b6c12af4613baa
+usr/share/locale/es/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	3613	1751b2931f16ce8a61734b4c9ed6825b
+usr/share/locale/es/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4285	201cddbe996045adffa83089c0cbc312
+usr/share/locale/es/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1298	f17e05f380a6c1ce72cfeb5318316aea
+usr/share/locale/et/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	446	defd76c0125c69dfcbbf4d77e0344518
+usr/share/locale/et/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	1627	9d0b3c98709a210791a575b626256b26
+usr/share/locale/eu/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	2892	d44a91613e5bef7fa0795954e446a2a1
+usr/share/locale/eu/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2220	b8fbae7841b9b8526018df5783ce2aaa
+usr/share/locale/eu/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	744	e801130a2c7290adbca8d0538faf246c
+usr/share/locale/eu/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	4028	f49f5eb0e5d036aa4acc149acb32360f
+usr/share/locale/eu/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	3320	a19122b59289a25227f23c13ace85cec
+usr/share/locale/eu/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4128	75bdcf7251bd460d51612a045c13c089
+usr/share/locale/eu/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1306	2d8089c09e2c8c66abf9ab9461064e61
+usr/share/locale/fi/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	3301	9dcfd1b49bc6a6a009fd48ea46d0fa11
+usr/share/locale/fi/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	2873	f323122983b456d963b072f55616afff
+usr/share/locale/fi/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	1705	f23a792e44188b5f8452435c56d9a1e3
+usr/share/locale/fi/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	722	4a5a7db1d57ee31f0e1b84cae9d67ac3
+usr/share/locale/fi/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3816	c0ca305f8f93d217f1f2eae66bc97582
+usr/share/locale/fi/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	3267	b6c36d76003f17c2ef0581237344fe9f
+usr/share/locale/fi/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	3942	b904818430eccc202d8d34dee791d86a
+usr/share/locale/fi/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	980	192e1a55c500f47ade9d77bc90a64d50
+usr/share/locale/fr/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	3086	f91f7e093d0e9e1ff45fe4e1c8f8d010
+usr/share/locale/fr/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3328	fe176298334aeee4ea36b37b361ea8a0
+usr/share/locale/fr/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2270	30cf9033610c29a3db851cd95c4569fe
+usr/share/locale/fr/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	750	1e98abcf0c884c1da60f401914dc10c8
+usr/share/locale/fr/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	4428	55a8e4e47038a655868a1289cf858298
+usr/share/locale/fr/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	3789	84ee4e84824a8d4276c18dc2f6288b6d
+usr/share/locale/fr/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4302	c109bcc0639cba2b60bab4bb03e6482f
+usr/share/locale/fr/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1288	f1a21f1c0a07a079a27e8db854b7ca64
+usr/share/locale/fur/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	3124	18b6a424e25cae8d96b5df0c883e21ad
+usr/share/locale/ga/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	443	f86c02a2881c9630c97cef16dc982987
+usr/share/locale/ga/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	454	33502c67455b8318942b706553cc4877
+usr/share/locale/ga/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	452	ee2e1024b5a0d08af3b782399600cf18
+usr/share/locale/ga/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	33	42571c39cf0a0547be303bf96c2db45a
+usr/share/locale/ga/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	452	ee2e1024b5a0d08af3b782399600cf18
+usr/share/locale/ga/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	454	33502c67455b8318942b706553cc4877
+usr/share/locale/gl/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	3301	fcc160d53055fc356e54f463efc82424
+usr/share/locale/gl/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	2923	485bb12376f8c202782fb1c1177b374d
+usr/share/locale/gl/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	771	98cfa6980ef42fec63ac294d6f7d7adf
+usr/share/locale/gl/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3400	8a603e755c609556c088c43f9dcf5f6e
+usr/share/locale/gl/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	1772	ca0dac899c29b8ec7da57bcae84b20e1
+usr/share/locale/gl/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	3755	731563a2442a848ccb3d95fa39f64fc6
+usr/share/locale/he/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	3551	63e62dada0f68e84fd8892f69cfde40b
+usr/share/locale/he/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3571	1cc58665aff2caf720f057e40a51efbd
+usr/share/locale/he/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2439	e51a9f55e9a140dfa509e3d65ad17f69
+usr/share/locale/he/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	845	e6a573562e5c1e0e033ce4eb919cd1b5
+usr/share/locale/he/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3831	ff038c6db2bbe0bcf957c784c14ce43e
+usr/share/locale/he/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	3919	970810ed5be065383351d5c1fb44a5db
+usr/share/locale/he/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4655	c908a4d66fe4ab89bd5f14b4601df7f6
+usr/share/locale/he/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1485	dad1c9ba203dbffe50ab77c3d8ff6794
+usr/share/locale/hi/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	1017	ae51a10dcd919a75620fe5c55e976677
+usr/share/locale/hi/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	821	b868011b93ba4f37a937b1e8fc9f0632
+usr/share/locale/hi/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	659	e2d9058b777c842706e90c82761a8ad5
+usr/share/locale/hi/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	2324	bc094c3c0e79b9e5ad965aae78c730ab
+usr/share/locale/hi/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4841	75cbfae3ffd358b6c37950cf86eb493a
+usr/share/locale/hu/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	3580	76f3142e03dce47595edfd719b95bea1
+usr/share/locale/hu/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3321	5d974c6904315d8f8ca124fe67fc55f9
+usr/share/locale/hu/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2237	abf0206cba8265a10d9f39c6c8462c29
+usr/share/locale/hu/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	757	35db47ec80aa8ba2b0d30c93393cdb7c
+usr/share/locale/hu/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3968	b2d42bdd055664fc92d7aa4f4b8b4726
+usr/share/locale/hu/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	1736	1395023b4da49cc98c98d3ed4285ec86
+usr/share/locale/hu/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4154	6a560b95f0532a923c87cee1736feb5d
+usr/share/locale/hu/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1300	a97932a5596f58fb5101cabb639bbdb6
+usr/share/locale/ia/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3274	779f0f292bc69224b5485f683973a0f6
+usr/share/locale/ia/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2212	261ffaaaa31326a1a0297caab50a42da
+usr/share/locale/ia/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	740	66af42219800c6e58ebcc63782450d56
+usr/share/locale/ia/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3916	f71daed0cb222fdf6f2e8f269b7a6990
+usr/share/locale/ia/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	1709	9bb69dd9a754bfaab00fcb45feed1329
+usr/share/locale/ia/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4167	7693a764e8298e6d266acc8e370062ef
+usr/share/locale/ia/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1290	20aac061665483e835935a2dd43948ea
+usr/share/locale/id/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	3094	6f9e7894d0e4a723bebec106e284ea67
+usr/share/locale/id/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	560	57395b972cd6ffb5b3eacad0c543bd81
+usr/share/locale/id/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	1777	59982dbff019db49041970ad390aaa3f
+usr/share/locale/id/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	1686	d235ab792b25a9d471e347fab6fcf9b0
+usr/share/locale/id/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	1824	9ddd48243071af8cad76b2e815168fe5
+usr/share/locale/is/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2221	69acc2ab3cb93721461f58f248aef65e
+usr/share/locale/is/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	741	e497b843d7eeecf4178a496d3721f257
+usr/share/locale/is/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3434	ae4f783c5a8795d583806aa23d59e540
+usr/share/locale/is/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	3476	316ab8d2e955f1f760c5e785b8a4814e
+usr/share/locale/is/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4053	aaa886480a503ddc66902ad6df7e4cf7
+usr/share/locale/is/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1289	021794ba3a20ac003a92779becd996d0
+usr/share/locale/it/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	3368	b78189960c0bedbf64d88f0ca5742530
+usr/share/locale/it/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3306	06ef81dc82bb76648a6e031fc2757f03
+usr/share/locale/it/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2243	4dff0a684aca13ae22be58d9b4c28e7d
+usr/share/locale/it/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	746	60b752ddfd22eabd2b810dd32fc6da56
+usr/share/locale/it/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	4096	89b4e35f0b4e5095a0325994bd0aa73b
+usr/share/locale/it/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	3545	0b4da1565ef6111602c53b5d26882227
+usr/share/locale/it/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4152	16b29c8f8e5c2ac2ddc502eb19a6dd97
+usr/share/locale/it/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1307	84df608d143cbcedb62da9a2667cac7a
+usr/share/locale/ja/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	454	e3fb547b48e7139b6c6e339f11705abe
+usr/share/locale/ja/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2334	26cbbb5fdbc7d1de01bcc397354273e3
+usr/share/locale/ja/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	463	3c19ef2305deec7ebdede54f85a72aec
+usr/share/locale/ja/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	1769	3bf982ec1318ec27fa627c706f5729ce
+usr/share/locale/ja/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	463	2deb0960ec18b329940babfee996d748
+usr/share/locale/ja/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	463	6d2a80116ae2d4db108d5440011bc5b9
+usr/share/locale/ka/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	5100	2ee050a4c17919ac1c9463faf4951ae2
+usr/share/locale/ka/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	4318	5ef69f50c03b63fe4260a586e1ef6dd1
+usr/share/locale/ka/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	3270	20e1b86a2bc01ba711d9ab477169c527
+usr/share/locale/ka/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	918	9e9c31af481155847b75b152b5f4a099
+usr/share/locale/ka/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	4105	008885167f71205ce965f09053a7f337
+usr/share/locale/ka/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	4974	6b4b6c29a36a0d3f519f2ab830c5f963
+usr/share/locale/ka/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	5978	f42902315fd532fa82f49fca08f49011
+usr/share/locale/ka/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1660	6145777bfb0e1f654df09a1f14613613
+usr/share/locale/kk/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	5213	f9d7bcc67c2b7f2ee8c23917a2284f4c
+usr/share/locale/ko/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3263	72d6d8db8c094b158c72ed2006626c28
+usr/share/locale/ko/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2089	99d0dff8056d8ff972d02da969089fd0
+usr/share/locale/ko/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	724	184192e1bfaffcd3bd120e3071182a76
+usr/share/locale/ko/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3295	13068bd3ac9063671724e6be73885265
+usr/share/locale/ko/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	3215	d13b55cc9cec56cabf3b65c27fd6a041
+usr/share/locale/ko/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4027	325b6c881a23c83b40a35dad434424d1
+usr/share/locale/ko/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1271	40d78f92474c9241caade016a547a7a2
+usr/share/locale/lt/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	3109	d2b6d8c206aeaf50cf0a345df3a1a282
+usr/share/locale/lt/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	460	576c51ecc4527627ad351cffae7158e9
+usr/share/locale/lt/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2292	cbedaddf19addb38bd5bc32bbef27ba4
+usr/share/locale/lt/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	804	d9a0075ac609965b691adcbc9801790f
+usr/share/locale/lt/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	4147	2adbfa4cb78562137c288ef11422db53
+usr/share/locale/lt/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	2224	8e2d7bb5cb5890ab9c15faeea4c95d27
+usr/share/locale/lt/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4278	2ba2854d9f47774fc382ef66d86a72fa
+usr/share/locale/lt/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1349	1b83212948b29f4eb91ce27228f8c267
+usr/share/locale/lv/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	2944	122a85d792f26beb64cbeebbd0e960e3
+usr/share/locale/lv/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	1742	d77e81af8568ef380b71758da0bb5784
+usr/share/locale/lv/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	789	7cfa3ef6c967f9de0da0fd8d61ecd1f0
+usr/share/locale/lv/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3611	1f89d7abec9d080f8aaa74597b6b118c
+usr/share/locale/lv/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	3318	914b437108f822d8e412aa300efa63b5
+usr/share/locale/lv/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	3953	0d7753419ee4162b3dbdf90fb1e893bc
+usr/share/locale/lv/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1035	3d91a936db4f238d3dfe12022bf7be6f
+usr/share/locale/ml/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	30	a30f0f2aa32949447c97e4e41e76522e
+usr/share/locale/nb/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	1749	ec9e6e79bd9e30b300714b246093981f
+usr/share/locale/nb/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3660	47f0d6c8b1ea0d18383d09744a8b7690
+usr/share/locale/nb/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1030	36b07b163fb38a69bfb8c38939671db8
+usr/share/locale/nl/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	3201	b7c78adebe75612817707f3a55fde3ef
+usr/share/locale/nl/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3300	fd3d69dea2fab982e3539d87f323a82e
+usr/share/locale/nl/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2269	a9beb459426156b134a60cb123ba57c6
+usr/share/locale/nl/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	715	d3c797c15b708e7ca3585f8c4c8843f3
+usr/share/locale/nl/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	4038	6267fdf6b5be05e871d7bf02f042828e
+usr/share/locale/nl/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	3474	d7f299380a3e1d71c60d4e4c942061d7
+usr/share/locale/nl/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4122	ee79643cedf43ab395c91b1b98729d0f
+usr/share/locale/nl/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1306	94199c9223a6f67df250b48d39a7fac3
+usr/share/locale/nn/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3272	79307f7871fd31fcb961b0689ecfe88e
+usr/share/locale/nn/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2258	da4a7dce8fe9c9a949543b358f536c99
+usr/share/locale/nn/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	804	4094faa2c2fcb55c2142a1d6f9535a09
+usr/share/locale/nn/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3869	9834a1f483e0aafb830f0e920039c99a
+usr/share/locale/nn/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	1744	8afac2aa5e56b45601ea67d9134f12fd
+usr/share/locale/nn/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4086	a3831381188345b27993ba8b67d49e66
+usr/share/locale/nn/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1346	fb17341d35142d44e011c7430c91659b
+usr/share/locale/pa/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	893	48a47a294025cf6fbe95a850bde39a29
+usr/share/locale/pa/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	806	3465b5f50038c186af85b2d6ba4d9710
+usr/share/locale/pa/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	1757	1718d5eaee70bf50de94c726db43874f
+usr/share/locale/pa/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	2083	9cc1ce1ded94e2d70215feb002939922
+usr/share/locale/pa/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4091	4275a43b9722cde2b65e5180f23fb56e
+usr/share/locale/pl/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	4059	d52ac691141388e34e8f6bd1dc0a3d3b
+usr/share/locale/pl/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	2952	8e229a069f4f285e448a11284e26387c
+usr/share/locale/pl/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2319	8de1aabb93c486ec72a3c263780bdf39
+usr/share/locale/pl/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	812	7fc15e229af4bea2752d34e7227cface
+usr/share/locale/pl/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3844	94da91ee54ee02c24e9b98a0d43c2eaa
+usr/share/locale/pl/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	3578	e19f55455d41220a7328838dc07979bc
+usr/share/locale/pl/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4321	f9eea11a80dd22329203576dfd59bc7a
+usr/share/locale/pl/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1377	0b45dc43aa011e433213c63f3a972adc
+usr/share/locale/pt/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	1018	3475b00f4b46c951c4620cd88745e431
+usr/share/locale/pt/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	758	328349277b2dd6b7e49c3a5cc578eba4
+usr/share/locale/pt/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	2060	d682f59c7569a7468924ca1be7e681dc
+usr/share/locale/pt/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	1712	bd0661b6ebb48bdcc87f027c0bb4bd0c
+usr/share/locale/pt/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4120	f807e4ead3b1bebb5d36002dafe416e6
+usr/share/locale/pt_BR/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	3955	c62ffb7b55ed781029d1802b96fd6420
+usr/share/locale/pt_BR/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3413	11183ba8a4ad7c04144d9bcfd327f1fc
+usr/share/locale/pt_BR/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2223	c24fa73d3731f03e9bb3b9522bf1bbdc
+usr/share/locale/pt_BR/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	784	c09a9e3d3399bad71ed1dfc604410890
+usr/share/locale/pt_BR/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3863	c36b18682ac20ea6651b497898045f47
+usr/share/locale/pt_BR/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	3679	b9c82a216e74e6ce2650922d1ba40929
+usr/share/locale/pt_BR/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4253	cb8771516b1235d1df1ba9d1b024e388
+usr/share/locale/pt_BR/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1324	f2e18449d75f758c300da855e206dcce
+usr/share/locale/ro/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2235	96cddcd01c19b5f9864fd5fd9d98f786
+usr/share/locale/ro/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	784	b3f1ddcf68778fd6ae3f771383b22749
+usr/share/locale/ro/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3893	c15c7a34bbdf08e0cf5b20fb0a327bea
+usr/share/locale/ro/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	1768	edd5915dc6c5c8f582196a6beb748450
+usr/share/locale/ro/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	1910	593d08d401d4de5be479251661b3d4ad
+usr/share/locale/ro/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1343	84c1750de1350bca4a61dd9208cf1c60
+usr/share/locale/ru/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	4549	ff4a5d6201a1cf028c73fd95c69d3d09
+usr/share/locale/ru/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3980	84e60b3271d05c952fea57c7a8d4b2fa
+usr/share/locale/ru/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2825	6f339ce359e9466bffad16f6b6d34081
+usr/share/locale/ru/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	913	51d0169e55ad810b416483481a232609
+usr/share/locale/ru/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	4270	3904152a406e96d682cc9a0f7869d830
+usr/share/locale/ru/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	2321	9b01fb1deefafaf61e534346cc7cf26b
+usr/share/locale/ru/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	5140	94f9a03ce39d689bc47a7eea871f9cd7
+usr/share/locale/ru/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1538	ae8a8cfc1d195246b3fc20a9db13cb39
+usr/share/locale/sa/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3603	0ea435c76454051da40adf536f47f3e6
+usr/share/locale/sa/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	826	609a6e24570a9813726be42d966f361e
+usr/share/locale/sa/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3385	b82c02bcee9a9892f81fe6a5f48622ca
+usr/share/locale/sa/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	2432	0397449100ce74a101843668d7917655
+usr/share/locale/sa/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	5254	b9d6f6780ae9fcbe4b78218efeac9e00
+usr/share/locale/sk/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	3425	714fd6dcf450f66b65459f40bcc3304d
+usr/share/locale/sk/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3318	ae2a25ecf8b2da81fd047e8fcb7f6b73
+usr/share/locale/sk/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2208	e61acd1dd5aec560afce2f92eabf4506
+usr/share/locale/sk/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	766	bbd9d005f9816817e240c61df85c6567
+usr/share/locale/sk/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3722	b4a588f1c06a83c202ebda2dc1f10e35
+usr/share/locale/sk/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	1667	ad4f8fbb97312c68dd05ee4c53935e16
+usr/share/locale/sk/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4200	b16c7ba687c7cc3d805678f1671b8ae0
+usr/share/locale/sk/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1273	b59bcfe85887556218e9872a112292c5
+usr/share/locale/sl/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	4023	a9d5f5e9bbfe5341021fe4bc554d918a
+usr/share/locale/sl/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3303	552af528a57810769e9ff02c819e21eb
+usr/share/locale/sl/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2213	8cae2745715533615d847d1d19f56761
+usr/share/locale/sl/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	794	be4a9da855aa39f3a986ff2be989989e
+usr/share/locale/sl/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3877	7923ffc5cbf63b6c58d100e3bd22a695
+usr/share/locale/sl/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	3496	fefcf68699f75a66397b613928c932ab
+usr/share/locale/sl/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4099	b273249eec8fa087a063d6faa60aab74
+usr/share/locale/sl/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1348	b38153f36bc1e6c10ab8c654596a73ad
+usr/share/locale/sr/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	5083	93f65ad4a372d065b6b4553c29f0b792
+usr/share/locale/sr/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	165	d603c61b128280c4dc243b12665fb98e
+usr/share/locale/sr@ijekavian/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	157	a8923c9a4055bb01c2a8eeeecb843be5
+usr/share/locale/sr@ijekavianlatin/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	164	aac8bbcc058bb2e764b6d5a4663a5a5c
+usr/share/locale/sr@latin/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	3896	84dafed32f1b32e94f0ced68f2b2e452
+usr/share/locale/sr@latin/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	155	90d3f191877a07b223650994d769a045
+usr/share/locale/sv/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	3776	d996128ae5bbb95a6b17c893c4a0a4ed
+usr/share/locale/sv/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3231	e05bc7faac780154afd9618037c38340
+usr/share/locale/sv/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2238	af37d2612f2bdac9cda56ad41ec8dcad
+usr/share/locale/sv/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	757	f64562a0c8c24f2a7e5d76ca194f7523
+usr/share/locale/sv/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3936	6e5684024bb23ec18313298c9c8645da
+usr/share/locale/sv/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	3276	e2194329dec9d1dc06959dc62d0a8d40
+usr/share/locale/sv/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4073	d3757d95088038c3be6efd9d97a2876d
+usr/share/locale/sv/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1323	8687bc4c629b03a4ebf826c569868027
+usr/share/locale/ta/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	4349	3aeb588f1abe1df88a7a92ab7e17e00f
+usr/share/locale/tg/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	228	c0908f06ea53e2bcee092760ab9f2b3f
+usr/share/locale/tr/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	3217	e9994978631e450c4ad3fca14366cd46
+usr/share/locale/tr/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3235	4e798f672c57df6b30eb6880f8279a84
+usr/share/locale/tr/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2150	62fb5968efd0aee00f06ec15fd1fd3e3
+usr/share/locale/tr/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	743	8b45267245cbf4c4052424f23bc2a845
+usr/share/locale/tr/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3954	1422e92348b4e0ca7b309b9626d93b80
+usr/share/locale/tr/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	3473	2bbba4fbecef6a64e9f6a596ab262d40
+usr/share/locale/tr/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	4040	1b17f30666cf81581bdb8fa4c8e7f2d8
+usr/share/locale/tr/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1275	38eed6a5b54b9ee82da155ba4853b7c0
+usr/share/locale/ug/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	2022	59b58b729775f6325e24451fc0f83989
+usr/share/locale/ug/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	2051	d1056a35a6aea24229624f777b8bdcbc
+usr/share/locale/uk/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	4610	b654c5a569d582f48de3e14e0c41956e
+usr/share/locale/uk/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3958	9c289d86d494d47d361b6ee13025632b
+usr/share/locale/uk/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	3018	8cc09db25250c825e0e22e29908e9b23
+usr/share/locale/uk/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	928	e78ece4e8bdb21afd2894eb213972d53
+usr/share/locale/uk/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	4234	036906bdc7b46a145f0bdca246a244f7
+usr/share/locale/uk/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	4296	a1ea501accd08bbe62b87ccf518f9462
+usr/share/locale/uk/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	5258	c4357a2503f0210ed12d0adfaaaec23e
+usr/share/locale/uk/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1532	d5fdf00f6f6802ba6133e5fd7e3cc71c
+usr/share/locale/vi/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	779	62c40d9209a01fd24c70f88be4c4ffc2
+usr/share/locale/vi/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	3735	6e38adc08f5286e2c0057957a4675339
+usr/share/locale/zh_CN/LC_MESSAGES/ModemManager.mo	binary built from the recipes in packages/ or upstream	2669	195816960cd610d9d9c46290d7c798da
+usr/share/locale/zh_CN/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3281	bdd0a2fb58310a9eb9b98cf3ca364e90
+usr/share/locale/zh_CN/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2070	7a05265883b492e2796102cd53c2e18e
+usr/share/locale/zh_CN/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	821	dbba4b1a6ea943a0db09ee44f0138cf4
+usr/share/locale/zh_CN/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3239	728831979202bab8c3118ae54a9c8299
+usr/share/locale/zh_CN/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	3326	70c22977debd10528a285d07827d9a30
+usr/share/locale/zh_CN/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	3927	847155b1b21e67d26bbfd28acd04dc67
+usr/share/locale/zh_CN/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1340	c98461aceba879f39203e16203f20b1e
+usr/share/locale/zh_TW/LC_MESSAGES/kalk.mo	binary built from the recipes in packages/ or upstream	3207	ff5f89f05e81473662a382a746db3417
+usr/share/locale/zh_TW/LC_MESSAGES/kcm_plasmakeyboard.mo	binary built from the recipes in packages/ or upstream	2038	d94d8eb65809c5846b63f6828c9dd242
+usr/share/locale/zh_TW/LC_MESSAGES/kde-telephony-daemon.mo	binary built from the recipes in packages/ or upstream	739	015105159c16110136f93d0176e78b56
+usr/share/locale/zh_TW/LC_MESSAGES/libkirigami6_qt.qm	binary built from the recipes in packages/ or upstream	3090	a493a2b7db386459a365dbbca1bf8d4a
+usr/share/locale/zh_TW/LC_MESSAGES/plasma-camera.mo	binary built from the recipes in packages/ or upstream	3243	c1276ab8ae372c3fa253176c1b76f987
+usr/share/locale/zh_TW/LC_MESSAGES/plasma-dialer.mo	binary built from the recipes in packages/ or upstream	3874	13c473f79c9cdbf3b052f9f63fedacce
+usr/share/locale/zh_TW/LC_MESSAGES/plasma-keyboard.mo	binary built from the recipes in packages/ or upstream	1292	768ae9279cf5989412297a18f9573b39
+usr/share/megapixels/config/pine64,pinephone,front.dcp	binary built from the recipes in packages/ or upstream	1102938	930a7a8f4fa499df646ca0197763f724
+usr/share/megapixels/config/pine64,pinephone,rear.dcp	binary built from the recipes in packages/ or upstream	1037418	e85718ce8defa1189aa7d9b7fa422c3f
+usr/share/plasma/keyboard/layouts/ar_AR/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/bg_BG/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/bg_BG/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/bg_BG/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/bg_BG/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/cs_CZ/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/cs_CZ/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/cs_CZ/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/cs_CZ/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/cs_CZ/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/da_DK/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/da_DK/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/da_DK/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/da_DK/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/da_DK/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/de_DE/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/de_DE/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/de_DE/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/de_DE/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/de_DE/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/el_GR/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/el_GR/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/el_GR/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/el_GR/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/en_GB/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/en_GB/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/en_GB/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/en_GB/main.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/en_GB/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/en_GB/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/en_US/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/en_US/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/en_US/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/en_US/main.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/en_US/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/en_US/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/es_ES/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/es_ES/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/es_ES/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/es_MX/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/es_MX/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/es_MX/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/et_EE/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/et_EE/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/et_EE/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/et_EE/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/et_EE/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/fa_FA/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/fi_FI/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/fi_FI/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/fi_FI/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/fi_FI/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/fi_FI/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/fr_CA/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/fr_CA/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/fr_CA/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/fr_CA/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/fr_CA/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/fr_FR/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/fr_FR/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/fr_FR/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/fr_FR/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/fr_FR/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/he_IL/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/he_IL/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/he_IL/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/hi_IN/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/hi_IN/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/hi_IN/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/hi_IN/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/hr_HR/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/hr_HR/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/hr_HR/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/hr_HR/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/hr_HR/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/hu_HU/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/hu_HU/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/hu_HU/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/hu_HU/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/hu_HU/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/id_ID/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/id_ID/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/id_ID/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/id_ID/main.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/id_ID/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/id_ID/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/it_IT/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/it_IT/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/it_IT/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/it_IT/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/it_IT/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/ja_JP/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/ja_JP/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/ja_JP/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/ko_KR/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/ko_KR/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/ko_KR/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/lv_LV/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/lv_LV/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/lv_LV/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/lv_LV/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/lv_LV/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/ms_MY/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/ms_MY/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/ms_MY/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/ms_MY/main.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/ms_MY/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/ms_MY/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/nb_NO/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/nb_NO/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/nb_NO/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/nb_NO/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/nb_NO/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/nl_NL/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/nl_NL/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/nl_NL/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/nl_NL/main.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/nl_NL/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/nl_NL/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/pl_PL/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/pl_PL/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/pl_PL/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/pl_PL/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/pl_PL/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/pt_BR/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/pt_BR/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/pt_BR/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/pt_BR/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/pt_BR/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/pt_PT/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/pt_PT/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/pt_PT/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/pt_PT/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/pt_PT/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/ro_RO/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/ro_RO/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/ro_RO/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/ro_RO/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/ro_RO/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/ru_RU/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/ru_RU/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/ru_RU/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/ru_RU/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sk_SK/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sk_SK/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sk_SK/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sk_SK/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sk_SK/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sl_SI/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sl_SI/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sl_SI/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sl_SI/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sl_SI/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sq_AL/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sq_AL/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sq_AL/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sq_AL/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sq_AL/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sr_SP/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sr_SP/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sr_SP/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sr_SP/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sv_SE/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sv_SE/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sv_SE/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sv_SE/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/sv_SE/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/th_TH/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/th_TH/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/th_TH/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/th_TH/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/tr_TR/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/tr_TR/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/tr_TR/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/tr_TR/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/tr_TR/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/uk_UA/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/uk_UA/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/uk_UA/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/uk_UA/symbols.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/vi_VN/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/vi_VN/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/vi_VN/handwriting.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/vi_VN/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/zh_CN/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/zh_CN/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/zh_CN/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/zh_TW/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/zh_TW/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/plasma/keyboard/layouts/zh_TW/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/kodiak_ak991x_0.json	proprietary firmware / sensor config / kernel module	6129	6d899de0c223f9f4ede261c2b537bcca
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/kodiak_ak991x_1.json	proprietary firmware / sensor config / kernel module	6310	540badfc0b187d9fcd83b66055104769
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/kodiak_default_sensors.json	proprietary firmware / sensor config / kernel module	5693	4c9b0015026924b6dfd65630d6590972
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/kodiak_lsm6dsm_0.json	proprietary firmware / sensor config / kernel module	6773	f41149a441e4d894c5133696b3c139d4
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/kodiak_stk3a0x_0.json	proprietary firmware / sensor config / kernel module	2233	cfff34c7fc8c12c39f8c098c442e4f14
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/lsm6dsm_0.json	proprietary firmware / sensor config / kernel module	1879	909bc680525295b5229ca6ff5a7878e8
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_amd.json	proprietary firmware / sensor config / kernel module	623	ac20de6deb7b6200a3d8d628dcea00ad
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_amd_sw_disabled.json	proprietary firmware / sensor config / kernel module	265	2bdc0dd6cef6bff884ac1afa3b4fc1fe
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_amd_sw_enabled.json	proprietary firmware / sensor config / kernel module	437	0fd22de3a4337e7a3d9d381c35e9e9bb
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_aont.json	proprietary firmware / sensor config / kernel module	142	0a099f915baa0c1448be158d8ff1273d
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_basic_gestures.json	proprietary firmware / sensor config / kernel module	1094	880508ba323951403ee8f42a65a27ee9
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_bring_to_ear.json	proprietary firmware / sensor config / kernel module	1115	a11bc653f9227cdb93ca7e9deedfebd5
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_ccd.json	proprietary firmware / sensor config / kernel module	6311	61c412a844ad72ac1ac5055c5f638cff
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_ccd_v2_walk.json	proprietary firmware / sensor config / kernel module	464	09416fcdf8187efdd81ad446262536ba
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_ccd_v3_1_walk.json	proprietary firmware / sensor config / kernel module	1295	7cbb8e18ea59fb8760a3f33b02df6f72
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_ccd_v3_walk.json	proprietary firmware / sensor config / kernel module	1223	396d59c7c1db17d14e878e83164f4357
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_cm.json	proprietary firmware / sensor config / kernel module	674	2b17fa3f7c2013ff0707fb1b78906905
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_dae.json	proprietary firmware / sensor config / kernel module	885	0ce9980c0fa523c9f43f16004558ef8b
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_device_orient.json	proprietary firmware / sensor config / kernel module	1116	5382e42f1118dea0197b9254a39973e1
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_diag_filter.json	proprietary firmware / sensor config / kernel module	5929	eca9cd6b6a8929ec742c53e1f4d3e58f
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_distance_bound.json	proprietary firmware / sensor config / kernel module	1031	a2133b1dd6098cfd67b17c7b8b19e6dc
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_dpc.json	proprietary firmware / sensor config / kernel module	821	328de07c3e3363f9b65e659d49a85982
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_facing.json	proprietary firmware / sensor config / kernel module	793	20768000530332733060532e99b68d57
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_fmv.json	proprietary firmware / sensor config / kernel module	1306	aa549763824cfbc41123e08783e7d306
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_fmv_legacy.json	proprietary firmware / sensor config / kernel module	1576	b6e0b41f66b8f1126bb2dc3d42329ff6
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_geomag_rv.json	proprietary firmware / sensor config / kernel module	1105	1daa1c3166c573411125798f3cba43e2
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_gyro_cal.json	proprietary firmware / sensor config / kernel module	842	eb514b4dd249d5b746a387d7c8ef8b25
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_heart_rate.json	proprietary firmware / sensor config / kernel module	3612	1e3f67a4acecc01cefa6995634f238b6
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_mag_cal.json	proprietary firmware / sensor config / kernel module	528	9553a5869ed9f49899a240933da44ea8
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_mag_cal_legacy.json	proprietary firmware / sensor config / kernel module	327	476efd633a330f7a794e760e6688017e
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_multishake.json	proprietary firmware / sensor config / kernel module	800	ededc338c04c8543782e6caca0e07040
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_pedometer.json	proprietary firmware / sensor config / kernel module	969	b109d683bf36eeb95b25b3761a34a025
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_rmd.json	proprietary firmware / sensor config / kernel module	775	0254caebe8c8fce4aeedc7809ebffe0a
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_rotv.json	proprietary firmware / sensor config / kernel module	734	b6363ecf355455a370fb2f069643ea35
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_smd.json	proprietary firmware / sensor config / kernel module	1240	869fb52804602f51d902a7b4c934eaab
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_tilt.json	proprietary firmware / sensor config / kernel module	701	67de0257a53ecb159ec9e9069e291ab5
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_tilt_sw_disabled.json	proprietary firmware / sensor config / kernel module	274	fd5afe4e89318ef553825da8739d41fe
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_tilt_sw_enabled.json	proprietary firmware / sensor config / kernel module	414	e61b1dd05ce824add6e924a6eaa33054
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_tilt_to_wake.json	proprietary firmware / sensor config / kernel module	1482	1ef603674b1e4dd6afc24aa88630dc8a
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_wrist_pedo.json	proprietary firmware / sensor config / kernel module	654	e77234401f71b00df3613113dcc56517
+usr/share/qcom/sm7325/Samsung/m52xq/sensors/sns_reg.conf	proprietary firmware / sensor config / kernel module	433	9d2f3cd0ee0182b92cfa6d8cd1a58e82
+usr/share/qcom/sm7325/Samsung/m52xq/socinfo/hw_platform	proprietary firmware / sensor config / kernel module	4	989e73f48cf5109fe8dd79d00a7df37a
+usr/share/qcom/sm7325/Samsung/m52xq/socinfo/platform_subtype	proprietary firmware / sensor config / kernel module	8	afc86b28be8cacb1266dcee54b11ca3e
+usr/share/qcom/sm7325/Samsung/m52xq/socinfo/platform_subtype_id	proprietary firmware / sensor config / kernel module	2	897316929176464ebc9ad085f31e7284
+usr/share/qcom/sm7325/Samsung/m52xq/socinfo/platform_version	proprietary firmware / sensor config / kernel module	6	74ca24d4d965600a1b15d718be3803bf
+usr/share/qcom/sm7325/Samsung/m52xq/socinfo/soc_id	proprietary firmware / sensor config / kernel module	4	a3431c0758a8cc2bb7d75c0c548f8aa0
+usr/share/sounds/m52xq/dtmf-0.wav	binary built from the recipes in packages/ or upstream	26504	c9ba606a14be4a2410da1c4ed4195fa7
+usr/share/sounds/m52xq/dtmf-1.wav	binary built from the recipes in packages/ or upstream	26504	df8367eaf8792280007452c5e51f5d66
+usr/share/sounds/m52xq/dtmf-2.wav	binary built from the recipes in packages/ or upstream	26504	aab1127571777ddae3ae36a08a5bb037
+usr/share/sounds/m52xq/dtmf-3.wav	binary built from the recipes in packages/ or upstream	26504	cf4c2eed72b1b15150f6182cfd0f5b45
+usr/share/sounds/m52xq/dtmf-4.wav	binary built from the recipes in packages/ or upstream	26504	5317d955cce78df1bd43c488773769fc
+usr/share/sounds/m52xq/dtmf-5.wav	binary built from the recipes in packages/ or upstream	26504	4c69667f007522e4deadc4970c465904
+usr/share/sounds/m52xq/dtmf-6.wav	binary built from the recipes in packages/ or upstream	26504	6056edab69a86466645350af6b574594
+usr/share/sounds/m52xq/dtmf-7.wav	binary built from the recipes in packages/ or upstream	26504	a29791bee6f2cc16edad002db8b164b7
+usr/share/sounds/m52xq/dtmf-8.wav	binary built from the recipes in packages/ or upstream	26504	155f7f20398a39422d0a6e5982c7e5ff
+usr/share/sounds/m52xq/dtmf-9.wav	binary built from the recipes in packages/ or upstream	26504	02911aabf909754f55c3fdc411185ced
+usr/share/sounds/m52xq/dtmf-clear.wav	binary built from the recipes in packages/ or upstream	31796	a4e0d452e46374b8e5b76e47a6922cfa
+usr/share/sounds/m52xq/dtmf-delete.wav	binary built from the recipes in packages/ or upstream	12392	3bb4f46d60f021e47b374c605a9eab61
+usr/share/sounds/m52xq/dtmf-hash.wav	binary built from the recipes in packages/ or upstream	26504	b8393dd806083ce568faace57ed646f4
+usr/share/sounds/m52xq/dtmf-star.wav	binary built from the recipes in packages/ or upstream	26504	455d84b591c046bb8ab5f7567a8fdd04
+usr/share/sounds/ocean/stereo/alarm-clock-elapsed.oga	binary built from the recipes in packages/ or upstream	281083	748b41d5df6b52e95ab1fbd336e99859
+usr/share/sounds/ocean/stereo/audio-volume-change.oga	binary built from the recipes in packages/ or upstream	13140	dbfa522ba7db1de83bff9cd1340d6ec3
+usr/share/sounds/ocean/stereo/battery-caution.oga	binary built from the recipes in packages/ or upstream	73319	d9a5ebaa1c09896f74a43ef6e55e19b1
+usr/share/sounds/ocean/stereo/battery-full.oga	binary built from the recipes in packages/ or upstream	70623	d0104277ddbf6222045b3abdd7af64c7
+usr/share/sounds/ocean/stereo/battery-low.oga	binary built from the recipes in packages/ or upstream	76848	2b931ab00a53e9a3d2626cb5308b28b0
+usr/share/sounds/ocean/stereo/bell-window-system.oga	binary built from the recipes in packages/ or upstream	48265	48346ce3683b84d14e58897774478860
+usr/share/sounds/ocean/stereo/bell.oga	binary built from the recipes in packages/ or upstream	48265	48346ce3683b84d14e58897774478860
+usr/share/sounds/ocean/stereo/button-pressed-modifier.oga	binary built from the recipes in packages/ or upstream	7313	94315bed0cd6b2c500ae26e6b6ba8096
+usr/share/sounds/ocean/stereo/button-pressed.oga	binary built from the recipes in packages/ or upstream	7323	cc4ce493064a20698a6278b59546b353
+usr/share/sounds/ocean/stereo/complete-media-burn.oga	binary built from the recipes in packages/ or upstream	70623	d0104277ddbf6222045b3abdd7af64c7
+usr/share/sounds/ocean/stereo/complete-media-error.oga	binary built from the recipes in packages/ or upstream	38918	8e762a0aa4ceb45f5597203d1f563e54
+usr/share/sounds/ocean/stereo/completion-fail.oga	binary built from the recipes in packages/ or upstream	38191	bc7d704d4a845284ad6d2a6e5bfa9219
+usr/share/sounds/ocean/stereo/completion-partial.oga	binary built from the recipes in packages/ or upstream	38918	8e762a0aa4ceb45f5597203d1f563e54
+usr/share/sounds/ocean/stereo/completion-rotation.oga	binary built from the recipes in packages/ or upstream	38482	84fb44e7c9ee09e813fb6ccb701dc4eb
+usr/share/sounds/ocean/stereo/completion-success.oga	binary built from the recipes in packages/ or upstream	44374	afdf6bda3a0a46ac120171ba33e5ee94
+usr/share/sounds/ocean/stereo/desktop-login.oga	binary built from the recipes in packages/ or upstream	109973	9ea267cd66be30511605c0c883674c9c
+usr/share/sounds/ocean/stereo/desktop-logout.oga	binary built from the recipes in packages/ or upstream	110151	c1a94ef273339ad285dabd2c8349acd2
+usr/share/sounds/ocean/stereo/device-added.oga	binary built from the recipes in packages/ or upstream	72708	0969a566511fb1bc467061e74a762e25
+usr/share/sounds/ocean/stereo/device-removed.oga	binary built from the recipes in packages/ or upstream	73363	f4a0d437fa64050cdb7454abb49a3c69
+usr/share/sounds/ocean/stereo/dialog-error-critical.oga	binary built from the recipes in packages/ or upstream	79860	fcb4a3406a9b7d809e4b9c90243255f4
+usr/share/sounds/ocean/stereo/dialog-error-serious.oga	binary built from the recipes in packages/ or upstream	79860	fcb4a3406a9b7d809e4b9c90243255f4
+usr/share/sounds/ocean/stereo/dialog-error.oga	binary built from the recipes in packages/ or upstream	69120	020a370f746b4951983b90b16ac4b20c
+usr/share/sounds/ocean/stereo/dialog-information.oga	binary built from the recipes in packages/ or upstream	67719	bd09139b7138e423e3f69493f7989562
+usr/share/sounds/ocean/stereo/dialog-question.oga	binary built from the recipes in packages/ or upstream	77295	c9bb09c62a53a1a3567fc8eed971ff43
+usr/share/sounds/ocean/stereo/dialog-warning-auth.oga	binary built from the recipes in packages/ or upstream	15533	0f30ee30d5da58f1767d7914896f7b60
+usr/share/sounds/ocean/stereo/dialog-warning.oga	binary built from the recipes in packages/ or upstream	75634	af4110a3c95a299c0043885053a2eab2
+usr/share/sounds/ocean/stereo/game-over-loser.oga	binary built from the recipes in packages/ or upstream	63743	0eb27fd2205a16f34dd7fcaa543a0f0c
+usr/share/sounds/ocean/stereo/game-over-winner.oga	binary built from the recipes in packages/ or upstream	82716	040085eb0360c446869d3bb793334340
+usr/share/sounds/ocean/stereo/media-insert-request.oga	binary built from the recipes in packages/ or upstream	38482	84fb44e7c9ee09e813fb6ccb701dc4eb
+usr/share/sounds/ocean/stereo/message-attention.oga	binary built from the recipes in packages/ or upstream	70623	d0104277ddbf6222045b3abdd7af64c7
+usr/share/sounds/ocean/stereo/message-contact-in.oga	binary built from the recipes in packages/ or upstream	44374	afdf6bda3a0a46ac120171ba33e5ee94
+usr/share/sounds/ocean/stereo/message-contact-out.oga	binary built from the recipes in packages/ or upstream	38191	bc7d704d4a845284ad6d2a6e5bfa9219
+usr/share/sounds/ocean/stereo/message-highlight.oga	binary built from the recipes in packages/ or upstream	38918	8e762a0aa4ceb45f5597203d1f563e54
+usr/share/sounds/ocean/stereo/message-new-email.oga	binary built from the recipes in packages/ or upstream	20051	4d5e35748c12bf20f08abfbb0b6ddc2b
+usr/share/sounds/ocean/stereo/message-new-instant.oga	binary built from the recipes in packages/ or upstream	80087	ca8e519a78a93e16ec45515ae37fecd8
+usr/share/sounds/ocean/stereo/message-sent-instant.oga	binary built from the recipes in packages/ or upstream	82716	040085eb0360c446869d3bb793334340
+usr/share/sounds/ocean/stereo/outcome-failure.oga	binary built from the recipes in packages/ or upstream	63743	0eb27fd2205a16f34dd7fcaa543a0f0c
+usr/share/sounds/ocean/stereo/outcome-success.oga	binary built from the recipes in packages/ or upstream	70623	d0104277ddbf6222045b3abdd7af64c7
+usr/share/sounds/ocean/stereo/phone-incoming-call.oga	binary built from the recipes in packages/ or upstream	181359	7b4828a065d0ef389effc605288db9ef
+usr/share/sounds/ocean/stereo/power-plug.oga	binary built from the recipes in packages/ or upstream	71296	657b8f3eef6aa6a51016e04bf3d04a87
+usr/share/sounds/ocean/stereo/power-unplug.oga	binary built from the recipes in packages/ or upstream	63616	fcb6662d9a4eecc002358b6c10a2c6f5
+usr/share/sounds/ocean/stereo/service-login.oga	binary built from the recipes in packages/ or upstream	82716	040085eb0360c446869d3bb793334340
+usr/share/sounds/ocean/stereo/service-logout.oga	binary built from the recipes in packages/ or upstream	57950	df344d909b12cbbe3e53979a77a709e2
+usr/share/sounds/ocean/stereo/theme-demo.oga	binary built from the recipes in packages/ or upstream	109973	9ea267cd66be30511605c0c883674c9c
+usr/share/sounds/ocean/stereo/trash-empty.oga	binary built from the recipes in packages/ or upstream	58651	f0cc8dd3baffc4ea13f40939967c624b

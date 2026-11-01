@@ -1,0 +1,1309 @@
+diff -ruN a/src/CMakeLists.txt b/src/CMakeLists.txt
+--- a/src/CMakeLists.txt	2026-10-17 17:25:12.498573411 +0300
++++ b/src/CMakeLists.txt	2026-10-19 02:47:08.891586386 +0300
+@@ -15,6 +15,8 @@
+     plasmacamera/path.cpp
+     plasmacamera/settings.cpp
+     plasmacamera/worker.cpp
++    m52xq/photo_gpu.c
++    m52xq/rawphoto.c
+     resources.qrc
+ )
+ 
+@@ -38,6 +40,10 @@
+ 
+ find_package(PkgConfig)
+ pkg_check_modules(LIBCAMERA REQUIRED IMPORTED_TARGET libcamera)
++# m52xq r36: GPU development of the full-resolution photos
++pkg_check_modules(EPOXY REQUIRED IMPORTED_TARGET epoxy)
++pkg_check_modules(LIBJPEG REQUIRED IMPORTED_TARGET libjpeg)
++target_link_libraries(plasma-camera PkgConfig::EPOXY PkgConfig::LIBJPEG)
+ include_directories(${CMAKE_SOURCE_DIR} ${LIBCAMERA_INCLUDE_DIRS})
+ 
+ kconfig_add_kcfg_files(plasma-camera GENERATE_MOC camerasettings.kcfgc)
+diff -ruN a/src/contents/ui/SettingsDialog.qml b/src/contents/ui/SettingsDialog.qml
+--- a/src/contents/ui/SettingsDialog.qml	2026-10-19 02:28:18.179153099 +0300
++++ b/src/contents/ui/SettingsDialog.qml	2026-10-19 02:47:08.891586386 +0300
+@@ -126,7 +126,7 @@
+                 spacing: 0
+ 
+                 Repeater {
+-                    model: [100, 75, 50, 35]
++                    model: [0, 100, 75, 50, 35] // r36: 0 = the full sensor frame (main 64 MP, front 32 MP)
+ 
+                     delegate: QQC2.RadioDelegate {
+                         id: photoDelegate
+diff -ruN a/src/m52xq/photo_gpu.c b/src/m52xq/photo_gpu.c
+--- a/src/m52xq/photo_gpu.c	1970-01-01 02:00:00.000000000 +0200
++++ b/src/m52xq/photo_gpu.c	2026-10-19 02:50:20.775119612 +0300
+@@ -0,0 +1,506 @@
++#define _POSIX_C_SOURCE 200809L // clock_gettime with -std=c99
++// m52xq: copy of photo_gpu.c of the m52xq Megapixels build (GPU development of a packed RAW10 frame into a JPEG);
++// kept as a separate copy so that plasma-camera and Megapixels do not depend on each other.
++// m52xq r67: develop a photo on the GPU.
++//
++// The stock path wrote the raw burst as DNG files, then dcraw_emu made a 16-bit TIFF and ImageMagick ran its filters on it,
++// all on the CPU through files: 15 s for 16 MP, ~40 s (or an OOM kill) for 64 MP. The viewfinder already develops every
++// frame on the GPU, but at half resolution (one output pixel per 2x2 Bayer quad). Here one fragment shader reads the packed
++// RAW10 frame directly, demosaics it at full resolution (Malvar-He-Cutler 5x5, "High-quality linear interpolation for
++// demosaicing of Bayer-patterned color images", ICASSP 2004), applies exactly the colour processing of the viewfinder
++// (black level, white balance and gain in the colour matrix, gamma, S-curve, saturation) and the orientation the DNG would
++// carry. The result is rendered in strips of rows, read back and handed to libjpeg-turbo line by line, so the memory use
++// stays small even for 64 MP.
++#include "photo_gpu.h"
++
++
++#include <epoxy/gl.h>
++#include <stdio.h>
++#include <jpeglib.h>
++#include <stdlib.h>
++#include <string.h>
++#include <time.h>
++
++#define STRIP_ROWS 512
++
++static const char *vertex_src =
++        "#version 300 es\n"
++        "void main() {\n"
++        "    vec2 p = vec2(float((gl_VertexID & 1) * 2 - 1), float((gl_VertexID >> 1) * 2 - 1));\n"
++        "    gl_Position = vec4(p, 0.0, 1.0);\n"
++        "}\n";
++
++static const char *fragment_src =
++        "#version 300 es\n"
++        "precision highp float;\n"
++        "precision highp int;\n"
++        "uniform highp sampler2D raw;\n"
++        "uniform ivec2 src_size;\n"
++        "uniform ivec2 red_pos;\n"     // position of the red pixel in the 2x2 pattern
++        "uniform int orient;\n"        // EXIF orientation 1..8
++        "uniform int strip_y0;\n"
++        "uniform mat3 color_matrix;\n"
++        "uniform float blacklevel;\n"
++        "uniform float inv_gamma;\n"
++        "out vec4 frag;\n"
++        "float px(ivec2 p) {\n"
++        "    p = clamp(p, ivec2(0), src_size - 1);\n"
++        "    int g = p.x >> 2;\n"
++        "    int i = p.x & 3;\n"
++        "    uint hi = uint(texelFetch(raw, ivec2(g * 5 + i, p.y), 0).r * 255.0 + 0.5);\n"
++        "    uint lo = uint(texelFetch(raw, ivec2(g * 5 + 4, p.y), 0).r * 255.0 + 0.5);\n"
++        "    return float((hi << 2u) | ((lo >> uint(2 * i)) & 3u)) / 1023.0;\n"
++        "}\n"
++        "ivec2 source_pos(ivec2 o) {\n"
++        "    int W = src_size.x, H = src_size.y;\n"
++        "    if (orient == 2) return ivec2(W - 1 - o.x, o.y);\n"
++        "    if (orient == 3) return ivec2(W - 1 - o.x, H - 1 - o.y);\n"
++        "    if (orient == 4) return ivec2(o.x, H - 1 - o.y);\n"
++        "    if (orient == 5) return ivec2(o.y, o.x);\n"
++        "    if (orient == 6) return ivec2(o.y, H - 1 - o.x);\n"
++        "    if (orient == 7) return ivec2(W - 1 - o.y, H - 1 - o.x);\n"
++        "    if (orient == 8) return ivec2(W - 1 - o.y, o.x);\n"
++        "    return o;\n"
++        "}\n"
++        "void main() {\n"
++        "    ivec2 o = ivec2(int(gl_FragCoord.x), strip_y0 + int(gl_FragCoord.y));\n"
++        "    ivec2 p = clamp(source_pos(o), ivec2(0), src_size - 1);\n"
++        "    float C = px(p);\n"
++        "    float N = px(p + ivec2(0, -1)), S = px(p + ivec2(0, 1)), E = px(p + ivec2(1, 0)), Wv = px(p + ivec2(-1, 0));\n"
++        "    float N2 = px(p + ivec2(0, -2)), S2 = px(p + ivec2(0, 2)), E2 = px(p + ivec2(2, 0)), W2 = px(p + ivec2(-2, 0));\n"
++        "    float D = px(p + ivec2(-1, -1)) + px(p + ivec2(1, -1)) + px(p + ivec2(-1, 1)) + px(p + ivec2(1, 1));\n"
++        "    float cross1 = N + S + E + Wv;\n"
++        "    float cross2 = N2 + S2 + E2 + W2;\n"
++        "    int rx = (p.x - red_pos.x) & 1, ry = (p.y - red_pos.y) & 1;\n"
++        "    float g_at_rb = (4.0 * C + 2.0 * cross1 - cross2) / 8.0;\n"
++        "    float rb_at_br = (6.0 * C + 2.0 * D - 1.5 * cross2) / 8.0;\n"
++        "    float h = (5.0 * C + 4.0 * (E + Wv) - (E2 + W2) - D + 0.5 * (N2 + S2)) / 8.0;\n" // the colour of the row neighbours
++        "    float v = (5.0 * C + 4.0 * (N + S) - (N2 + S2) - D + 0.5 * (E2 + W2)) / 8.0;\n" // the colour of the column neighbours
++        "    vec3 rgb;\n"
++        "    if (rx == 0 && ry == 0) rgb = vec3(C, g_at_rb, rb_at_br);\n"         // red site
++        "    else if (rx == 1 && ry == 1) rgb = vec3(rb_at_br, g_at_rb, C);\n"    // blue site
++        "    else if (ry == 0) rgb = vec3(h, C, v);\n"                            // green in a red row
++        "    else rgb = vec3(v, C, h);\n"                                         // green in a blue row
++        "    vec3 color = max(rgb - blacklevel, vec3(0.0));\n"
++        "    color *= color_matrix;\n"
++        "    vec3 g = clamp(pow(max(color, vec3(0.0)), vec3(inv_gamma)), 0.0, 1.0);\n"
++        // identical to the viewfinder (debayer_packed.frag): S-curve k=0.5 and +25 % saturation
++        "    g += 0.5 * (g * g * (3.0 - 2.0 * g) - g);\n"
++        "    float l = dot(g, vec3(0.299, 0.587, 0.114));\n"
++        "    g = clamp(vec3(l) + (g - vec3(l)) * 1.25, 0.0, 1.0);\n"
++        "    frag = vec4(g, 1.0);\n"
++        "}\n";
++
++// m52xq r72: second pass, edge-preserving 5x5 noise reduction on the developed strip (colour noise fully, brightness
++// partly): weights by distance and by the brightness difference, so edges stay sharp. The strip is developed with
++// 10 extra rows above and below (tmp texture, r73) so the filters need no neighbouring strips.
++static const char *denoise_src =
++        "#version 300 es\n"
++        "precision highp float;\n"
++        "precision highp int;\n"
++        "uniform highp sampler2D tmp;\n"
++        "uniform float sigma_r;\n"    // brightness difference that still counts as the same surface
++        "uniform float luma_k;\n"     // share of the filtered brightness (colour is always filtered)
++        "uniform float wide_k;\n"     // r73: share of the wide (19x19, every 3rd pixel) colour average
++        "uniform float mid_k;\n"      // r82: share of the mid-scale (9x9, every 2nd pixel) brightness average (high gain)
++        "out vec4 frag;\n"
++        "void main() {\n"
++        "    ivec2 c = ivec2(int(gl_FragCoord.x), int(gl_FragCoord.y) + 10);\n"
++        "    ivec2 sz = textureSize(tmp, 0);\n"
++        "    vec3 c0 = texelFetch(tmp, c, 0).rgb;\n"
++        "    const vec3 lw = vec3(0.299, 0.587, 0.114);\n"
++        "    float y0 = dot(c0, lw);\n"
++        "    vec3 acc = vec3(0.0);\n"
++        "    float wsum = 0.0;\n"
++        "    for (int j = -2; j <= 2; j++) {\n"
++        "        for (int i = -2; i <= 2; i++) {\n"
++        "            ivec2 q = clamp(c + ivec2(i, j), ivec2(0), sz - 1);\n"
++        "            vec3 v = texelFetch(tmp, q, 0).rgb;\n"
++        "            float d = dot(v, lw) - y0;\n"
++        "            float w = exp(-float(i * i + j * j) / 4.5 - d * d / (2.0 * sigma_r * sigma_r));\n"
++        "            acc += v * w;\n"
++        "            wsum += w;\n"
++        "        }\n"
++        "    }\n"
++        "    vec3 f = acc / wsum;\n"
++        "    float yf = dot(f, lw);\n"
++        "    float y = mix(y0, yf, luma_k);\n"
++        "    if (mid_k > 0.0) {\n"   // r82: the grain of 3-6 px at high gain (the 5x5 pass leaves it)
++        "        float macc = 0.0, mw = 0.0;\n"
++        "        for (int j = -2; j <= 2; j++) {\n"
++        "            for (int i = -2; i <= 2; i++) {\n"
++        "                ivec2 q = clamp(c + ivec2(i, j) * 2, ivec2(0), sz - 1);\n"
++        "                float yv = dot(texelFetch(tmp, q, 0).rgb, lw);\n"
++        "                float d = yv - yf;\n"
++        "                float w = exp(-float(i * i + j * j) / 4.5 - d * d / (2.0 * 2.25 * sigma_r * sigma_r));\n"
++        "                macc += yv * w;\n"
++        "                mw += w;\n"
++        "            }\n"
++        "        }\n"
++        "        y = mix(y, macc / mw, mid_k);\n"
++        "    }\n"
++        "    vec3 ch = f - vec3(yf);\n"
++        // r73: the large yellow/blue colour blotches: average only the colour over +-9 px, weighted by distance and
++        // by the brightness difference (so colour does not leak over edges); brightness is left untouched
++        "    if (wide_k > 0.0) {\n"   // r74: skipped on the rear camera (costs ~0.45 s at 64 MP, little colour noise there)
++        "    vec3 cacc = vec3(0.0);\n"
++        "    float cw = 0.0;\n"
++        "    for (int j = -3; j <= 3; j++) {\n"
++        "        for (int i = -3; i <= 3; i++) {\n"
++        "            ivec2 q = clamp(c + ivec2(i, j) * 3, ivec2(0), sz - 1);\n"
++        "            vec3 v = texelFetch(tmp, q, 0).rgb;\n"
++        "            float yv = dot(v, lw);\n"
++        "            float d = yv - yf;\n"
++        "            float w = exp(-float(i * i + j * j) / 8.0 - d * d / (2.0 * 4.0 * sigma_r * sigma_r));\n"
++        "            cacc += (v - vec3(yv)) * w;\n"
++        "            cw += w;\n"
++        "        }\n"
++        "    }\n"
++        "    ch = mix(ch, cacc / cw, wide_k);\n"
++        "    }\n"
++        "    frag = vec4(clamp(vec3(y) + ch, 0.0, 1.0), 1.0);\n"
++        "}\n";
++
++static GLuint program = 0;
++static GLuint dn_program = 0;
++static GLint u_tmp, u_sigma_r, u_luma_k, u_wide_k, u_mid_k;
++static float mid_nr = 0.0f; // r82: set per photo from the sensor gain
++static float wide_nr = -1.0f; // r83: share of the wide colour pass (-1: the r74 rule, front only)
++
++void
++mp_photo_gpu_set_wide_nr(float k)
++{
++        wide_nr = k < 0.0f ? 0.0f : (k > 1.0f ? 1.0f : k);
++}
++
++void
++mp_photo_gpu_set_mid_nr(float k)
++{
++        mid_nr = k < 0.0f ? 0.0f : (k > 1.0f ? 1.0f : k);
++}
++static GLint u_raw, u_src_size, u_red_pos, u_orient, u_strip_y0, u_color_matrix, u_blacklevel, u_inv_gamma;
++
++static GLuint
++compile(GLenum type, const char *src)
++{
++        GLuint s = glCreateShader(type);
++        glShaderSource(s, 1, &src, NULL);
++        glCompileShader(s);
++        GLint ok = 0;
++        glGetShaderiv(s, GL_COMPILE_STATUS, &ok);
++        if (!ok) {
++                char log[2048];
++                glGetShaderInfoLog(s, sizeof(log), NULL, log);
++                fprintf(stderr, "photo_gpu: shader compile failed: %s\n", log);
++                glDeleteShader(s);
++                return 0;
++        }
++        return s;
++}
++
++static bool
++ensure_program(void)
++{
++        if (program)
++                return true;
++        GLuint vs = compile(GL_VERTEX_SHADER, vertex_src);
++        GLuint fs = compile(GL_FRAGMENT_SHADER, fragment_src);
++        if (!vs || !fs)
++                return false;
++        GLuint p = glCreateProgram();
++        glAttachShader(p, vs);
++        glAttachShader(p, fs);
++        glLinkProgram(p);
++        glDeleteShader(vs);
++        glDeleteShader(fs);
++        GLint ok = 0;
++        glGetProgramiv(p, GL_LINK_STATUS, &ok);
++        if (!ok) {
++                char log[2048];
++                glGetProgramInfoLog(p, sizeof(log), NULL, log);
++                fprintf(stderr, "photo_gpu: link failed: %s\n", log);
++                glDeleteProgram(p);
++                return false;
++        }
++        program = p;
++        {
++                GLuint vs2 = compile(GL_VERTEX_SHADER, vertex_src);
++                GLuint fs2 = compile(GL_FRAGMENT_SHADER, denoise_src);
++                if (vs2 && fs2) {
++                        GLuint d = glCreateProgram();
++                        glAttachShader(d, vs2);
++                        glAttachShader(d, fs2);
++                        glLinkProgram(d);
++                        GLint dok = 0;
++                        glGetProgramiv(d, GL_LINK_STATUS, &dok);
++                        if (dok) {
++                                dn_program = d;
++                                u_tmp = glGetUniformLocation(d, "tmp");
++                                u_sigma_r = glGetUniformLocation(d, "sigma_r");
++                                u_luma_k = glGetUniformLocation(d, "luma_k");
++                                u_wide_k = glGetUniformLocation(d, "wide_k");
++                                u_mid_k = glGetUniformLocation(d, "mid_k");
++                        } else {
++                                glDeleteProgram(d);
++                        }
++                }
++                if (vs2)
++                        glDeleteShader(vs2);
++                if (fs2)
++                        glDeleteShader(fs2);
++        }
++        u_raw = glGetUniformLocation(p, "raw");
++        u_src_size = glGetUniformLocation(p, "src_size");
++        u_red_pos = glGetUniformLocation(p, "red_pos");
++        u_orient = glGetUniformLocation(p, "orient");
++        u_strip_y0 = glGetUniformLocation(p, "strip_y0");
++        u_color_matrix = glGetUniformLocation(p, "color_matrix");
++        u_blacklevel = glGetUniformLocation(p, "blacklevel");
++        u_inv_gamma = glGetUniformLocation(p, "inv_gamma");
++        return true;
++}
++
++static double
++now_ms(void)
++{
++        struct timespec ts;
++        clock_gettime(CLOCK_MONOTONIC, &ts);
++        return ts.tv_sec * 1000.0 + ts.tv_nsec / 1e6;
++}
++
++// m52xq r75: the GPU governor (simple_ondemand) stays at 315 MHz for the short burst of a photo (the same 64 MP development
++// took 0.45 s or 1.36 s): raise the floor to the top frequency while developing. min_freq is made writable for the user by
++// /etc/udev/rules.d/90-m52xq-gpu-minfreq.rules; without it nothing changes.
++#define GPU_MINFREQ "/sys/class/devfreq/3d00000.qcom,kgsl-3d0/min_freq"
++#define GPU_MAXFREQ "/sys/class/devfreq/3d00000.qcom,kgsl-3d0/max_freq"
++static void
++gpu_floor(bool boost)
++{
++        static char saved[32] = "";
++        char buf[32] = "";
++        if (boost) {
++                FILE *f = fopen(GPU_MINFREQ, "r");
++                if (!f)
++                        return;
++                if (!fgets(saved, sizeof(saved), f))
++                        saved[0] = 0;
++                fclose(f);
++                f = fopen(GPU_MAXFREQ, "r");
++                if (!f)
++                        return;
++                if (!fgets(buf, sizeof(buf), f))
++                        buf[0] = 0;
++                fclose(f);
++        } else {
++                if (!saved[0])
++                        return;
++                snprintf(buf, sizeof(buf), "%s", saved);
++                saved[0] = 0;
++        }
++        FILE *w = fopen(GPU_MINFREQ, "w");
++        if (w) {
++                fputs(buf, w);
++                fclose(w);
++        }
++}
++
++static bool develop(const uint8_t *raw, int width, int height, int line_bytes, const char *cfa, int orientation,
++                    const float color_matrix[9], float blacklevel, float inv_gamma, const char *jpeg_path, int quality,
++                    float nr);
++
++bool
++mp_photo_gpu_develop(const uint8_t *raw, int width, int height, int line_bytes, const char *cfa, int orientation,
++                     const float color_matrix[9], float blacklevel, float inv_gamma, const char *jpeg_path, int quality,
++                     float nr)
++{
++        gpu_floor(true);
++        bool ok = develop(raw, width, height, line_bytes, cfa, orientation, color_matrix, blacklevel, inv_gamma, jpeg_path,
++                          quality, nr);
++        gpu_floor(false);
++        return ok;
++}
++
++static bool
++develop(const uint8_t *raw, int width, int height, int line_bytes, const char *cfa, int orientation,
++                     const float color_matrix[9], float blacklevel, float inv_gamma, const char *jpeg_path, int quality,
++                     float nr)
++{
++        double t0 = now_ms();
++        if (width % 4 || !ensure_program())
++                return false;
++
++        GLint max_tex = 0;
++        glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_tex);
++        if (line_bytes > max_tex || height > max_tex) {
++                fprintf(stderr, "photo_gpu: %dx%d raw does not fit a %d texture\n", line_bytes, height, max_tex);
++                return false;
++        }
++
++        int red_x = 0, red_y = 0;
++        if (cfa && strcmp(cfa, "GRBG") == 0) {
++                red_x = 1;
++        } else if (cfa && strcmp(cfa, "GBRG") == 0) {
++                red_y = 1;
++        } else if (cfa && strcmp(cfa, "BGGR") == 0) {
++                red_x = 1;
++                red_y = 1;
++        }
++        // m52xq r68: the pixels stay in sensor order and the JPEG carries the EXIF orientation of the DNG (the shader
++        // mapping of the transposed cases came out 180 degrees off for the mirrored front camera); viewers apply it
++        int exif_orientation = orientation >= 1 && orientation <= 8 ? orientation : 1;
++        orientation = 1;
++        int out_w = width;
++        int out_h = height;
++
++        // keep the state of the viewfinder rendering
++        GLint prev_program, prev_fb, prev_tex, prev_active, prev_viewport[4], prev_align;
++        glGetIntegerv(GL_CURRENT_PROGRAM, &prev_program);
++        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prev_fb);
++        glGetIntegerv(GL_ACTIVE_TEXTURE, &prev_active);
++        glActiveTexture(GL_TEXTURE0);
++        glGetIntegerv(GL_TEXTURE_BINDING_2D, &prev_tex);
++        glGetIntegerv(GL_VIEWPORT, prev_viewport);
++        glGetIntegerv(GL_UNPACK_ALIGNMENT, &prev_align);
++
++        GLuint src_tex, dst_tex, fb;
++        glGenTextures(1, &src_tex);
++        glBindTexture(GL_TEXTURE_2D, src_tex);
++        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
++        glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, line_bytes, height, 0, GL_RED, GL_UNSIGNED_BYTE, raw);
++        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
++        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
++
++        glGenTextures(1, &dst_tex);
++        glBindTexture(GL_TEXTURE_2D, dst_tex);
++        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, out_w, STRIP_ROWS, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
++        glGenFramebuffers(1, &fb);
++        glBindFramebuffer(GL_FRAMEBUFFER, fb);
++        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, dst_tex, 0);
++        bool ok = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
++
++        // m52xq r72/r73: developed strip with 10 margin rows on each side, input of the noise reduction pass
++        bool denoise = nr > 0.01f && dn_program != 0;
++        GLuint tmp_tex = 0, fb_tmp = 0;
++        if (ok && denoise) {
++                glGenTextures(1, &tmp_tex);
++                glBindTexture(GL_TEXTURE_2D, tmp_tex);
++                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, out_w, STRIP_ROWS + 20, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
++                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
++                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
++                glGenFramebuffers(1, &fb_tmp);
++                glBindFramebuffer(GL_FRAMEBUFFER, fb_tmp);
++                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tmp_tex, 0);
++                if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
++                        denoise = false;
++                glBindFramebuffer(GL_FRAMEBUFFER, fb);
++        }
++
++        FILE *out = ok ? fopen(jpeg_path, "wb") : NULL;
++        uint8_t *strip = ok ? malloc((size_t)out_w * STRIP_ROWS * 4) : NULL;
++        if (!out || !strip) {
++                ok = false;
++        }
++
++        double t_gpu = 0, t_jpeg = 0;
++        if (ok) {
++                struct jpeg_compress_struct cinfo;
++                struct jpeg_error_mgr jerr;
++                cinfo.err = jpeg_std_error(&jerr);
++                jpeg_create_compress(&cinfo);
++                jpeg_stdio_dest(&cinfo, out);
++                cinfo.image_width = out_w;
++                cinfo.image_height = out_h;
++                cinfo.input_components = 4;
++                cinfo.in_color_space = JCS_EXT_RGBA;
++                jpeg_set_defaults(&cinfo);
++                jpeg_set_quality(&cinfo, quality, TRUE);
++                jpeg_start_compress(&cinfo, TRUE);
++                {
++                        // minimal EXIF: TIFF header (little endian) + IFD0 with the Orientation tag only
++                        const JOCTET exif[] = {
++                                'E', 'x', 'i', 'f', 0, 0,
++                                'I', 'I', 0x2a, 0, 8, 0, 0, 0,
++                                1, 0,
++                                0x12, 0x01, 3, 0, 1, 0, 0, 0, (JOCTET)exif_orientation, 0, 0, 0,
++                                0, 0, 0, 0,
++                        };
++                        jpeg_write_marker(&cinfo, JPEG_APP0 + 1, exif, sizeof(exif));
++                }
++
++                glUseProgram(program);
++                glActiveTexture(GL_TEXTURE0);
++                glBindTexture(GL_TEXTURE_2D, src_tex);
++                glUniform1i(u_raw, 0);
++                glUniform2i(u_src_size, width, height);
++                glUniform2i(u_red_pos, red_x, red_y);
++                glUniform1i(u_orient, orientation);
++                glUniformMatrix3fv(u_color_matrix, 1, GL_FALSE, color_matrix);
++                glUniform1f(u_blacklevel, blacklevel);
++                glUniform1f(u_inv_gamma, inv_gamma);
++
++                for (int y0 = 0; y0 < out_h; y0 += STRIP_ROWS) {
++                        int rows = out_h - y0 < STRIP_ROWS ? out_h - y0 : STRIP_ROWS;
++                        double a = now_ms();
++                        if (denoise) {
++                                // pass 1: develop rows y0-10 .. y0+rows+9 (the raw lookup clamps at the frame edges)
++                                glUseProgram(program);
++                                glActiveTexture(GL_TEXTURE0);
++                                glBindTexture(GL_TEXTURE_2D, src_tex);
++                                glBindFramebuffer(GL_FRAMEBUFFER, fb_tmp);
++                                glViewport(0, 0, out_w, rows + 20);
++                                glUniform1i(u_strip_y0, y0 - 10);
++                                glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
++                                // pass 2: noise reduction into the output strip
++                                glUseProgram(dn_program);
++                                glBindTexture(GL_TEXTURE_2D, tmp_tex);
++                                glUniform1i(u_tmp, 0);
++                                glUniform1f(u_sigma_r, 0.02f + 0.06f * nr);
++                                glUniform1f(u_luma_k, 0.6f * nr);
++                                glUniform1f(u_wide_k, wide_nr >= 0.0f ? wide_nr : (nr >= 0.99f ? 1.0f : 0.0f)); // r74/r83
++                                glUniform1f(u_mid_k, mid_nr);
++                                glBindFramebuffer(GL_FRAMEBUFFER, fb);
++                                glViewport(0, 0, out_w, rows);
++                                glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
++                        } else {
++                                glViewport(0, 0, out_w, rows);
++                                glUniform1i(u_strip_y0, y0);
++                                glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
++                        }
++                        glReadPixels(0, 0, out_w, rows, GL_RGBA, GL_UNSIGNED_BYTE, strip);
++                        double b = now_ms();
++                        for (int r = 0; r < rows; r++) {
++                                JSAMPROW row = strip + (size_t)r * out_w * 4;
++                                jpeg_write_scanlines(&cinfo, &row, 1);
++                        }
++                        t_gpu += b - a;
++                        t_jpeg += now_ms() - b;
++                }
++                jpeg_finish_compress(&cinfo);
++                jpeg_destroy_compress(&cinfo);
++        }
++        if (out)
++                fclose(out);
++        free(strip);
++
++        glBindFramebuffer(GL_FRAMEBUFFER, prev_fb);
++        if (fb_tmp)
++                glDeleteFramebuffers(1, &fb_tmp);
++        if (tmp_tex)
++                glDeleteTextures(1, &tmp_tex);
++        glDeleteFramebuffers(1, &fb);
++        glDeleteTextures(1, &dst_tex);
++        glDeleteTextures(1, &src_tex);
++        glUseProgram(prev_program);
++        glBindTexture(GL_TEXTURE_2D, prev_tex);
++        glActiveTexture(prev_active);
++        glViewport(prev_viewport[0], prev_viewport[1], prev_viewport[2], prev_viewport[3]);
++        glPixelStorei(GL_UNPACK_ALIGNMENT, prev_align);
++
++        printf("photo_gpu: EXIF orientation %d, noise reduction %.2f, mid-scale %.2f\n", exif_orientation, denoise ? nr : 0.0f,
++               denoise ? mid_nr : 0.0f);
++        printf("photo_gpu: %dx%d -> %s %s in %.0f ms (GPU+readback %.0f ms, JPEG %.0f ms)\n", out_w, out_h, jpeg_path,
++               ok ? "developed" : "FAILED", now_ms() - t0, t_gpu, t_jpeg);
++        if (!ok)
++                remove(jpeg_path);
++        return ok;
++}
+diff -ruN a/src/m52xq/photo_gpu.h b/src/m52xq/photo_gpu.h
+--- a/src/m52xq/photo_gpu.h	1970-01-01 02:00:00.000000000 +0200
++++ b/src/m52xq/photo_gpu.h	2026-10-19 02:44:17.476018773 +0300
+@@ -0,0 +1,12 @@
++#pragma once
++
++#include <stdbool.h>
++#include <stdint.h>
++
++/* m52xq r67: develop a packed RAW10 Bayer frame on the GPU (full-resolution demosaic + the viewfinder colour processing,
++ * EXIF orientation 1..8 applied) straight into a JPEG. Needs the GL context of the process pipeline to be current. */
++bool mp_photo_gpu_develop(const uint8_t *raw, int width, int height, int line_bytes, const char *cfa, int orientation,
++                          const float color_matrix[9], float blacklevel, float inv_gamma, const char *jpeg_path, int quality,
++                          float nr);
++void mp_photo_gpu_set_wide_nr(float k); // m52xq r83: 0..1, wide colour pass of the next photo
++void mp_photo_gpu_set_mid_nr(float k); // m52xq r82: 0..1, mid-scale brightness noise reduction of the next photo
+diff -ruN a/src/m52xq/rawphoto.c b/src/m52xq/rawphoto.c
+--- a/src/m52xq/rawphoto.c	1970-01-01 02:00:00.000000000 +0200
++++ b/src/m52xq/rawphoto.c	2026-10-19 02:50:20.775119612 +0300
+@@ -0,0 +1,223 @@
++#define _POSIX_C_SOURCE 200809L // clock_gettime with -std=c99
++// SPDX-License-Identifier: GPL-2.0-or-later
++// m52xq: full-resolution photos of plasma-camera, see rawphoto.h.
++
++#include "rawphoto.h"
++#include "photo_gpu.h"
++
++#include <epoxy/egl.h>
++#include <epoxy/gl.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <time.h>
++
++#ifndef EGL_PLATFORM_SURFACELESS_MESA
++#define EGL_PLATFORM_SURFACELESS_MESA 0x31DD
++#endif
++
++static __thread EGLDisplay g_dpy = EGL_NO_DISPLAY;
++static __thread EGLContext g_ctx = EGL_NO_CONTEXT;
++
++static bool
++ensure_context(void)
++{
++	if (g_ctx != EGL_NO_CONTEXT)
++		return eglMakeCurrent(g_dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, g_ctx) == EGL_TRUE;
++
++	if (epoxy_has_egl_extension(EGL_NO_DISPLAY, "EGL_MESA_platform_surfaceless"))
++		g_dpy = eglGetPlatformDisplayEXT(EGL_PLATFORM_SURFACELESS_MESA, EGL_DEFAULT_DISPLAY, NULL);
++	if (g_dpy == EGL_NO_DISPLAY)
++		g_dpy = eglGetDisplay(EGL_DEFAULT_DISPLAY);
++	if (g_dpy == EGL_NO_DISPLAY || !eglInitialize(g_dpy, NULL, NULL)) {
++		fprintf(stderr, "m52xq rawphoto: no EGL display\n");
++		return false;
++	}
++	eglBindAPI(EGL_OPENGL_ES_API);
++
++	EGLConfig cfg = (EGLConfig)0; // EGL_NO_CONFIG_KHR
++	if (!epoxy_has_egl_extension(g_dpy, "EGL_KHR_no_config_context")) {
++		const EGLint attrs[] = { EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT, EGL_NONE };
++		EGLint n = 0;
++		if (!eglChooseConfig(g_dpy, attrs, &cfg, 1, &n) || n < 1) {
++			fprintf(stderr, "m52xq rawphoto: no EGL config\n");
++			return false;
++		}
++	}
++	const EGLint ctx_attrs[] = { EGL_CONTEXT_MAJOR_VERSION, 3, EGL_CONTEXT_MINOR_VERSION, 0, EGL_NONE };
++	g_ctx = eglCreateContext(g_dpy, cfg, EGL_NO_CONTEXT, ctx_attrs);
++	if (g_ctx == EGL_NO_CONTEXT) {
++		fprintf(stderr, "m52xq rawphoto: cannot create a GLES 3 context (0x%x)\n", eglGetError());
++		return false;
++	}
++	if (eglMakeCurrent(g_dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, g_ctx) != EGL_TRUE) {
++		fprintf(stderr, "m52xq rawphoto: eglMakeCurrent failed (0x%x)\n", eglGetError());
++		return false;
++	}
++	printf("m52xq rawphoto: GL %s, %s\n", (const char *)glGetString(GL_VERSION), (const char *)glGetString(GL_RENDERER));
++	return true;
++}
++
++static inline int
++px10(const uint8_t *row, int x)
++{
++	const uint8_t *g = row + (x >> 2) * 5;
++	int i = x & 3;
++	return ((int)g[i] << 2) | ((g[4] >> (2 * i)) & 3);
++}
++
++// --- copy of remosaic_tetracell_raw10() of the m52xq Megapixels build (r64 + r68 position gains) ---
++// 4-cell -> Bayer by moving pixels within each 4x4 block. Target (GRBG) <- source position in the block:
++static const uint8_t remosaic_src[4][4][2] = {
++	{ { 0, 0 }, { 0, 2 }, { 0, 1 }, { 0, 3 } }, // G R G R
++	{ { 2, 0 }, { 1, 1 }, { 2, 1 }, { 2, 3 } }, // B G B G
++	{ { 1, 0 }, { 1, 2 }, { 2, 2 }, { 1, 3 } }, // G R G R
++	{ { 3, 0 }, { 3, 2 }, { 3, 1 }, { 3, 3 } }, // B G B G
++};
++
++static void
++remosaic_tetracell_raw10(const uint8_t *src, uint8_t *dst, int width, int height, size_t line)
++{
++	memcpy(dst, src, line * height);
++
++	static const int pos_color[4][4] = { { 1, 1, 0, 0 }, { 1, 1, 0, 0 }, { 2, 2, 1, 1 }, { 2, 2, 1, 1 } }; // 0 R 1 G 2 B
++	double sum[4][4] = { { 0 } }, cnt[4][4] = { { 0 } };
++	for (int y = 0; y + 4 <= height; y += 32) {
++		for (int gx = 0; gx < width / 4; gx += 8) {
++			for (int r = 0; r < 4; r++) {
++				const uint8_t *p = src + (size_t)(y + r) * line + (size_t)gx * 5;
++				for (int c = 0; c < 4; c++) {
++					int v = ((int)p[c] << 2) | ((p[4] >> (2 * c)) & 3);
++					if (v > 80 && v < 960) {
++						sum[r][c] += v - 64;
++						cnt[r][c] += 1;
++					}
++				}
++			}
++		}
++	}
++	double csum[3] = { 0 }, ccnt[3] = { 0 };
++	for (int r = 0; r < 4; r++)
++		for (int c = 0; c < 4; c++) {
++			csum[pos_color[r][c]] += sum[r][c];
++			ccnt[pos_color[r][c]] += cnt[r][c];
++		}
++	float gain[4][4];
++	for (int r = 0; r < 4; r++)
++		for (int c = 0; c < 4; c++) {
++			int k = pos_color[r][c];
++			double m = cnt[r][c] > 100 ? sum[r][c] / cnt[r][c] : 0;
++			double cm = ccnt[k] > 100 ? csum[k] / ccnt[k] : 0;
++			gain[r][c] = (m > 1 && cm > 1) ? (float)(cm / m) : 1.0f;
++			if (gain[r][c] < 0.8f || gain[r][c] > 1.25f)
++				gain[r][c] = 1.0f;
++		}
++
++	for (int y = 0; y < height; y += 4) {
++		for (int gx = 0; gx < width / 4; gx++) {
++			uint16_t s[4][4];
++			for (int r = 0; r < 4; r++) {
++				const uint8_t *p = src + (size_t)(y + r) * line + (size_t)gx * 5;
++				for (int c = 0; c < 4; c++) {
++					int v = ((int)p[c] << 2) | ((p[4] >> (2 * c)) & 3);
++					if (v > 64 && v < 1023) {
++						v = 64 + (int)((v - 64) * gain[r][c] + 0.5f);
++						v = v > 1023 ? 1023 : v;
++					}
++					s[r][c] = (uint16_t)v;
++				}
++			}
++			for (int r = 0; r < 4; r++) {
++				uint8_t *q = dst + (size_t)(y + r) * line + (size_t)gx * 5;
++				uint8_t low = 0;
++				for (int c = 0; c < 4; c++) {
++					uint16_t v = s[remosaic_src[r][c][0]][remosaic_src[r][c][1]];
++					q[c] = v >> 2;
++					low |= (v & 3) << (2 * c);
++				}
++				q[4] = low;
++			}
++		}
++	}
++}
++
++// mean linear level (black 64, white 1023) of each colour of the Bayer frame, saturated pixels left out
++static void
++bayer_means(const uint8_t *raw, int width, int height, int stride, const char *cfa, double out[3])
++{
++	double sum[3] = { 0 }, cnt[3] = { 0 };
++	for (int y = 0; y + 1 < height; y += 16) {
++		for (int dy = 0; dy < 2; dy++) {
++			const uint8_t *row = raw + (size_t)(y + dy) * stride;
++			for (int x = 0; x + 1 < width; x += 16) {
++				for (int dx = 0; dx < 2; dx++) {
++					int v = px10(row, x + dx);
++					if (v >= 1000)
++						continue;
++					char c = cfa[dy * 2 + dx];
++					int k = c == 'R' ? 0 : (c == 'B' ? 2 : 1);
++					sum[k] += (v - 64 > 0 ? v - 64 : 0) / 959.0;
++					cnt[k] += 1;
++				}
++			}
++		}
++	}
++	for (int k = 0; k < 3; k++)
++		out[k] = cnt[k] > 0 ? sum[k] / cnt[k] : 0.0;
++}
++
++static double
++now_ms_rp(void)
++{
++	struct timespec ts;
++	clock_gettime(CLOCK_MONOTONIC, &ts);
++	return ts.tv_sec * 1000.0 + ts.tv_nsec / 1e6;
++}
++
++bool
++m52xq_raw_develop(const uint8_t *raw, int width, int height, int stride, const char *cfa, bool tetracell,
++                  int exif_orientation, float dark, bool front, const char *jpeg_path)
++{
++	double t0 = now_ms_rp();
++	if (!raw || width <= 0 || height <= 0 || !cfa || strlen(cfa) < 4 || !ensure_context())
++		return false;
++
++	const uint8_t *frame = raw;
++	uint8_t *rm = NULL;
++	if (tetracell) {
++		rm = malloc((size_t)stride * height);
++		if (!rm)
++			return false;
++		remosaic_tetracell_raw10(raw, rm, width, height, (size_t)stride);
++		frame = rm;
++	}
++	double t1 = now_ms_rp();
++
++	// gray world white balance and an exposure gain to a mid grey of 0.16 (linear), both measured on the frame
++	double m[3];
++	bayer_means(frame, width, height, stride, cfa, m);
++	float rg = m[0] > 1e-4 ? (float)(m[1] / m[0]) : 1.0f;
++	float bg = m[2] > 1e-4 ? (float)(m[1] / m[2]) : 1.0f;
++	rg = rg < 0.5f ? 0.5f : (rg > 4.0f ? 4.0f : rg);
++	bg = bg < 0.5f ? 0.5f : (bg > 4.0f ? 4.0f : bg);
++	float gain = m[1] > 1e-4 ? (float)(0.16 / m[1]) : 1.0f;
++	gain = gain < 0.6f ? 0.6f : (gain > 12.0f ? 12.0f : gain);
++	const float cm[9] = { rg * gain, 0, 0, 0, gain, 0, 0, 0, bg * gain };
++
++	if (dark < 0.0f)
++		dark = 0.0f;
++	if (dark > 1.0f)
++		dark = 1.0f;
++	mp_photo_gpu_set_mid_nr(front ? dark : 0.6f * dark);
++	mp_photo_gpu_set_wide_nr(front ? 1.0f : (dark >= 0.5f ? dark : 0.0f));
++	const float nr = front ? 1.0f : 0.35f;
++
++	bool ok = mp_photo_gpu_develop(frame, width, height, stride, cfa, exif_orientation, cm, 64.0f / 1023.0f, 1.0f / 2.2f,
++				       jpeg_path, 92, nr);
++	free(rm);
++	printf("m52xq rawphoto: %dx%d %s means R %.3f G %.3f B %.3f -> wb %.2f/%.2f gain %.2f, dark %.2f, remosaic %.0f ms, "
++	       "total %.0f ms: %s\n",
++	       width, height, cfa, m[0], m[1], m[2], rg, bg, gain, dark, t1 - t0, now_ms_rp() - t0, ok ? jpeg_path : "FAILED");
++	fflush(stdout);
++	return ok;
++}
+diff -ruN a/src/m52xq/rawphoto.h b/src/m52xq/rawphoto.h
+--- a/src/m52xq/rawphoto.h	1970-01-01 02:00:00.000000000 +0200
++++ b/src/m52xq/rawphoto.h	2026-10-19 02:44:25.843997253 +0300
+@@ -0,0 +1,25 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++// m52xq: full-resolution photos of plasma-camera (main camera 9248x6936, front camera 6528x4896) from a raw RAW10 frame,
++// developed on the GPU like the m52xq Megapixels build does (own copy of its code, see photo_gpu.c).
++
++#pragma once
++
++#include <stdbool.h>
++#include <stdint.h>
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++/*
++ * raw: packed RAW10 (MIPI CSI-2), stride bytes per line; cfa: "GRBG", "RGGB", ...; tetracell: the frame is the 4-cell array
++ * of the main camera (re-mosaiced to Bayer first); exif_orientation 1..8 is stored in the JPEG; dark 0..1 controls the noise
++ * reduction; front: front camera (stronger noise reduction). The white balance and the brightness are measured on the
++ * frame itself. Creates (once per thread) a surfaceless EGL / GLES 3 context. Returns false on any error.
++ */
++bool m52xq_raw_develop(const uint8_t *raw, int width, int height, int stride, const char *cfa, bool tetracell,
++                       int exif_orientation, float dark, bool front, const char *jpeg_path);
++
++#ifdef __cplusplus
++}
++#endif
+diff -ruN a/src/plasmacamera/worker.cpp b/src/plasmacamera/worker.cpp
+--- a/src/plasmacamera/worker.cpp	2026-10-19 01:57:55.211425172 +0300
++++ b/src/plasmacamera/worker.cpp	2026-10-19 02:46:16.151717681 +0300
+@@ -4,6 +4,73 @@
+ #include <chrono>
+ #include "worker.h"
+ 
++#include <QDir>
++#include <QFile>
++#include <cmath>
++#include <fcntl.h>
++#include <linux/v4l2-subdev.h>
++#include <linux/videodev2.h>
++#include <sys/ioctl.h>
++#include <unistd.h>
++
++// m52xq r36: the V4L2 sub-device of the sensor of a libcamera camera (main s5kgw3 = camera@2d, front imx616 = camera@1a)
++static int openSensorSubdev(const std::string &cameraId)
++{
++    const char *name = cameraId.find("camera@2d") != std::string::npos ? "s5kgw3"
++        : (cameraId.find("camera@1a") != std::string::npos ? "imx616" : nullptr);
++    if (!name) {
++        return -1;
++    }
++    const QDir dir(QStringLiteral("/sys/class/video4linux"));
++    for (const QString &entry : dir.entryList({QStringLiteral("v4l-subdev*")}, QDir::Dirs | QDir::NoDotAndDotDot)) {
++        QFile f(dir.filePath(entry + QStringLiteral("/name")));
++        if (f.open(QIODevice::ReadOnly) && f.readAll().startsWith(name)) {
++            return ::open(QStringLiteral("/dev/%1").arg(entry).toLocal8Bit().constData(), O_RDWR);
++        }
++    }
++    return -1;
++}
++
++static bool subdevCtrl(int fd, unsigned id, long long *value, bool set)
++{
++    struct v4l2_ext_control c = {};
++    c.id = id;
++    if (set) {
++        if (id == V4L2_CID_PIXEL_RATE)
++            c.value64 = *value;
++        else
++            c.value = static_cast<int>(*value);
++    }
++    struct v4l2_ext_controls cs = {};
++    cs.which = V4L2_CTRL_WHICH_CUR_VAL;
++    cs.count = 1;
++    cs.controls = &c;
++    if (ioctl(fd, set ? VIDIOC_S_EXT_CTRLS : VIDIOC_G_EXT_CTRLS, &cs) < 0) {
++        return false;
++    }
++    if (!set) {
++        *value = id == V4L2_CID_PIXEL_RATE ? c.value64 : c.value;
++    }
++    return true;
++}
++
++// line time of the present sensor mode in microseconds: (width + HBLANK) / PIXEL_RATE
++static double sensorLineUs(int fd)
++{
++    if (fd < 0) {
++        return 0.0;
++    }
++    struct v4l2_subdev_format fmt = {};
++    fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
++    fmt.pad = 0;
++    long long hblank = 0, rate = 0;
++    if (ioctl(fd, VIDIOC_SUBDEV_G_FMT, &fmt) < 0 || !subdevCtrl(fd, V4L2_CID_HBLANK, &hblank, false) ||
++        !subdevCtrl(fd, V4L2_CID_PIXEL_RATE, &rate, false) || rate <= 0) {
++        return 0.0;
++    }
++    return (fmt.format.width + hblank) * 1e6 / static_cast<double>(rate);
++}
++
+ static const QMap<libcamera::PixelFormat, QImage::Format> NATIVE_FORMATS{
+     {libcamera::formats::ABGR8888, QImage::Format_RGBX8888},
+     {libcamera::formats::XBGR8888, QImage::Format_RGBX8888},
+@@ -85,6 +152,149 @@
+     }
+ }
+ 
++void Worker::stopStreaming()
++{
++    m_framePollTimer->stop();
++    if (m_camera) {
++        m_camera->stop();
++        m_camera->requestCompleted.disconnect(this);
++    }
++    m_requests.clear();
++    m_config.reset();
++    if (m_allocator) {
++        m_allocator->free(m_stream);
++        delete m_allocator;
++        m_allocator = nullptr;
++    }
++    m_mappedBuffers.clear();
++    {
++        const QMutexLocker lock(&m_freeMutex);
++        m_freeQueue.clear();
++    }
++    {
++        const QMutexLocker lock(&m_doneMutex);
++        m_doneQueue.clear();
++    }
++}
++
++void Worker::rawRequestComplete(libcamera::Request *request)
++{
++    // libcamera thread
++    if (request->status() == libcamera::Request::RequestCancelled || !m_rawStream) {
++        return;
++    }
++    std::lock_guard<std::mutex> lock(m_rawMutex);
++    ++m_rawFrames;
++    // the 1st frame may still have the exposure of the stream start: take the 2nd one
++    if (m_rawFrames == 2 && request->buffers().count(m_rawStream)) {
++        libcamera::FrameBuffer *buffer = request->buffers().at(m_rawStream);
++        Image *image = m_mappedBuffers[buffer].get();
++        const size_t used = buffer->metadata().planes()[0].bytesused;
++        if (image) {
++            m_rawData = QByteArray(reinterpret_cast<const char *>(image->data(0).data()), static_cast<qsizetype>(used));
++        }
++    }
++    m_rawCv.notify_all();
++}
++
++void Worker::captureRaw()
++{
++    const QString camId = m_camera ? QString::fromStdString(m_camera->id()) : QString();
++    if (!m_camera || m_state != State::Running) {
++        Q_EMIT rawCaptured(QByteArray(), 0, 0, 0, QString(), camId);
++        return;
++    }
++    const bool mainCam = camId.contains(QLatin1String("camera@2d"));
++    const libcamera::Size full = mainCam ? libcamera::Size(9248, 6936) : libcamera::Size(6528, 4896);
++    const auto t0 = std::chrono::steady_clock::now();
++
++    // the exposure time must stay the same in the full mode (other line time)
++    const int sfd = openSensorSubdev(m_camera->id());
++    long long expPrev = 0;
++    const double ltPrev = sensorLineUs(sfd);
++    if (sfd >= 0) {
++        subdevCtrl(sfd, V4L2_CID_EXPOSURE, &expPrev, false);
++    }
++
++    stopStreaming();
++
++    QByteArray data;
++    int width = 0, height = 0, stride = 0;
++    QString cfa;
++    {
++        std::unique_ptr<libcamera::CameraConfiguration> cfg = m_camera->generateConfiguration({libcamera::StreamRole::Raw});
++        if (cfg && !cfg->empty()) {
++            libcamera::StreamConfiguration &sc = cfg->at(0);
++            sc.size = full;
++            sc.bufferCount = 3;
++            if (cfg->validate() != libcamera::CameraConfiguration::Invalid && m_camera->configure(cfg.get()) == 0) {
++                width = static_cast<int>(sc.size.width);
++                height = static_cast<int>(sc.size.height);
++                stride = static_cast<int>(sc.stride);
++                const QString fmt = QString::fromStdString(sc.pixelFormat.toString()); // e.g. SGRBG10_CSI2P
++                cfa = fmt.startsWith(QLatin1Char('S')) ? fmt.mid(1, 4) : QString();
++                qInfo() << "m52xq: raw capture" << QString::fromStdString(sc.toString()) << "stride" << stride;
++
++                m_rawStream = sc.stream();
++                auto *allocator = new libcamera::FrameBufferAllocator(m_camera);
++                std::vector<std::unique_ptr<libcamera::Request>> requests;
++                if (allocator->allocate(m_rawStream) > 0) {
++                    for (const std::unique_ptr<libcamera::FrameBuffer> &buffer : allocator->buffers(m_rawStream)) {
++                        m_mappedBuffers[buffer.get()] = Image::fromFrameBuffer(buffer.get(), Image::MapMode::ReadOnly);
++                        std::unique_ptr<libcamera::Request> request = m_camera->createRequest();
++                        if (request && request->addBuffer(m_rawStream, buffer.get()) == 0) {
++                            requests.push_back(std::move(request));
++                        }
++                    }
++                }
++                const double ltFull = sensorLineUs(sfd);
++                if (sfd >= 0 && expPrev > 0 && ltPrev > 0 && ltFull > 0) {
++                    long long e = std::llround(expPrev * ltPrev / ltFull);
++                    subdevCtrl(sfd, V4L2_CID_EXPOSURE, &e, true);
++                    qInfo() << "m52xq: raw capture exposure" << expPrev << "->" << e << "lines (line" << ltPrev << "->" << ltFull << "us)";
++                }
++                {
++                    std::lock_guard<std::mutex> lock(m_rawMutex);
++                    m_rawFrames = 0;
++                    m_rawData.clear();
++                }
++                m_camera->requestCompleted.connect(this, &Worker::rawRequestComplete);
++                if (!requests.empty() && m_camera->start() == 0) {
++                    for (auto &r : requests) {
++                        m_camera->queueRequest(r.get());
++                    }
++                    std::unique_lock<std::mutex> lock(m_rawMutex);
++                    m_rawCv.wait_for(lock, std::chrono::seconds(4), [this]() { return !m_rawData.isEmpty(); });
++                    data = m_rawData;
++                    m_rawData.clear();
++                    lock.unlock();
++                    m_camera->stop();
++                }
++                m_camera->requestCompleted.disconnect(this);
++                requests.clear();
++                allocator->free(m_rawStream);
++                delete allocator;
++                m_mappedBuffers.clear();
++                m_rawStream = nullptr;
++            } else {
++                qWarning() << "m52xq: raw configuration" << QString::fromStdString(sc.toString()) << "not accepted";
++            }
++        }
++    }
++
++    // back to the viewfinder with the exposure it had
++    startViewFinder();
++    if (sfd >= 0) {
++        if (expPrev > 0) {
++            subdevCtrl(sfd, V4L2_CID_EXPOSURE, &expPrev, true);
++        }
++        ::close(sfd);
++    }
++    const long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
++    qInfo() << "m52xq: raw capture" << (data.isEmpty() ? "FAILED" : "done") << data.size() << "bytes in" << ms << "ms";
++    Q_EMIT rawCaptured(data, width, height, stride, cfa, camId);
++}
++
+ void Worker::capture()
+ {
+     m_stillCaptureFrames.clear();
+diff -ruN a/src/plasmacamera/worker.h b/src/plasmacamera/worker.h
+--- a/src/plasmacamera/worker.h	2026-10-17 17:25:12.538573414 +0300
++++ b/src/plasmacamera/worker.h	2026-10-19 02:46:16.151717681 +0300
+@@ -13,6 +13,8 @@
+ #include <QCameraFormat>
+ 
+ #include <atomic>
++#include <condition_variable>
++#include <mutex>
+ #include <memory>
+ #include <libcamera/libcamera.h>
+ #include <libcamera/framebuffer.h>
+@@ -61,6 +63,8 @@
+     //		- it looks like slots with queued connection might work really nicely?
+     void viewFinderFrame(const QImage &frame); // connect to this to get new frames
+     void stillCaptureFrames(const QQueue<QImage> &frames); // connect to this to get captures
++    // m52xq r36: a full-resolution raw frame (packed RAW10) for a photo; empty data = the capture failed
++    void rawCaptured(const QByteArray &data, int width, int height, int stride, const QString &cfa, const QString &cameraId);
+ 
+ public Q_SLOTS:
+     // Camera
+@@ -78,6 +82,8 @@
+ 
+     // Photo capture
+     void capture();
++    // m52xq r36: one raw frame of the full sensor (main 9248x6936, front 6528x4896), then back to the viewfinder
++    void captureRaw();
+ 
+     void setSettings(const Settings &settings);
+ 
+@@ -130,6 +136,13 @@
+     int createRequests();
+ 
+     void requestComplete(libcamera::Request *request);
++    void rawRequestComplete(libcamera::Request *request); // m52xq r36
++    void stopStreaming(); // m52xq r36: like stopViewFinder, but the camera stays acquired
++    std::mutex m_rawMutex;
++    std::condition_variable m_rawCv;
++    int m_rawFrames = 0;
++    QByteArray m_rawData;
++    libcamera::Stream *m_rawStream = nullptr;
+     void processRequestData(); // convert buffers to QImage stored at m_image
+ 
+     bool m_error = false;
+diff -ruN a/src/plasmacamera.cpp b/src/plasmacamera.cpp
+--- a/src/plasmacamera.cpp	2026-10-17 17:25:12.542573414 +0300
++++ b/src/plasmacamera.cpp	2026-10-19 02:46:29.159685176 +0300
+@@ -55,6 +55,10 @@
+     // resend frames that we received from the camera worker
+     connect(m_cameraWorker, &Worker::viewFinderFrame, this, &PlasmaCamera::viewFinderFrame);
+     connect(m_cameraWorker, &Worker::stillCaptureFrames, this, &PlasmaCamera::stillCaptureFrames);
++    connect(m_cameraWorker, &Worker::rawCaptured, this, [this](const QByteArray &data, int w, int h, int stride, const QString &cfa, const QString &id) {
++        setBusy(false);
++        Q_EMIT rawCaptured(data, w, h, stride, cfa, id);
++    });
+     connect(m_cameraWorker, &Worker::stillCaptureFrames, this, [this]() {
+         // Finished taking image
+         setBusy(false);
+@@ -221,6 +225,16 @@
+     return m_cameraFormat;
+ }
+ 
++bool PlasmaCamera::captureRawImage()
++{
++    if (m_state != State::Running) {
++        return false;
++    }
++    setBusy(true);
++    QMetaObject::invokeMethod(m_cameraWorker, "captureRaw", Qt::QueuedConnection);
++    return true;
++}
++
+ bool PlasmaCamera::captureImage()
+ {
+     if (m_state != State::Running) {
+diff -ruN a/src/plasmacamera.h b/src/plasmacamera.h
+--- a/src/plasmacamera.h	2026-10-17 17:25:12.542573414 +0300
++++ b/src/plasmacamera.h	2026-10-19 02:46:29.159685176 +0300
+@@ -155,6 +155,8 @@
+      * Capture an image with the current camera.
+      */
+     bool captureImage();
++    // m52xq r36: full-resolution photo from one raw frame of the sensor (main and front camera)
++    bool captureRawImage();
+ 
+     // Focus
+     QSize afWindow() const;
+@@ -205,6 +207,7 @@
+      */
+     void viewFinderFrame(const QImage &frame); // connect to this to get new frames
+     void stillCaptureFrames(const QQueue<QImage> &frames); // connect to this to get captures
++    void rawCaptured(const QByteArray &data, int width, int height, int stride, const QString &cfa, const QString &cameraId);
+ 
+     // Focus
+     void afWindowChanged(const QSize &newAfWindow);
+diff -ruN a/src/plasmacameramanager.cpp b/src/plasmacameramanager.cpp
+--- a/src/plasmacameramanager.cpp	2026-10-19 02:28:18.179153099 +0300
++++ b/src/plasmacameramanager.cpp	2026-10-19 02:47:08.891586386 +0300
+@@ -17,6 +17,7 @@
+ #include <QTimer>
+ 
+ #include <exiv2/exiv2.hpp>
++#include "m52xq/rawphoto.h"
+ #include <memory>
+ 
+ PlasmaCameraManager::PlasmaCameraManager(QObject *parent)
+@@ -290,6 +291,7 @@
+             connect(plasmaCamera, &PlasmaCamera::settingsChanged, this, &PlasmaCameraManager::setSettings);
+             connect(plasmaCamera, &PlasmaCamera::viewFinderFrame, this, &PlasmaCameraManager::processViewfinderFrame);
+             connect(plasmaCamera, &PlasmaCamera::stillCaptureFrames, this, &PlasmaCameraManager::processCaptureImage);
++            connect(plasmaCamera, &PlasmaCamera::rawCaptured, this, &PlasmaCameraManager::processRawCapture, Qt::UniqueConnection);
+             // entering / leaving the logical camera: back to 1x
+             connect(plasmaCamera, &PlasmaCamera::logicalModeChanged, this, [this]() {
+                 m_zoom = 1.0;
+@@ -473,7 +475,7 @@
+ 
+ void PlasmaCameraManager::setPhotoScale(int scale)
+ {
+-    scale = qBound(20, scale, 100);
++    scale = scale <= 0 ? 0 : qBound(20, scale, 100); // r36: 0 = full sensor frame
+     if (scale == m_photoScale) {
+         return;
+     }
+@@ -483,8 +485,87 @@
+     Q_EMIT photoScaleChanged();
+ }
+ 
++bool PlasmaCameraManager::fullFrameWanted() const
++{
++    if (m_photoScale != 0 || !m_plasmaCamera || effectiveZoom() > 1.001) {
++        return false;
++    }
++    const QString cam = m_plasmaCamera->cameraDevice();
++    return cam.contains(QLatin1String("camera@2d")) || cam.contains(QLatin1String("camera@1a"));
++}
++
++void PlasmaCameraManager::startCapture()
++{
++    if (fullFrameWanted() && m_plasmaCamera->captureRawImage()) {
++        return;
++    }
++    m_plasmaCamera->captureImage();
++}
++
++void PlasmaCameraManager::processRawCapture(const QByteArray &data, int width, int height, int stride, const QString &cfa,
++                                            const QString &cameraId)
++{
++    if (data.isEmpty() || width <= 0 || height <= 0 || cfa.size() != 4 || data.size() < qsizetype(stride) * height) {
++        qWarning() << "m52xq: no raw frame, taking the photo from the viewfinder stream";
++        m_plasmaCamera->captureImage();
++        return;
++    }
++    QDateTime now = QDateTime::currentDateTime();
++    if ((m_filenamePattern == 1) || (m_filenamePattern == 2)) {
++        m_imageCaptureFileName = now.toString(QStringLiteral("yyyyMMddHHmmss"));
++    }
++    const QString fileName = PlasmaLibcameraUtils::generateFileName(m_imageCaptureFileName, QLatin1String("jpg"), m_filenamePattern, m_outputPath);
++
++    // EXIF orientation of the still path (mirror vertically, then rotate clockwise by the output orientation)
++    const int deg = (static_cast<int>(outputOrientationDegrees()) % 360 + 360) % 360;
++    const bool mirror = m_plasmaCamera->mirrorOutput();
++    int exif = 1;
++    if (!mirror) {
++        exif = deg == 90 ? 6 : (deg == 180 ? 3 : (deg == 270 ? 8 : 1));
++    } else {
++        exif = deg == 90 ? 5 : (deg == 180 ? 2 : (deg == 270 ? 7 : 4));
++    }
++    // how dark the scene is (sensor gain towards its maximum, digital gain on top): stronger noise reduction
++    const double isoFrac = m_ae.maxIso() > 0 ? double(m_ae.iso()) / m_ae.maxIso() : 0.0;
++    const float dark = float(qBound(0.0, (isoFrac - 0.25) / 0.65 + (m_ae.digitalGain() - 1.0) * 0.25, 1.0));
++    const bool mainCam = cameraId.contains(QLatin1String("camera@2d"));
++    const bool front = cameraId.contains(QLatin1String("camera@1a"));
++    const int captureNum = m_imageCaptureNum;
++    // after the re-mosaic the main camera frame is a plain GRBG Bayer pattern
++    const QByteArray cfaBytes = (mainCam ? QStringLiteral("GRBG") : cfa).toLatin1();
++
++    m_developPool.setMaxThreadCount(1);
++    m_developPool.setExpiryTimeout(-1);
++    m_developPool.start([this, data, width, height, stride, cfaBytes, mainCam, exif, dark, front, fileName, captureNum]() {
++        const bool ok = m52xq_raw_develop(reinterpret_cast<const uint8_t *>(data.constData()), width, height, stride,
++                                          cfaBytes.constData(), mainCam, exif, dark, front, fileName.toLocal8Bit().constData());
++        if (ok) {
++            writeExifData(fileName);
++        }
++        QMetaObject::invokeMethod(this, [this, ok, fileName, captureNum]() {
++            setFlashLed(0);
++            if (ok) {
++                Q_EMIT imageSaved(captureNum, fileName);
++            } else {
++                setError(captureNum, ResourceError, QStringLiteral("Could not develop the full-resolution photo"));
++                m_plasmaCamera->captureImage();
++            }
++        }, Qt::QueuedConnection);
++    });
++}
++
+ QString PlasmaCameraManager::photoSizeLabel(int scale) const
+ {
++    if (scale == 0) {
++        const QString cam = m_plasmaCamera ? m_plasmaCamera->cameraDevice() : QString();
++        if (cam.contains(QLatin1String("camera@2d"))) {
++            return QStringLiteral("9248 × 6936 (64 MP)");
++        }
++        if (cam.contains(QLatin1String("camera@1a"))) {
++            return QStringLiteral("6528 × 4896 (32 MP)");
++        }
++        return photoSizeLabel(100);
++    }
+     if (m_currentFrame.isNull()) {
+         return QStringLiteral("%1 %").arg(scale);
+     }
+@@ -646,7 +727,7 @@
+ 
+     QImage image = applyZoom(frames.head());
+     // m52xq r35: the chosen photo size (percent of the frame side); a zoomed crop is not enlarged beyond it
+-    if (m_photoScale < 100) {
++    if (m_photoScale > 0 && m_photoScale < 100) {
+         const QSize full = frames.head().size();
+         const QSize target((full.width() * m_photoScale / 100) & ~1, (full.height() * m_photoScale / 100) & ~1);
+         if (image.width() > target.width()) {
+@@ -819,10 +900,10 @@
+     if (flashWanted() && flashAvailable()) {
+         // LED on a moment before the frame is taken; off when the photo is saved (or after a safety timeout)
+         setFlashLed(flashMaxLevel());
+-        QTimer::singleShot(350, this, [this]() { m_plasmaCamera->captureImage(); });
++        QTimer::singleShot(350, this, [this]() { startCapture(); });
+         QTimer::singleShot(5000, this, [this]() { setFlashLed(0); });
+     } else {
+-        m_plasmaCamera->captureImage();
++        startCapture();
+     }
+ 
+     return newImageCaptureId;
+diff -ruN a/src/plasmacameramanager.h b/src/plasmacameramanager.h
+--- a/src/plasmacameramanager.h	2026-10-19 02:28:18.179153099 +0300
++++ b/src/plasmacameramanager.h	2026-10-19 02:47:08.891586386 +0300
+@@ -15,6 +15,7 @@
+ #include <QLightSensor>
+ 
+ #include "lensautofocus.h"
++#include <QThreadPool>
+ #include "sensorae.h"
+ #include "plasmacamera.h"
+ 
+@@ -248,6 +249,8 @@
+     // image processing
+     void processViewfinderFrame(const QImage &image);
+     void processCaptureImage(const QQueue<QImage> &frames);
++    // m52xq r36: full-resolution photo from a raw frame (developed on the GPU in m_developPool)
++    void processRawCapture(const QByteArray &data, int width, int height, int stride, const QString &cfa, const QString &cameraId);
+     void processVideoFrame();
+     void updateFromOrientationSensor();
+ 
+@@ -357,7 +360,10 @@
+     float m_videoRecordingFps = 24.0f;
+     bool m_audioRecordingEnabled = true;
+     Resolution m_videoResolution = Resolution::ResolutionAuto;
+-    int m_photoScale = 100; // m52xq r35
++    int m_photoScale = 100; // m52xq r35; r36: 0 = the full sensor frame (main 64 MP, front 32 MP)
++    bool fullFrameWanted() const;
++    void startCapture();
++    QThreadPool m_developPool; // r36: one thread that keeps its EGL context
+     VideoCodec m_videoCodec = VideoCodec::H264;
+ 
+     // Device orientation for correct rotation

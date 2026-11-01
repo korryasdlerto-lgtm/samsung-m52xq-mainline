@@ -1,0 +1,262 @@
+#!/usr/bin/env python3
+# M52XQ: virtual webcams for apps that only know V4L2 webcams (Telegram, browsers ...).
+# The phone cameras are raw sensors behind libcamera, so two v4l2loopback devices (/dev/video20 "Phone camera front",
+# /dev/video21 "Phone camera rear") are fed by a gstreamer pipeline from libcamera. A loopback device gives EIO to readers
+# while nothing feeds it, so an idle device is fed with black frames; when an application opens a device the real camera
+# pipeline replaces the black one (and the other camera is stopped), and when nobody reads any more the black frames return.
+# An application's own "switch camera" button therefore simply moves to the next device.
+#   orientation   : /etc/m52xq-virtualcam.conf   (key=value; videoflip methods per camera, see below)
+import os, signal, subprocess, sys, time
+
+DEVS = {'front': '/dev/video20', 'rear': '/dev/video21'}
+FRONT_ID = '/base/soc/cci@ac4b000/i2c-bus@0/camera@1a'	# imx616
+REAR_ID = '/base/soc/cci@ac4a000/i2c-bus@0/camera@2d'	# s5kgw3
+
+CONF = '/etc/m52xq-virtualcam.conf'
+SLEEP_FLAG = '/run/m52xq-camera-sleep'	# set by the sleep hook m52xq-camera-sleep.sh: no real camera while the system sleeps
+W, H = 720, 960		# fixed output size (portrait); the loopback format must not change while a reader is streaming
+ENV = dict(os.environ, LIBCAMERA_IPA_CONFIG_PATH='/usr/local/share/m52xq/libcamera/ipa')
+
+
+def log(msg):
+    print('m52xq-virtualcam: ' + msg, flush=True)
+
+
+# 30.10: the virtual camera follows the screen orientation (iio-sensor-proxy, net.hadess.SensorProxy). The output stays 720x960
+# (the loopback format must not change while a reader is streaming): in landscape the picture is turned upright and letterboxed.
+# portrait ("normal") = the configured method, landscape "right-up" = -90 degrees, "left-up" = +90, "bottom-up" = 180
+# (first tried the other way round: the user saw both cameras turned the wrong way in Telegram, 30.10).
+ANGLE = {'none': 0, 'clockwise': 90, 'rotate-180': 180, 'counterclockwise': 270}
+METHOD = {v: k for k, v in ANGLE.items()}
+ORIENT_ADD = {'normal': 0, 'right-up': 270, 'left-up': 90, 'bottom-up': 180}
+
+
+def orientation():
+    """normal | bottom-up | left-up | right-up (the accelerometer via iio-sensor-proxy); normal when unknown"""
+    try:
+        out = subprocess.run(['busctl', '--system', 'get-property', 'net.hadess.SensorProxy', '/net/hadess/SensorProxy',
+                              'net.hadess.SensorProxy', 'AccelerometerOrientation'],
+                             capture_output=True, text=True, timeout=2).stdout.split('"')
+        return out[1] if len(out) > 1 and out[1] in ORIENT_ADD else 'normal'
+    except (OSError, subprocess.SubprocessError):
+        return 'normal'
+
+
+def read_conf():
+    c = {'front_method': 'clockwise', 'rear_method': 'clockwise', 'front_mirror': '0', 'front_landscape_flip': '0'}
+    try:
+        for line in open(CONF):
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                k, v = line.split('=', 1)
+                c[k.strip()] = v.strip()
+    except OSError:
+        pass
+    return c
+
+
+STATE = os.path.expanduser('~/.cache/m52xq-virtualcam-state')
+FORCE = os.path.expanduser('~/.config/m52xq-virtualcam-force')	# off | front | rear: keep that camera running without a reader
+
+
+def read_force():
+    try:
+        v = open(FORCE).read().strip()
+        return v if v in ('front', 'rear') else 'off'
+    except OSError:
+        return 'off'
+
+
+def write_state(real):
+    cams = [c for c, p in real.items() if p]
+    try:
+        os.makedirs(os.path.dirname(STATE), exist_ok=True)
+        with open(STATE, 'w') as f:
+            f.write((cams[0] if cams else 'off') + '\n')
+    except OSError:
+        pass
+
+
+def readers(dev, own):
+    """pids (not ours) that are READING dev: they hold it open AND have its buffers mmap'ed. Telegram, for one, keeps hundreds
+    of /dev/video* nodes open after enumerating them; those are not readers."""
+    res = []
+    for p in os.listdir('/proc'):
+        if not p.isdigit() or int(p) in own:
+            continue
+        try:
+            held = any(os.readlink('/proc/%s/fd/%s' % (p, fd)) == dev for fd in os.listdir('/proc/%s/fd' % p))
+            if held and dev in open('/proc/%s/maps' % p).read():
+                res.append(int(p))
+        except OSError:
+            continue
+    return res
+
+
+def real_pipeline(camera, conf, orient='normal'):
+    cid = FRONT_ID if camera == 'front' else REAR_ID
+    method = conf['front_method'] if camera == 'front' else conf['rear_method']
+    landscape = False
+    if method in ANGLE and orient != 'normal':
+        angle = (ANGLE[method] + ORIENT_ADD.get(orient, 0)) % 360
+        if camera == 'front' and conf.get('front_landscape_flip') == '1':
+            angle = (angle + 180) % 360	# 31.10: the front camera was upside down in landscape (user): turn it by another 180 degrees
+        method = METHOD[angle]
+        landscape = angle in (0, 180)	# the 1280x960 sensor frame is upright as it is: a landscape picture
+    flip = 'videoflip method=%s ! ' % method if method not in ('', 'none') else ''
+    mirror = 'videoflip method=horizontal-flip ! ' if camera == 'front' and conf.get('front_mirror') == '1' else ''
+    if landscape:
+        # 720x540 picture + black bars (negative videobox values add borders) = the fixed 720x960 output
+        size = 'videoscale ! video/x-raw,width=%d,height=%d ! videobox top=%d bottom=%d ! videoconvert ! ' % (W, W * 3 // 4, -((H - W * 3 // 4) // 2), -((H - W * 3 // 4) // 2))
+    else:
+        size = 'videoscale ! videoconvert ! '
+    return ('gst-launch-1.0 -q libcamerasrc camera-name="%s" ! video/x-raw,width=1280,height=960 ! %s%s%s'
+            'video/x-raw,format=YUY2,width=%d,height=%d ! v4l2sink device=%s sync=false' % (cid, flip, mirror, size, W, H, DEVS[camera]))
+
+
+def black_pipeline(camera):
+    return ('gst-launch-1.0 -q videotestsrc is-live=true pattern=black ! video/x-raw,format=YUY2,width=%d,height=%d,framerate=5/1 ! '
+            'v4l2sink device=%s sync=false' % (W, H, DEVS[camera]))
+
+
+def spawn(cmd):
+    return subprocess.Popen(cmd, shell=True, env=ENV, preexec_fn=os.setsid, stdout=sys.stdout, stderr=sys.stderr)
+
+
+def stop(proc):
+    if proc and proc.poll() is None:
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+            proc.wait(timeout=5)
+        except Exception:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except OSError:
+                pass
+
+
+def children_of(pid):
+    res = {pid}
+    try:
+        for p in os.listdir('/proc'):
+            if p.isdigit() and open('/proc/%s/stat' % p).read().rsplit(')', 1)[1].split()[1] == str(pid):
+                res.add(int(p))
+    except OSError:
+        pass
+    return res
+
+
+def main():
+    if len(sys.argv) > 1 and sys.argv[1] == 'switch':
+        # manual: keep the front or the rear virtual camera running (quick setting tile): toggle = off -> front -> rear -> off
+        want = sys.argv[2] if len(sys.argv) > 2 else 'toggle'
+        cur = read_force()
+        new = {'off': 'front', 'front': 'rear', 'rear': 'off'}[cur] if want == 'toggle' else want
+        if new not in ('off', 'front', 'rear'):
+            sys.exit('usage: m52xq-virtualcam switch off|front|rear|toggle')
+        os.makedirs(os.path.dirname(FORCE), exist_ok=True)
+        open(FORCE, 'w').write(new + '\n')
+        print(new)
+        return
+    if len(sys.argv) > 1 and sys.argv[1] == 'status':
+        # front | rear | off: which virtual camera is really running (for the status bar)
+        try:
+            print(open(STATE).read().strip() or 'off')
+        except OSError:
+            print('off')
+        return
+    for dev in DEVS.values():
+        while not os.path.exists(dev):
+            time.sleep(1)
+    stop_flag = []
+    signal.signal(signal.SIGTERM, lambda *a: stop_flag.append(1))
+    black = {c: spawn(black_pipeline(c)) for c in DEVS}
+    real = {c: None for c in DEVS}		# running real pipeline per camera
+    started_orient = {c: 'normal' for c in DEVS}	# orientation the running real pipeline was built for
+    orient_since = {c: None for c in DEVS}	# a different orientation seen since
+    cur_orient = 'normal'
+    orient_poll = 0.0
+    write_state(real)
+    since = {c: None for c in DEVS}		# reader seen since
+    idle = {c: None for c in DEVS}		# no reader since
+    asleep = False
+    while not stop_flag:
+        time.sleep(0.5)
+        now = time.time()
+        if os.path.exists(SLEEP_FLAG):
+            # the system goes to sleep: both cameras off (the sensor and the ISP must not stay powered through s2idle)
+            if not asleep:
+                asleep = True
+                for cam in DEVS:
+                    if real[cam]:
+                        log('%s: system sleep -> black' % cam)
+                        stop(real[cam])
+                        real[cam] = None
+                        black[cam] = spawn(black_pipeline(cam))
+                write_state(real)
+            continue
+        if asleep:
+            asleep = False
+            since = {c: None for c in DEVS}
+            idle = {c: None for c in DEVS}
+            log('resumed: cameras follow their readers again')
+        if now - orient_poll >= 1.0 and any(real.values()):
+            orient_poll = now
+            cur_orient = orientation()
+        for cam, dev in DEVS.items():
+            if real[cam] and real[cam].poll() is None and cur_orient != started_orient[cam]:
+                orient_since[cam] = orient_since[cam] or now
+                if now - orient_since[cam] >= 1.0:	# steady for a second, not a shake of the phone
+                    log('%s: orientation %s -> %s: restart the pipeline' % (cam, started_orient[cam], cur_orient))
+                    stop(real[cam])
+                    started_orient[cam] = cur_orient
+                    orient_since[cam] = None
+                    real[cam] = spawn(real_pipeline(cam, read_conf(), cur_orient))
+                    continue
+            else:
+                orient_since[cam] = None
+            own = children_of(black[cam].pid) if black[cam] and black[cam].poll() is None else set()
+            if real[cam] and real[cam].poll() is None:
+                own |= children_of(real[cam].pid)
+            r = readers(dev, own)
+            if read_force() == cam:
+                r = r or [0]
+            if r:
+                idle[cam] = None
+                since[cam] = since[cam] or now
+            else:
+                since[cam] = None
+                idle[cam] = idle[cam] or now
+            if real[cam] and real[cam].poll() is not None:
+                log('%s pipeline exited (%s)' % (cam, real[cam].returncode))
+                real[cam] = None
+                black[cam] = spawn(black_pipeline(cam))
+                write_state(real)
+                time.sleep(2)
+            if not real[cam] and r and since[cam] and now - since[cam] > 1.5:
+                other = 'rear' if cam == 'front' else 'front'
+                if real[other]:
+                    log('%s -> stop %s' % (cam, other))
+                    stop(real[other])
+                    real[other] = None
+                    black[other] = spawn(black_pipeline(other))
+                    write_state(real)
+                log('%s: reader -> start camera' % cam)
+                stop(black[cam])
+                black[cam] = None
+                started_orient[cam] = orientation()
+                orient_since[cam] = None
+                real[cam] = spawn(real_pipeline(cam, read_conf(), started_orient[cam]))
+                write_state(real)
+            elif real[cam] and not r and idle[cam] and now - idle[cam] > 4.0:
+                log('%s: no readers -> black' % cam)
+                stop(real[cam])
+                real[cam] = None
+                black[cam] = spawn(black_pipeline(cam))
+                write_state(real)
+    for c in DEVS:
+        stop(real[c])
+        stop(black[c])
+
+
+main()

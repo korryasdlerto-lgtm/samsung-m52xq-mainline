@@ -1,0 +1,58 @@
+#!/bin/sh
+# M52XQ: GPS on/off for the "Location" quick-settings tile.
+#   m52xq-gps status|on|off|toggle
+# "on" = GNSS engine (gps-raw + gps-nmea in ModemManager, 1 s refresh) and the
+# GNOME/GeoClue master switch org.gnome.system.location. The engine lock is
+# re-set first: it is lost whenever the modem is power-cycled (live 2026-10-04,
+# GNSS start failed with QMI GeneralError until --loc-set-engine-lock=none).
+# v40 dual SIM: with two modem objects "-m any" is the first one, which can be the SIM2 object without a GNSS engine
+# (it changes between ModemManager restarts): use the modem that has gps-raw (the qcom-soc object of SIM1)
+M=any
+for m in $(mmcli -L 2>/dev/null | grep -o "Modem/[0-9]*" | cut -d/ -f2); do
+	if mmcli -m $m --location-status 2>/dev/null | grep -q "capabilities:.*gps-raw"; then M=$m; break; fi
+done
+MM() { mmcli -m $M "$@" 2>&1; }
+
+is_on() { MM --location-status | grep -q "enabled:.*gps-raw"; }
+
+case "$1" in
+status)
+	if is_on; then echo on; else echo off; fi
+	;;
+on)
+	timeout 10 qmicli -d qrtr://0 --loc-set-engine-lock=none >/dev/null 2>&1
+	MM --location-enable-gps-nmea --location-enable-gps-raw >/dev/null
+	MM --location-set-gps-refresh-rate=1 >/dev/null
+	gsettings set org.gnome.system.location enabled true 2>/dev/null
+	is_on && echo on || { echo off; exit 1; }
+	;;
+off)
+	MM --location-disable-gps-nmea --location-disable-gps-raw >/dev/null
+	gsettings set org.gnome.system.location enabled false 2>/dev/null
+	is_on && { echo on; exit 1; } || echo off
+	;;
+toggle)
+	if is_on; then "$0" off; else "$0" on; fi
+	;;
+pause)
+	# v42: system-sleep/m52xq-gps-sleep.sh - the GNSS engine kept searching while the phone slept (24.10: GPS on,
+	# ~150 mA asleep); stop it for the sleep, without touching the user's location switch, and remember it
+	if is_on; then
+		MM --location-disable-gps-nmea --location-disable-gps-raw >/dev/null
+		touch /run/m52xq-gps-paused
+		echo paused
+	fi
+	;;
+resume)
+	[ -f /run/m52xq-gps-paused ] || exit 0
+	rm -f /run/m52xq-gps-paused
+	timeout 10 qmicli -d qrtr://0 --loc-set-engine-lock=none >/dev/null 2>&1
+	MM --location-enable-gps-nmea --location-enable-gps-raw >/dev/null
+	MM --location-set-gps-refresh-rate=1 >/dev/null
+	is_on && echo on || { echo off; exit 1; }
+	;;
+*)
+	echo "usage: $0 status|on|off|toggle|pause|resume" >&2
+	exit 2
+	;;
+esac

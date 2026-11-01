@@ -1,0 +1,68 @@
+# The group tag is just to easily find this APKBUILD by some scripts for automation
+# group=kde-plasma
+maintainer="team/kde <bribbers@disroot.org>"
+pkgname=spacebar
+pkgver=6.7.5
+pkgrel=54
+pkgdesc="Collection of stuff for running IM on Plasma Mobile"
+url="https://invent.kde.org/plasma-mobile/spacebar"
+# armhf blocked by qt6-qtdeclarative
+arch="all !armhf"
+license="GPL-2.0-or-later AND LicenseRef-KDE-Accepted-GPL"
+depends="kirigami"
+makedepends="
+	c-ares-dev
+	curl-dev
+	extra-cmake-modules
+	futuresql-dev
+	kcontacts-dev
+	ki18n-dev
+	kio-dev
+	kirigami-addons-dev
+	kirigami-dev
+	knotifications-dev
+	kpeople-dev
+	libphonenumber-dev
+	modemmanager-qt-dev
+	qcoro-dev
+	qt6-qtbase-dev
+	qt6-qtdeclarative-dev
+	qt6-qtdeclarative-private-dev
+	samurai
+	"
+subpackages="$pkgname-lang"
+
+case "$pkgver" in
+	*.*.9*) _rel=unstable;;
+	*) _rel=stable;;
+esac
+
+_repo_url="https://invent.kde.org/plasma-mobile/spacebar.git"
+source="https://download.kde.org/$_rel/plasma/$pkgver/spacebar-$pkgver.tar.xz
+	spacebar-0001-persistent-notification.patch
+	spacebar-0002-m52xq-multimodem.patch
+	spacebar-0003-m52xq-delivery.patch
+	spacebar-0004-m52xq-status-report.patch
+	spacebar-0005-m52xq-sim-label-open-chat.patch"
+options="!check" # No tests
+
+build() {
+	cmake -B build -G Ninja \
+		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+		-DCMAKE_INSTALL_PREFIX=/usr \
+		-DCMAKE_INSTALL_LIBDIR=lib
+	cmake --build build
+}
+
+package() {
+	DESTDIR="$pkgdir" cmake --install build
+}
+
+sha512sums="
+269f4f26c4283aa999769974603c6d6db5106acfb2dd4c32f7abda76495fabcc294133e47fa7ca9170d2f56007f676cd46566184005bd6694df4568ad45e4845  spacebar-6.7.5.tar.xz
+d9077ef01bc452a4072e4096630ceb6507735bd5cc0175250320066422bc277bfceb1e8138b2bc6c64b9569d4cfb62e5c828affea5b771a2ba4ba695f595b5d6  spacebar-0001-persistent-notification.patch
+83eb6d1d5dfdd03ba7e016d6bc4518d946e25be7f1a7014782e21cba14e640978725624d3aea5aeb08d59a8b790895a3903daea85c0c52b8f8070923ea743110  spacebar-0002-m52xq-multimodem.patch
+59315cf81ccdd352284ed40a3bde2a84c6cf580333eb1c30c3174b9778de372cf91781bc10793cc7bbabc3a6f5d969440ae5ce78f5a08eae0b08850d0dce7994  spacebar-0003-m52xq-delivery.patch
+d17f69dc432bece13f72008a62f02f76521908b05f295e8ea63f2a931f9688947e3bd2297ec83165404a9b98ac7522c60c540e1ed23c1affc80bd53b349d6d3e  spacebar-0004-m52xq-status-report.patch
+660fcd2457e2f1a66fc1e634fdd0a3da44c25996191cfa240b8181eb3967bf03b33897f48f0be25b752f2a21eeead81b310fbdcff240000293649954ffa93877  spacebar-0005-m52xq-sim-label-open-chat.patch
+"

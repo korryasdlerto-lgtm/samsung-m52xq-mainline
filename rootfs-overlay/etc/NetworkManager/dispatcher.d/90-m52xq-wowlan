@@ -1,0 +1,13 @@
+#!/bin/sh
+# M52XQ: Wi-Fi wakes the phone from sleep (WoW). Boot v228 loads an APF program into the WCN6750 firmware for the WoW
+# time (the firmware wakes for packets it passes, reason 39 BPF_ALLOW, like the stock Android); WoW itself has to be
+# armed for the phy, the MAC of the pattern follows the (randomised) address of the connection.
+[ "$1" = wlan0 ] || exit 0
+case "$2" in
+up | dhcp4-change)
+	mac=$(cat /sys/class/net/wlan0/address 2>/dev/null)
+	phy=$(basename "$(readlink -f /sys/class/net/wlan0/phy80211)")
+	[ -n "$mac" ] && [ -n "$phy" ] && iw phy "$phy" wowlan enable disconnect magic-packet patterns "$mac"
+	;;
+esac
+exit 0

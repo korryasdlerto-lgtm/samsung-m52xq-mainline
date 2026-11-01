@@ -1,0 +1,205 @@
+diff -ruN a/po/ru/plasma-camera.po b/po/ru/plasma-camera.po
+--- a/po/ru/plasma-camera.po	2025-12-05 16:55:48.000000000 +0200
++++ b/po/ru/plasma-camera.po	2026-10-19 02:28:28.815105069 +0300
+@@ -316,3 +316,13 @@
+ 
+ #~ msgid "View source code online"
+ #~ msgstr "Просмотр исходного кода в сети Интернет"
++
++#: src/contents/ui/SettingsDialog.qml
++#, kde-format
++msgid "Photo resolution"
++msgstr "Разрешение фото"
++
++#: src/contents/ui/SettingsDialog.qml
++#, kde-format
++msgid "Photo Resolution"
++msgstr "Разрешение фото"
+diff -ruN a/src/camerasettings.kcfg b/src/camerasettings.kcfg
+--- a/src/camerasettings.kcfg	2025-12-05 16:55:48.000000000 +0200
++++ b/src/camerasettings.kcfg	2026-10-19 02:28:18.179153099 +0300
+@@ -22,6 +22,9 @@
+         <entry key="videoResolution" type="int">
+             <default>0</default> <!-- PlasmaCameraManager::ResolutionAuto -->
+         </entry>
++        <entry key="photoScale" type="int">
++            <default>100</default> <!-- m52xq r35: photo size in percent of the frame side (100 / 75 / 50 / 35) -->
++        </entry>
+         <entry key="videoCodec" type="int">
+             <default>0</default> <!-- PlasmaCameraManager::H264 -->
+         </entry>
+diff -ruN a/src/contents/ui/SettingsDialog.qml b/src/contents/ui/SettingsDialog.qml
+--- a/src/contents/ui/SettingsDialog.qml	2025-12-05 16:55:48.000000000 +0200
++++ b/src/contents/ui/SettingsDialog.qml	2026-10-19 02:28:18.179153099 +0300
+@@ -30,6 +30,16 @@
+         },
+ 
+         Kirigami.Action {
++            text: i18n("Photo resolution")
++            icon.name: 'camera-photo-symbolic'
++
++            onTriggered: {
++                selectPhotoScaleDialogLoader.active = true;
++                selectPhotoScaleDialogLoader.item.open();
++            }
++        },
++
++        Kirigami.Action {
+             text: i18n("Video recording resolution")
+             icon.name: 'view-fullscreen-symbolic'
+ 
+@@ -101,6 +111,45 @@
+         }
+     ]
+ 
++    // m52xq r35: photo resolution (the camera frame or a smaller copy of it)
++    property Loader selectPhotoScaleDialogLoader: Loader {
++        id: selectPhotoScaleDialogLoader
++        active: false
++
++        sourceComponent: Kirigami.Dialog {
++            title: i18n("Photo Resolution")
++            preferredWidth: Kirigami.Units.gridUnit * 18
++
++            onClosed: selectPhotoScaleDialogLoader.active = false
++
++            ColumnLayout {
++                spacing: 0
++
++                Repeater {
++                    model: [100, 75, 50, 35]
++
++                    delegate: QQC2.RadioDelegate {
++                        id: photoDelegate
++                        property int value: modelData
++
++                        Layout.fillWidth: true
++                        topPadding: Kirigami.Units.smallSpacing * 2
++                        bottomPadding: Kirigami.Units.smallSpacing * 2
++
++                        text: root.cameraManager.photoSizeLabel(value)
++                        checked: value == root.cameraManager.photoScale
++                        onCheckedChanged: {
++                            if (checked) {
++                                root.cameraManager.photoScale = photoDelegate.value;
++                                checked = Qt.binding(() => (photoDelegate.value == root.cameraManager.photoScale));
++                            }
++                        }
++                    }
++                }
++            }
++        }
++    }
++
+     property Loader selectVideoResolutionDialogLoader: Loader {
+         id: selectVideoResolutionDialogLoader
+         active: false
+diff -ruN a/src/plasmacameramanager.cpp b/src/plasmacameramanager.cpp
+--- a/src/plasmacameramanager.cpp	2026-10-19 02:06:41.578779168 +0300
++++ b/src/plasmacameramanager.cpp	2026-10-19 02:28:18.179153099 +0300
+@@ -26,6 +26,7 @@
+     setVideoRecordingFps(CameraSettings::self()->videoRecordingFps());
+     setQuality(static_cast<Quality>(CameraSettings::self()->videoRecordingQuality()));
+     setVideoResolution(static_cast<Resolution>(CameraSettings::self()->videoResolution()));
++    setPhotoScale(CameraSettings::self()->photoScale());
+     setVideoCodec(static_cast<VideoCodec>(CameraSettings::self()->videoCodec()));
+     setFilenamePattern(static_cast<FilenamePattern>(CameraSettings::self()->filenamePattern()));
+     setOutputPath(static_cast<OutputPath>(CameraSettings::self()->outputPath()));
+@@ -465,6 +466,34 @@
+     updateRecorderSettings();
+ }
+ 
++int PlasmaCameraManager::photoScale() const
++{
++    return m_photoScale;
++}
++
++void PlasmaCameraManager::setPhotoScale(int scale)
++{
++    scale = qBound(20, scale, 100);
++    if (scale == m_photoScale) {
++        return;
++    }
++    m_photoScale = scale;
++    CameraSettings::self()->setPhotoScale(scale);
++    CameraSettings::self()->save();
++    Q_EMIT photoScaleChanged();
++}
++
++QString PlasmaCameraManager::photoSizeLabel(int scale) const
++{
++    if (m_currentFrame.isNull()) {
++        return QStringLiteral("%1 %").arg(scale);
++    }
++    const int w = (m_currentFrame.width() * scale / 100) & ~1;
++    const int h = (m_currentFrame.height() * scale / 100) & ~1;
++    const double mp = double(w) * h / 1e6;
++    return QStringLiteral("%1 × %2 (%3 MP)").arg(w).arg(h).arg(mp >= 10 ? QString::number(qRound(mp)) : QString::number(mp, 'f', 1));
++}
++
+ void PlasmaCameraManager::setVideoResolution(Resolution resolution)
+ {
+     if (m_videoResolution == resolution) {
+@@ -616,6 +645,14 @@
+     QFile file(fileName);
+ 
+     QImage image = applyZoom(frames.head());
++    // m52xq r35: the chosen photo size (percent of the frame side); a zoomed crop is not enlarged beyond it
++    if (m_photoScale < 100) {
++        const QSize full = frames.head().size();
++        const QSize target((full.width() * m_photoScale / 100) & ~1, (full.height() * m_photoScale / 100) & ~1);
++        if (image.width() > target.width()) {
++            image = image.scaled(target, Qt::KeepAspectRatio, Qt::SmoothTransformation);
++        }
++    }
+ 
+     // Flip image if requested
+     if (m_plasmaCamera->mirrorOutput()) {
+@@ -631,7 +668,7 @@
+ 
+     // TODO: set format and quality
+     qDebug() << "saving image to " << fileName;
+-    const bool res = image.save(&file, "JPEG", 50);
++    const bool res = image.save(&file, "JPEG", 92); // m52xq r35: was 50 (visible blocks), Megapixels uses 92
+     if (!res) {
+         setError(
+             0,
+diff -ruN a/src/plasmacameramanager.h b/src/plasmacameramanager.h
+--- a/src/plasmacameramanager.h	2026-10-19 02:12:59.324543185 +0300
++++ b/src/plasmacameramanager.h	2026-10-19 02:28:18.179153099 +0300
+@@ -46,6 +46,8 @@
+     Q_PROPERTY(QAudioInput *audioInput READ audioInput WRITE setAudioInput NOTIFY audioInputChanged)
+     Q_PROPERTY(float videoRecordingFps READ videoRecordingFps WRITE setVideoRecordingFps NOTIFY videoRecordingFpsChanged)
+     Q_PROPERTY(Resolution videoResolution READ videoResolution WRITE setVideoResolution NOTIFY videoResolutionChanged)
++    // m52xq r35: photo resolution in percent of the frame side (the frame = the viewfinder stream of the camera)
++    Q_PROPERTY(int photoScale READ photoScale WRITE setPhotoScale NOTIFY photoScaleChanged)
+     Q_PROPERTY(VideoCodec videoCodec READ videoCodec WRITE setVideoCodec NOTIFY videoCodecChanged)
+ 
+     Q_PROPERTY(qreal zoom READ zoom WRITE setZoom NOTIFY zoomChanged)
+@@ -172,6 +174,10 @@
+     // m52xq r33: tap to focus, (x, y) = the tapped point in the shown viewfinder picture, 0..1 from the top left
+     // (public: QML cannot call the private Q_INVOKABLE methods)
+     Q_INVOKABLE void focusAt(qreal x, qreal y);
++    // m52xq r35: "4616 x 3468 (16 MP)" for a photo scale of the present camera
++    Q_INVOKABLE QString photoSizeLabel(int scale) const;
++    int photoScale() const;
++    void setPhotoScale(int scale);
+ 
+ Q_SIGNALS:
+     void errorChanged();
+@@ -191,6 +197,7 @@
+     void audioInputChanged();
+     void videoRecordingFpsChanged(float fps);
+     void videoResolutionChanged();
++    void photoScaleChanged();
+     void videoCodecChanged();
+     void imageSaved(int id, const QString &fileName);
+ 
+@@ -350,6 +357,7 @@
+     float m_videoRecordingFps = 24.0f;
+     bool m_audioRecordingEnabled = true;
+     Resolution m_videoResolution = Resolution::ResolutionAuto;
++    int m_photoScale = 100; // m52xq r35
+     VideoCodec m_videoCodec = VideoCodec::H264;
+ 
+     // Device orientation for correct rotation

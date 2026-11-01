@@ -1,0 +1,48 @@
+diff -ruN -x '*.orig' a/src/plasmacamera/worker.cpp b/src/plasmacamera/worker.cpp
+--- a/src/plasmacamera/worker.cpp	2026-10-10 17:30:14.531311912 +0300
++++ b/src/plasmacamera/worker.cpp	2026-10-10 17:30:05.734968467 +0300
+@@ -224,6 +224,11 @@
+     g_vfInFlight.store(1);
+     g_vfLastEmitMs.store(nowMs);
+ 
++    // m52xq r28: the frame must not point into the mapped libcamera buffer: the request has already gone back to the free queue
++    // (the sensor overwrites the buffer, a torn picture) and when the camera is stopped or switched the buffers are unmapped
++    // while the render thread still uploads the texture (SIGSEGV in memcpy inside Mesa at 30 fps)
++    m_image = m_image.copy();
++    g_vfFrameGeneration.store(g_camGeneration.load());
+     // Emit view finder frame, m_image is moved for performance
+     Q_EMIT viewFinderFrame(std::move(m_image));
+ }
+@@ -269,6 +274,7 @@
+     }
+ 
+     qDebug() << "Starting view finder in worker";
++    g_camGeneration.fetch_add(1); // r28: frames of the previous camera still in flight are dropped by the GUI
+ 
+     /*
+      * https://libcamera.org/api-html/namespacelibcamera.html#a295d1f5e7828d95c0b0aabc0a8baac03
+diff -ruN -x '*.orig' a/src/plasmacamera/worker.h b/src/plasmacamera/worker.h
+--- a/src/plasmacamera/worker.h	2026-10-10 17:30:14.531311912 +0300
++++ b/src/plasmacamera/worker.h	2026-10-10 17:30:05.730968311 +0300
+@@ -26,6 +26,8 @@
+ // produce one, and without a limit the queued frames grew to gigabytes (1.3-1.8 GB per session -> out of memory).
+ inline std::atomic<int> g_vfInFlight{0};
+ inline std::atomic<long long> g_vfLastEmitMs{0};
++inline std::atomic<unsigned> g_camGeneration{0}; // r28: counts viewfinder (re)starts
++inline std::atomic<unsigned> g_vfFrameGeneration{0}; // r28: generation of the frame that is in flight
+ 
+ // needed to pass shared_ptr via signals
+ Q_DECLARE_METATYPE(const std::shared_ptr<libcamera::Camera>)
+diff -ruN -x '*.orig' a/src/plasmacameramanager.cpp b/src/plasmacameramanager.cpp
+--- a/src/plasmacameramanager.cpp	2026-10-10 17:30:14.531311912 +0300
++++ b/src/plasmacameramanager.cpp	2026-10-10 17:30:05.734968467 +0300
+@@ -528,6 +528,9 @@
+ void PlasmaCameraManager::processViewfinderFrame(const QImage &image)
+ {
+     g_vfInFlight.store(0); // m52xq: this frame has been taken by the GUI thread, the worker may send the next one
++    if (g_vfFrameGeneration.load() != g_camGeneration.load()) {
++        return; // r28: a frame of the camera that has just been switched away (it was shown mirrored / with the wrong settings)
++    }
+     if (image.isNull()) {
+         return;
+     }

@@ -1,0 +1,32 @@
+--- a/plasma-dialer/src/qml/dialpad/DialerButton.qml	2026-10-03 00:14:59.874599952 +0300
++++ b/plasma-dialer/src/qml/dialpad/DialerButton.qml	2026-10-03 00:14:59.890599505 +0300
+@@ -5,6 +5,7 @@
+ import QtQuick
+ import QtQuick.Layouts
+ import QtQuick.Controls as Controls
++import QtMultimedia
+ import org.kde.kirigami as Kirigami
+ 
+ Item {
+@@ -31,10 +32,21 @@
+         opacity: mouse.pressed ? 0.4 : 0
+     }
+ 
++    // m52xq: DTMF key tone on press (files from /usr/share/sounds/m52xq/)
++    SoundEffect {
++        id: keyTone
++        source: {
++            const names = { "*": "star", "#": "hash" };
++            const n = names[root.text] || root.text;
++            return /^[0-9]$|^star$|^hash$/.test(n) ? "file:///usr/share/sounds/m52xq/dtmf-" + n + ".wav" : "";
++        }
++    }
++
+     Controls.AbstractButton {
+         id: mouse
+ 
+         anchors.fill: parent
++        onPressedChanged: if (pressed && keyTone.source != "") keyTone.play()
+         onClicked: root.clicked(parent.text)
+         onPressAndHold: root.held(parent.text)
+     }

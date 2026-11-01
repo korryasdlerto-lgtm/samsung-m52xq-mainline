@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+# M52XQ: software bridge between the voice call (modem DSP, q6voice) and a USB headset (a plain USB audio card).
+# The call audio never goes through PulseAudio, so:
+#   downlink: AFE pseudo port VOICE_RECORD_RX (MultiMedia2 capture) -> USB headset sink
+#   uplink:   USB headset source -> MultiMedia1 playback -> AFE pseudo port VOICE_PLAYBACK_TX -> voice Tx stream
+# (the kernel starts the in-call playback with q6voice.playback_uplink=1, set by m52xq-voicecall before the session).
+# Started/stopped by m52xq-voicecall; "m52xq-usb-call-bridge find" prints the USB sink/source or exits 1.
+import os, re, signal, subprocess, sys, time
+
+ENV = dict(os.environ, PULSE_SERVER='unix:/run/user/10000/pulse/native', PULSE_COOKIE='/home/user/.config/pulse/cookie')
+RATE = '8000'
+PCM_TAP = 'hw:0,1'	# MultiMedia2: capture of VOICE_RECORD_RX (downlink)
+PCM_INJECT = 'hw:0,0'	# MultiMedia1: playback into VOICE_PLAYBACK_TX (uplink). One FE has ONE ASM client: capture and playback
+			# on the same FE fail with "Audio Client already active", hence two different front ends.
+BUILTIN = ['sinks:alsa_output.platform-soc_sound.HiFi__Speaker__sink', 'sources:alsa_input.platform-soc_sound.HiFi__Mic__source',
+           'sources:mic_dup']	# PulseAudio holds MultiMedia1/2 with these while they are not suspended
+
+
+def conf_int(key, default):
+    # /etc/m52xq-voice.conf (shell syntax, shared with m52xq-voice-mixers.sh): KEY=value
+    try:
+        for line in open('/etc/m52xq-voice.conf'):
+            k, _, v = line.strip().partition('=')
+            if k.strip() == key:
+                return int(v.strip().strip('"\''))
+    except (OSError, ValueError):
+        pass
+    return default
+
+
+USB_MIC_GAIN = conf_int('USB_MIC_GAIN', 200)	# % of the PulseAudio source volume during a call: the AB17X microphone is
+						# quiet (speech peaks ~-27 dBFS) and has no hardware gain, 200 % = +18 dB
+
+
+def sh(*args):
+    try:
+        return subprocess.run(list(args), capture_output=True, text=True, timeout=3, env=ENV).stdout
+    except Exception:
+        return ''
+
+
+def find(kind):
+    for line in sh('pactl', 'list', 'short', kind).splitlines():
+        f = line.split('\t')
+        if len(f) > 1 and f[1].startswith('alsa_%s.usb-' % ('output' if kind == 'sinks' else 'input')) and not f[1].endswith('.monitor'):
+            return f[1]
+    return None
+
+
+def mixer(name, value):
+    subprocess.run(['amixer', '-q', '-c0', 'cset', 'name=' + name, str(value)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def log(msg):
+    print('m52xq-usb-call-bridge: ' + msg, flush=True)
+
+
+def main():
+    sink, source = find('sinks'), find('sources')
+    if len(sys.argv) > 1 and sys.argv[1] == 'find':
+        if not (sink and source):
+            sys.exit(1)
+        print(sink, source)
+        return
+    if not (sink and source):
+        log('no USB headset')
+        sys.exit(1)
+    log('USB headset: sink %s source %s' % (sink, source))
+
+    for b in BUILTIN:
+        kind, name = b.split(':')
+        sh('pactl', 'suspend-' + kind[:-1], name, '1')
+    time.sleep(0.5)
+    m = re.search(r'(\d+)%', sh('pactl', 'get-source-volume', source))
+    mic_volume = m.group(1) + '%' if m else '100%'
+    sh('pactl', 'set-source-volume', source, '%d%%' % USB_MIC_GAIN)
+    log('headset microphone volume %s -> %d%%' % (mic_volume, USB_MIC_GAIN))
+    mixer('MultiMedia2 Mixer TX_CODEC_DMA_TX_3', 0)
+    mixer('MultiMedia2 Mixer VOICE_RECORD_RX', 1)
+    mixer('VOICE_PLAYBACK_TX Audio Mixer MultiMedia1', 1)
+
+    cmds = {
+        'down': 'arecord -q -D %s -t raw -f S16_LE -r %s -c 1 | pacat --playback --device=%s --format=s16le --rate=%s --channels=1 --latency-msec=80 --raw'
+                % (PCM_TAP, RATE, sink, RATE),
+        'up': 'parec --device=%s --format=s16le --rate=%s --channels=1 --latency-msec=40 --raw | aplay -q -D %s -t raw -f S16_LE -r %s -c 1 --buffer-time=80000'
+              % (source, RATE, PCM_INJECT, RATE),
+    }
+    procs = {}
+    stop = []
+    signal.signal(signal.SIGTERM, lambda *a: stop.append(1))
+    signal.signal(signal.SIGINT, lambda *a: stop.append(1))
+
+    def spawn(name):
+        procs[name] = subprocess.Popen(cmds[name], shell=True, env=ENV, preexec_fn=os.setsid,
+                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    for n in cmds:
+        spawn(n)
+    restarts = 0
+    failed = False
+    while not stop:
+        time.sleep(1)
+        for n, p in procs.items():
+            if p.poll() is not None:
+                restarts += 1
+                log('%s pipeline exited (%s), restart %d' % (n, p.returncode, restarts))
+                if restarts > 6:
+                    # give up: m52xq-voicecall falls back to the earpiece and the phone microphone
+                    failed = True
+                    stop.append(1)
+                    break
+                time.sleep(1)
+                spawn(n)
+    for p in procs.values():
+        try:
+            os.killpg(p.pid, signal.SIGTERM)
+        except OSError:
+            pass
+    sh('pactl', 'set-source-volume', source, mic_volume)
+    mixer('VOICE_PLAYBACK_TX Audio Mixer MultiMedia1', 0)
+    # q6routing keeps ONE port per front end session: switching VOICE_PLAYBACK_TX off leaves MultiMedia1 with no port at all
+    # ("Routing not setup for MultiMedia-1 Session": every later playback - tones, ringtone - fails and the dialer hangs).
+    mixer('QUIN_MI2S_RX Audio Mixer MultiMedia1', 1)	# the loud speaker route of the normal playback
+    mixer('MultiMedia2 Mixer VOICE_RECORD_RX', 0)
+    mixer('MultiMedia2 Mixer TX_CODEC_DMA_TX_3', 1)	# back to the recorder / UCM capture route
+    for b in BUILTIN:
+        kind, name = b.split(':')
+        sh('pactl', 'suspend-' + kind[:-1], name, '0')
+    log('stopped')
+    sys.exit(2 if failed else 0)
+
+
+main()

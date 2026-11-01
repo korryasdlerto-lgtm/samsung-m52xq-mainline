@@ -1,0 +1,752 @@
+diff --git a/src/kerneldevice/mm-kernel-device-qrtr.c b/src/kerneldevice/mm-kernel-device-qrtr.c
+index 1abfebb..e75f6e6 100644
+--- a/src/kerneldevice/mm-kernel-device-qrtr.c
++++ b/src/kerneldevice/mm-kernel-device-qrtr.c
+@@ -36,6 +36,8 @@ struct _MMKernelDeviceQrtrPrivate {
+     QrtrNode *node;
+     gchar    *name;
+     gchar    *physdev_uid;
++    guint     subscription; /* m52xq DSDS: 0 = SIM1 (primary), 1 = SIM2 */
++    gboolean  own_physdev;  /* both SIMs active: SIM2 is a modem of its own, without the data port */
+ };
+ 
+ /*****************************************************************************/
+@@ -66,7 +68,8 @@ kernel_device_cmp (MMKernelDevice *_a,
+     a = MM_KERNEL_DEVICE_QRTR (_a);
+     b = MM_KERNEL_DEVICE_QRTR (_b);
+ 
+-    return qrtr_node_get_id (a->priv->node) == qrtr_node_get_id (b->priv->node);
++    return (qrtr_node_get_id (a->priv->node) == qrtr_node_get_id (b->priv->node) &&
++            a->priv->subscription == b->priv->subscription);
+ }
+ 
+ static gboolean
+@@ -103,8 +106,14 @@ kernel_device_get_name (MMKernelDevice *_self)
+     MMKernelDeviceQrtr *self;
+ 
+     self = MM_KERNEL_DEVICE_QRTR (_self);
+-    if (!self->priv->name)
+-        self->priv->name = mm_kernel_device_qrtr_helper_build_name (qrtr_node_get_id (self->priv->node));
++    if (!self->priv->name) {
++        g_autofree gchar *base = NULL;
++
++        base = mm_kernel_device_qrtr_helper_build_name (qrtr_node_get_id (self->priv->node));
++        self->priv->name = (self->priv->subscription ?
++                            g_strdup_printf ("%s-sim%u", base, self->priv->subscription + 1) :
++                            g_steal_pointer (&base));
++    }
+ 
+     return self->priv->name;
+ }
+@@ -112,7 +121,17 @@ kernel_device_get_name (MMKernelDevice *_self)
+ static const gchar *
+ kernel_device_get_physdev_uid (MMKernelDevice *_self)
+ {
+-    return MM_KERNEL_DEVICE_QRTR_PHYSDEV_UID;
++    MMKernelDeviceQrtr *self;
++
++    self = MM_KERNEL_DEVICE_QRTR (_self);
++    if (!self->priv->own_physdev)
++        return MM_KERNEL_DEVICE_QRTR_PHYSDEV_UID;
++
++    /* A separate physical device, so that the second subscription gets its own modem object */
++    if (!self->priv->physdev_uid)
++        self->priv->physdev_uid = g_strdup_printf (MM_KERNEL_DEVICE_QRTR_PHYSDEV_UID "-sim%u",
++                                                   self->priv->subscription + 1);
++    return self->priv->physdev_uid;
+ }
+ 
+ static const gchar *
+@@ -133,6 +152,27 @@ mm_kernel_device_qrtr_new (QrtrNode *qrtr_node)
+     return self;
+ }
+ 
++MMKernelDevice *
++mm_kernel_device_qrtr_new_for_subscription (QrtrNode *qrtr_node,
++                                            guint     subscription,
++                                            gboolean  own_physdev)
++{
++    MMKernelDeviceQrtr *self;
++
++    self = MM_KERNEL_DEVICE_QRTR (mm_kernel_device_qrtr_new (qrtr_node));
++    self->priv->subscription = subscription;
++    self->priv->own_physdev = own_physdev;
++    g_object_set_data_full (G_OBJECT (self), ID_MM_QMI_SUBSCRIPTION,
++                            g_strdup_printf ("%u", subscription), g_free);
++    return MM_KERNEL_DEVICE (self);
++}
++
++guint
++mm_kernel_device_qrtr_get_subscription (MMKernelDeviceQrtr *self)
++{
++    return self->priv->subscription;
++}
++
+ /*****************************************************************************/
+ 
+ static void
+diff --git a/src/kerneldevice/mm-kernel-device-qrtr.h b/src/kerneldevice/mm-kernel-device-qrtr.h
+index f0c5bbc..3d66247 100644
+--- a/src/kerneldevice/mm-kernel-device-qrtr.h
++++ b/src/kerneldevice/mm-kernel-device-qrtr.h
+@@ -65,4 +65,11 @@ QrtrNode       *mm_kernel_device_qrtr_get_node   (MMKernelDeviceQrtr *self);
+ GType           mm_kernel_device_qrtr_get_type (void);
+ MMKernelDevice *mm_kernel_device_qrtr_new      (QrtrNode *qrtr_node);
+ 
++/* m52xq DSDS: a kernel device for the second subscription (SIM2) of the same QRTR node */
++#define ID_MM_QMI_SUBSCRIPTION "ID_MM_QMI_SUBSCRIPTION"
++MMKernelDevice *mm_kernel_device_qrtr_new_for_subscription (QrtrNode *qrtr_node,
++                                                            guint     subscription,
++                                                            gboolean  own_physdev);
++guint           mm_kernel_device_qrtr_get_subscription     (MMKernelDeviceQrtr *self);
++
+ #endif /* MM_KERNEL_DEVICE_QRTR_H */
+diff --git a/src/mm-base-manager.c b/src/mm-base-manager.c
+index 7ba2cde..d433553 100644
+--- a/src/mm-base-manager.c
++++ b/src/mm-base-manager.c
+@@ -617,9 +617,22 @@ handle_qrtr_device_added (MMBaseManager    *self,
+ 
+     node = mm_qrtr_bus_watcher_peek_node (bus_watcher, node_id);
+ 
+-    kernel_device = mm_kernel_device_qrtr_new (node);
++    /* m52xq DSDS (m52xq-sim-mode): MM_QRTR_SIM_ONLY=2 -> the only modem object is SIM2 (QMI clients
++     * bound to subscription 1, with the data port); otherwise SIM1, and with MM_QRTR_DSDS (both SIMs
++     * active, the modem keeps both registered) SIM2 gets a second modem object of its own */
++    if (!g_strcmp0 (g_getenv ("MM_QRTR_SIM_ONLY"), "2"))
++        kernel_device = mm_kernel_device_qrtr_new_for_subscription (node, 1, FALSE);
++    else
++        kernel_device = mm_kernel_device_qrtr_new (node);
+ 
+     device_added (self, kernel_device, TRUE, FALSE);
++
++    if (g_getenv ("MM_QRTR_DSDS") && !g_getenv ("MM_QRTR_SIM_ONLY")) {
++        g_autoptr(MMKernelDevice) sim2_device = NULL;
++
++        sim2_device = mm_kernel_device_qrtr_new_for_subscription (node, 1, TRUE);
++        device_added (self, sim2_device, TRUE, FALSE);
++    }
+ }
+ 
+ static void
+@@ -630,6 +643,13 @@ handle_qrtr_device_removed (MMBaseManager    *self,
+ 
+     qrtr_device_name = mm_kernel_device_qrtr_helper_build_name (node_id);
+     device_removed (self, MM_KERNEL_DEVICE_QRTR_SUBSYSTEM, qrtr_device_name);
++
++    if (g_getenv ("MM_QRTR_DSDS") || g_getenv ("MM_QRTR_SIM_ONLY")) {
++        g_autofree gchar *sim2_name = NULL;
++
++        sim2_name = g_strdup_printf ("%s-sim2", qrtr_device_name);
++        device_removed (self, MM_KERNEL_DEVICE_QRTR_SUBSYSTEM, sim2_name);
++    }
+ }
+ #endif
+ 
+diff --git a/src/mm-base-modem.c b/src/mm-base-modem.c
+index 224320f..09f2a0a 100644
+--- a/src/mm-base-modem.c
++++ b/src/mm-base-modem.c
+@@ -311,10 +311,13 @@ base_modem_create_qrtr_port (MMBaseModem    *self,
+ {
+     if (ptype == MM_PORT_TYPE_QMI) {
+         g_autoptr(QrtrNode) node = NULL;
++        MMPortQmi           *port;
+ 
+         g_assert (MM_IS_KERNEL_DEVICE_QRTR (kernel_device));
+         node = mm_kernel_device_qrtr_get_node (MM_KERNEL_DEVICE_QRTR (kernel_device));
+-        return MM_PORT (mm_port_qmi_new_from_node (name, node));
++        port = mm_port_qmi_new_from_node (name, node);
++        mm_port_qmi_set_subscription (port, mm_kernel_device_qrtr_get_subscription (MM_KERNEL_DEVICE_QRTR (kernel_device)));
++        return MM_PORT (port);
+     }
+     return NULL;
+ }
+@@ -1683,8 +1686,9 @@ mm_base_modem_organize_ports (MMBaseModem *self,
+         secondary = backup_primary ? backup_primary : backup_secondary;
+ 
+ #if defined WITH_QMI
+-    /* On QMI-based modems, we need to have at least a net port */
+-    if (qmi && !data_net) {
++    /* On QMI-based modems, we need to have at least a net port; m52xq DSDS: the SIM2 modem
++     * object (QMI clients bound to subscription 1) has no data port of its own */
++    if (qmi && !data_net && !mm_port_qmi_get_subscription (MM_PORT_QMI (qmi->data))) {
+         g_set_error_literal (error,
+                              MM_CORE_ERROR,
+                              MM_CORE_ERROR_FAILED,
+@@ -1786,8 +1790,9 @@ mm_base_modem_organize_ports (MMBaseModem *self,
+     }
+ 
+     /* Fail if we haven't added any single data port; this is probably a plugin
+-     * misconfiguration */
+-    if (!self->priv->data) {
++     * misconfiguration (m52xq DSDS: except the SIM2 modem object, which has none) */
++    if (!self->priv->data &&
++        !(qmi && mm_port_qmi_get_subscription (MM_PORT_QMI (qmi->data)))) {
+         g_set_error_literal (error, MM_CORE_ERROR, MM_CORE_ERROR_FAILED,
+                              "Failed to find a data port in the modem");
+         return FALSE;
+@@ -1795,12 +1800,15 @@ mm_base_modem_organize_ports (MMBaseModem *self,
+ 
+ #if defined WITH_QMI
+     if (qmi) {
+-        /* The first item in the data list must be a net port, because
+-         * QMI modems only expect net ports */
+-        g_assert (MM_IS_PORT_NET (self->priv->data->data));
+-        /* let the MMPortQmi know which net driver is being used, taken
+-         * from the first item in the net port list */
+-        g_list_foreach (qmi, (GFunc)mm_port_qmi_set_net_details, (gpointer) MM_PORT (self->priv->data->data));
++        /* m52xq DSDS: the SIM2 modem object has no data port at all */
++        if (self->priv->data) {
++            /* The first item in the data list must be a net port, because
++             * QMI modems only expect net ports */
++            g_assert (MM_IS_PORT_NET (self->priv->data->data));
++            /* let the MMPortQmi know which net driver is being used, taken
++             * from the first item in the net port list */
++            g_list_foreach (qmi, (GFunc)mm_port_qmi_set_net_details, (gpointer) MM_PORT (self->priv->data->data));
++        }
+ 
+         g_list_foreach (qmi, (GFunc)g_object_ref, NULL);
+         self->priv->qmi = g_steal_pointer (&qmi);
+diff --git a/src/mm-broadband-modem-qmi.c b/src/mm-broadband-modem-qmi.c
+index 8a740e8..cb82195 100644
+--- a/src/mm-broadband-modem-qmi.c
++++ b/src/mm-broadband-modem-qmi.c
+@@ -917,8 +917,9 @@ unlock_required_uim_get_card_status_ready (QmiClientUim *client,
+         return;
+     }
+ 
+-    if (!mm_qmi_uim_get_card_status_output_parse (self,
++    if (!mm_qmi_uim_get_card_status_output_parse_subscription (self,
+                                                   output,
++                                                  mm_shared_qmi_get_subscription (self),
+                                                   &lock,
+                                                   NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                                                   &error)) {
+@@ -1177,8 +1178,9 @@ unlock_retries_uim_get_card_status_ready (QmiClientUim *client,
+         return;
+     }
+ 
+-    if (!mm_qmi_uim_get_card_status_output_parse (self,
++    if (!mm_qmi_uim_get_card_status_output_parse_subscription (self,
+                                                   output,
++                                                  mm_shared_qmi_get_subscription (self),
+                                                   &lock,
+                                                   NULL, &pin1_retries, &puk1_retries,
+                                                   NULL, &pin2_retries, &puk2_retries,
+@@ -2565,6 +2567,16 @@ common_power_up_down_off (MMIfaceModem        *_self,
+ 
+     task = g_task_new (self, NULL, callback, user_data);
+ 
++    /* m52xq DSDS: the operating mode is global to the whole modem; the SIM2 object must
++     * never switch it (powering SIM2 "down" would take SIM1 offline as well) */
++    if (mm_shared_qmi_is_sim2_object (self)) {
++        mm_obj_dbg (self, "SIM2 modem object: operating mode '%s' not applied (shared with SIM1)",
++                    qmi_dms_operating_mode_get_string (mode));
++        g_task_return_boolean (task, TRUE);
++        g_object_unref (task);
++        return;
++    }
++
+     if (self->priv->set_operating_mode_task) {
+         error = g_error_new (MM_CORE_ERROR, MM_CORE_ERROR_IN_PROGRESS, "Another operation in progress");
+         g_task_return_error (task, error);
+@@ -2826,8 +2838,9 @@ get_sim_lock_status_via_get_card_status_ready (QmiClientUim *client,
+         return;
+     }
+ 
+-    if (!mm_qmi_uim_get_card_status_output_parse (self,
++    if (!mm_qmi_uim_get_card_status_output_parse_subscription (self,
+                                                   output,
++                                                  mm_shared_qmi_get_subscription (self),
+                                                   &lock,
+                                                   &pin1_state, NULL, NULL, &pin2_state, NULL, NULL, NULL,
+                                                   &error)) {
+diff --git a/src/mm-modem-helpers-qmi.c b/src/mm-modem-helpers-qmi.c
+index 9fc10cd..70a12cf 100644
+--- a/src/mm-modem-helpers-qmi.c
++++ b/src/mm-modem-helpers-qmi.c
+@@ -2911,8 +2911,9 @@ mm_firmware_unique_id_to_qmi_unique_id (const gchar  *unique_id,
+ /*****************************************************************************/
+ 
+ gboolean
+-mm_qmi_uim_get_card_status_output_parse (gpointer                           log_object,
++mm_qmi_uim_get_card_status_output_parse_subscription (gpointer                           log_object,
+                                          QmiMessageUimGetCardStatusOutput  *output,
++                                         guint                              subscription,
+                                          MMModemLock                       *o_lock,
+                                          QmiUimPinState                    *o_pin1_state,
+                                          guint                             *o_pin1_retries,
+@@ -2937,9 +2938,9 @@ mm_qmi_uim_get_card_status_output_parse (gpointer                           log_
+ 
+     qmi_message_uim_get_card_status_output_get_card_status (
+         output,
+-        &index_gw_primary,
++        subscription ? NULL : &index_gw_primary,
+         NULL, /* index_1x_primary */
+-        NULL, /* index_gw_secondary */
++        subscription ? &index_gw_primary : NULL, /* index_gw_secondary: SIM2 of a DSDS modem */
+         NULL, /* index_1x_secondary */
+         &cards,
+         NULL);
+@@ -3212,6 +3213,25 @@ mm_qmi_uim_get_card_status_output_parse (gpointer                           log_
+     return TRUE;
+ }
+ 
++gboolean
++mm_qmi_uim_get_card_status_output_parse (gpointer                           log_object,
++                                         QmiMessageUimGetCardStatusOutput  *output,
++                                         MMModemLock                       *o_lock,
++                                         QmiUimPinState                    *o_pin1_state,
++                                         guint                             *o_pin1_retries,
++                                         guint                             *o_puk1_retries,
++                                         QmiUimPinState                    *o_pin2_state,
++                                         guint                             *o_pin2_retries,
++                                         guint                             *o_puk2_retries,
++                                         guint                             *o_pers_retries,
++                                         GError                           **error)
++{
++    return mm_qmi_uim_get_card_status_output_parse_subscription (log_object, output, 0, o_lock,
++                                                                 o_pin1_state, o_pin1_retries, o_puk1_retries,
++                                                                 o_pin2_state, o_pin2_retries, o_puk2_retries,
++                                                                 o_pers_retries, error);
++}
++
+ /*****************************************************************************/
+ 
+ gboolean
+diff --git a/src/mm-modem-helpers-qmi.h b/src/mm-modem-helpers-qmi.h
+index 4f97bb6..1289a77 100644
+--- a/src/mm-modem-helpers-qmi.h
++++ b/src/mm-modem-helpers-qmi.h
+@@ -233,6 +233,19 @@ GArray *mm_firmware_unique_id_to_qmi_unique_id (const gchar  *unique_id,
+ /*****************************************************************************/
+ /* Common UIM Get Card Status parsing */
+ 
++/* m52xq DSDS: subscription 0 uses the primary GW provisioning application, 1 the secondary one */
++gboolean mm_qmi_uim_get_card_status_output_parse_subscription (gpointer                           log_object,
++                                                               QmiMessageUimGetCardStatusOutput  *output,
++                                                               guint                              subscription,
++                                                               MMModemLock                       *o_lock,
++                                                               QmiUimPinState                    *o_pin1_state,
++                                                               guint                             *o_pin1_retries,
++                                                               guint                             *o_puk1_retries,
++                                                               QmiUimPinState                    *o_pin2_state,
++                                                               guint                             *o_pin2_retries,
++                                                               guint                             *o_puk2_retries,
++                                                               guint                             *o_pers_retries,
++                                                               GError                           **error);
+ gboolean mm_qmi_uim_get_card_status_output_parse (gpointer                           log_object,
+                                                   QmiMessageUimGetCardStatusOutput  *output,
+                                                   MMModemLock                       *o_lock,
+diff --git a/src/mm-port-qmi.c b/src/mm-port-qmi.c
+index d4c4d64..2771ce9 100644
+--- a/src/mm-port-qmi.c
++++ b/src/mm-port-qmi.c
+@@ -64,6 +64,8 @@ struct _MMPortQmiPrivate {
+ #if defined WITH_QRTR
+     QrtrNode  *node;
+ #endif
++    /* m52xq DSDS: QMI subscription the clients of this port are bound to (0 = SIM1) */
++    guint      subscription;
+ 
+     /* port monitoring */
+     gulong timeout_monitoring_id;
+@@ -291,6 +293,96 @@ mm_port_qmi_allocate_client_finish (MMPortQmi *self,
+     return g_task_propagate_boolean (G_TASK (res), error);
+ }
+ 
++static void
++allocate_client_done (MMPortQmi             *self,
++                      GTask                 *task,
++                      AllocateClientContext *ctx)
++{
++    /* Move the service info to our internal list */
++    self->priv->services = g_list_prepend (self->priv->services, ctx->info);
++    ctx->info = NULL;
++    g_task_return_boolean (task, TRUE);
++    g_object_unref (task);
++}
++
++static void
++bind_subscription_ready (QmiDevice    *qmi_device,
++                         GAsyncResult *res,
++                         GTask        *task)
++{
++    MMPortQmi             *self;
++    AllocateClientContext *ctx;
++    g_autoptr(QmiMessage)  response = NULL;
++    GError                *error = NULL;
++    gsize                  offset = 0;
++    gsize                  init_offset;
++    guint16                result = 1;
++    guint16                qmi_error = 0;
++
++    self = g_task_get_source_object (task);
++    ctx = g_task_get_task_data (task);
++
++    response = qmi_device_command_full_finish (qmi_device, res, &error);
++    if (response &&
++        ((init_offset = qmi_message_tlv_read_init (response, 0x02, NULL, &error)) > 0) &&
++        qmi_message_tlv_read_guint16 (response, init_offset, &offset, QMI_ENDIAN_LITTLE, &result, &error) &&
++        qmi_message_tlv_read_guint16 (response, init_offset, &offset, QMI_ENDIAN_LITTLE, &qmi_error, &error) &&
++        result != 0)
++        error = g_error_new (MM_CORE_ERROR, MM_CORE_ERROR_FAILED, "QMI error %u", qmi_error);
++
++    if (error) {
++        g_prefix_error (&error, "Couldn't bind client for service '%s' to subscription %u: ",
++                        qmi_service_get_string (ctx->info->service), self->priv->subscription);
++        qmi_device_release_client (qmi_device, ctx->info->client,
++                                   QMI_DEVICE_RELEASE_CLIENT_FLAGS_RELEASE_CID, 3, NULL, NULL, NULL);
++        g_clear_object (&ctx->info->client);
++        g_task_return_error (task, error);
++        g_object_unref (task);
++        return;
++    }
++
++    mm_obj_dbg (self, "client for service '%s' bound to subscription %u",
++                qmi_service_get_string (ctx->info->service), self->priv->subscription);
++    allocate_client_done (self, task, ctx);
++}
++
++/* m52xq DSDS: NAS/Voice/WMS (0 = SIM1, 1 = SIM2) and WDS (QmiSubscriptionType, 1 = primary) bind a client
++ * to a subscription; libqmi has no NAS/Voice/WMS message for it, so the request is built by hand */
++static gboolean
++bind_subscription (MMPortQmi             *self,
++                   GTask                 *task,
++                   AllocateClientContext *ctx)
++{
++    g_autoptr(QmiMessage)  request = NULL;
++    QmiClient             *client = ctx->info->client;
++    guint16                message_id;
++    gsize                  tlv;
++
++    switch (ctx->info->service) {
++    case QMI_SERVICE_NAS:   message_id = 0x0045; break;
++    case QMI_SERVICE_VOICE: message_id = 0x0044; break;
++    case QMI_SERVICE_WMS:   message_id = 0x004C; break;
++    case QMI_SERVICE_WDS:   message_id = 0x00AF; break;
++    default:
++        return FALSE;
++    }
++
++    request = qmi_message_new (ctx->info->service,
++                               qmi_client_get_cid (client),
++                               qmi_client_get_next_transaction_id (client),
++                               message_id);
++    tlv = qmi_message_tlv_write_init (request, 0x01, NULL);
++    if (ctx->info->service == QMI_SERVICE_WDS)
++        qmi_message_tlv_write_guint32 (request, QMI_ENDIAN_LITTLE, self->priv->subscription + 1, NULL);
++    else
++        qmi_message_tlv_write_guint8 (request, self->priv->subscription, NULL);
++    qmi_message_tlv_write_complete (request, tlv, NULL);
++
++    qmi_device_command_full (self->priv->qmi_device, request, NULL, 10, NULL,
++                             (GAsyncReadyCallback)bind_subscription_ready, task);
++    return TRUE;
++}
++
+ static void
+ allocate_client_ready (QmiDevice *qmi_device,
+                        GAsyncResult *res,
+@@ -308,14 +400,17 @@ allocate_client_ready (QmiDevice *qmi_device,
+                         "Couldn't create client for service '%s': ",
+                         qmi_service_get_string (ctx->info->service));
+         g_task_return_error (task, error);
+-    } else {
+-        /* Move the service info to our internal list */
+-        self->priv->services = g_list_prepend (self->priv->services, ctx->info);
+-        ctx->info = NULL;
+-        g_task_return_boolean (task, TRUE);
++        g_object_unref (task);
++        return;
+     }
+ 
+-    g_object_unref (task);
++    /* With both SIMs active the SIM1 clients are bound too: unbound clients get the indications of every
++     * subscription (an incoming call on SIM2 also showed up as a phantom call on the SIM1 modem) */
++    if ((self->priv->subscription || (g_getenv ("MM_QRTR_DSDS") && !g_getenv ("MM_QRTR_SIM_ONLY"))) &&
++        bind_subscription (self, task, ctx))
++        return;
++
++    allocate_client_done (self, task, ctx);
+ }
+ 
+ void
+@@ -2709,7 +2804,8 @@ mm_port_qmi_open (MMPortQmi           *self,
+ 
+     ctx = g_slice_new0 (PortOpenContext);
+     ctx->step = PORT_OPEN_STEP_FIRST;
+-    ctx->set_data_format = set_data_format;
++    /* m52xq DSDS: the SIM2 modem object has no net port, so there is no data format to set up */
++    ctx->set_data_format = set_data_format && !(self->priv->subscription && !self->priv->net_driver);
+     ctx->kernel_data_modes = MM_PORT_QMI_KERNEL_DATA_MODE_NONE;
+ 
+     task = g_task_new (self, cancellable, callback, user_data);
+@@ -2877,6 +2973,19 @@ mm_port_qmi_new (const gchar  *name,
+                                       NULL));
+ }
+ 
++void
++mm_port_qmi_set_subscription (MMPortQmi *self,
++                              guint      subscription)
++{
++    self->priv->subscription = subscription;
++}
++
++guint
++mm_port_qmi_get_subscription (MMPortQmi *self)
++{
++    return self->priv->subscription;
++}
++
+ #if defined WITH_QRTR
+ MMPortQmi *
+ mm_port_qmi_new_from_node (const gchar *name,
+diff --git a/src/mm-port-qmi.h b/src/mm-port-qmi.h
+index 148067f..d6af812 100644
+--- a/src/mm-port-qmi.h
++++ b/src/mm-port-qmi.h
+@@ -111,6 +111,11 @@ void     mm_port_qmi_release_client         (MMPortQmi    *self,
+                                              QmiService    service,
+                                              MMPortQmiFlag flag);
+ 
++/* m52xq DSDS: QMI clients of the port get bound to this subscription (0 = SIM1) */
++void  mm_port_qmi_set_subscription (MMPortQmi *self,
++                                    guint      subscription);
++guint mm_port_qmi_get_subscription (MMPortQmi *self);
++
+ QmiClient *mm_port_qmi_peek_client (MMPortQmi  *self,
+                                     QmiService  service,
+                                     guint       flag);
+diff --git a/src/mm-shared-qmi.c b/src/mm-shared-qmi.c
+index ed6a5ac..cd69315 100644
+--- a/src/mm-shared-qmi.c
++++ b/src/mm-shared-qmi.c
+@@ -34,6 +34,8 @@
+ #include "mm-sim-qmi.h"
+ #include "mm-shared-qmi.h"
+ #include "mm-modem-helpers-qmi.h"
++#include "mm-broadband-modem-qmi.h"
++#include "mm-base-sim.h"
+ 
+ /* Default session id to use in LOC operations */
+ #define DEFAULT_LOC_SESSION_ID 0x10
+@@ -2224,6 +2226,12 @@ mm_shared_qmi_reset (MMIfaceModem        *self,
+     GTask                              *task;
+     QmiClient                          *client;
+ 
++    if (mm_shared_qmi_is_sim2_object (self)) {
++        g_task_report_new_error (self, callback, user_data, mm_shared_qmi_reset, MM_CORE_ERROR, MM_CORE_ERROR_UNSUPPORTED,
++                                 "Not allowed on the SIM2 modem object (shared with SIM1)");
++        return;
++    }
++
+     if (!mm_shared_qmi_ensure_client (MM_SHARED_QMI (self),
+                                       QMI_SERVICE_DMS, &client,
+                                       callback, user_data))
+@@ -2289,6 +2297,12 @@ mm_shared_qmi_factory_reset (MMIfaceModem        *self,
+     QmiClient                                *client = NULL;
+     GError                                   *error = NULL;
+ 
++    if (mm_shared_qmi_is_sim2_object (self)) {
++        g_task_report_new_error (self, callback, user_data, mm_shared_qmi_factory_reset, MM_CORE_ERROR, MM_CORE_ERROR_UNSUPPORTED,
++                                 "Not allowed on the SIM2 modem object (shared with SIM1)");
++        return;
++    }
++
+     if (!mm_shared_qmi_ensure_client (MM_SHARED_QMI (self),
+                                       QMI_SERVICE_DMS, &client,
+                                       callback, user_data))
+@@ -3407,8 +3421,10 @@ uim_get_slot_status_ready (QmiClientUim *client,
+         if (slot_status->physical_slot_status == QMI_UIM_SLOT_STATE_ACTIVE) {
+             sim_active = TRUE;
+             /* DSDS modems report every slot as active: the primary one is
+-             * the slot mapped to logical slot 1 (primary GW provisioning) */
+-            if (!ctx->active_slot_number || slot_status->logical_slot == 1) {
++             * the slot mapped to logical slot 1 (primary GW provisioning),
++             * for the SIM2 modem object logical slot 2 */
++            if (!ctx->active_slot_number ||
++                slot_status->logical_slot == mm_shared_qmi_get_subscription (self) + 1) {
+                 ctx->active_logical_id = slot_status->logical_slot;
+                 ctx->active_slot_number = i + 1;
+             }
+@@ -3613,6 +3629,12 @@ mm_shared_qmi_set_primary_sim_slot (MMIfaceModem        *self,
+     GTask     *task;
+     QmiClient *client = NULL;
+ 
++    if (mm_shared_qmi_is_sim2_object (self)) {
++        g_task_report_new_error (self, callback, user_data, mm_shared_qmi_set_primary_sim_slot, MM_CORE_ERROR, MM_CORE_ERROR_UNSUPPORTED,
++                                 "Not allowed on the SIM2 modem object (shared with SIM1)");
++        return;
++    }
++
+     if (!mm_shared_qmi_ensure_client (MM_SHARED_QMI (self),
+                                       QMI_SERVICE_UIM, &client,
+                                       callback, user_data))
+@@ -3709,8 +3731,8 @@ uim_refresh_indication_cb (QmiClientUim                  *client,
+                 qmi_uim_refresh_mode_get_string (mode));
+ 
+     /* Support only the first slot for now. Primary GW provisioning is used in old modems. */
+-    if (session_type != QMI_UIM_SESSION_TYPE_CARD_SLOT_1 &&
+-        session_type != QMI_UIM_SESSION_TYPE_PRIMARY_GW_PROVISIONING) {
++    if (session_type != mm_shared_qmi_card_slot_session (self) &&
++        session_type != mm_shared_qmi_gw_session (self)) {
+         mm_obj_warn (self, "refresh session type not supported: %s", qmi_uim_session_type_get_string (session_type));
+         return;
+     }
+@@ -4029,7 +4051,7 @@ uim_refresh_register_file (GTask         *task,
+                                                      file,
+                                                      NULL);
+     qmi_message_uim_refresh_register_input_set_session (refresh_register_input,
+-                                                        QMI_UIM_SESSION_TYPE_PRIMARY_GW_PROVISIONING,
++                                                        mm_shared_qmi_gw_session (self),
+                                                         placeholder_aid,
+                                                         NULL);
+ 
+@@ -4206,7 +4228,7 @@ setup_sim_hot_swap_step (GTask *task)
+                                                              TRUE,
+                                                              NULL);
+         qmi_message_uim_refresh_register_all_input_set_session (refresh_register_all_input,
+-                                                                QMI_UIM_SESSION_TYPE_PRIMARY_GW_PROVISIONING,
++                                                                mm_shared_qmi_gw_session (self),
+                                                                 placeholder_aid,
+                                                                 NULL);
+ 
+@@ -6663,6 +6685,13 @@ mm_shared_qmi_location_load_capabilities (MMIfaceModemLocation *self,
+ 
+     task = g_task_new (self, NULL, callback, user_data);
+ 
++    /* m52xq DSDS: the GNSS engine is global; only the SIM1 modem object drives it */
++    if (mm_shared_qmi_is_sim2_object (self)) {
++        g_task_return_int (task, MM_MODEM_LOCATION_SOURCE_NONE);
++        g_object_unref (task);
++        return;
++    }
++
+     priv = get_private (MM_SHARED_QMI (self));
+     g_assert (priv->iface_modem_location_parent);
+     g_assert (priv->iface_modem_location_parent->load_capabilities);
+@@ -7612,6 +7641,47 @@ mm_shared_qmi_location_inject_assistance_data (MMIfaceModemLocation *self,
+ 
+ /*****************************************************************************/
+ 
++guint
++mm_shared_qmi_get_subscription (gpointer self)
++{
++    g_autoptr(MMBaseModem)  modem = NULL;
++    MMPortQmi              *port;
++
++    if (MM_IS_BASE_SIM (self))
++        g_object_get (self, MM_BASE_SIM_MODEM, &modem, NULL);
++    else if (MM_IS_BASE_MODEM (self))
++        modem = g_object_ref (self);
++    if (!modem || !MM_IS_BROADBAND_MODEM_QMI (modem))
++        return 0;
++    port = mm_broadband_modem_qmi_peek_port_qmi (MM_BROADBAND_MODEM_QMI (modem));
++    return port ? mm_port_qmi_get_subscription (port) : 0;
++}
++
++gboolean
++mm_shared_qmi_is_sim2_object (gpointer self)
++{
++    /* both SIMs active: the SIM2 object shares the modem with SIM1 and must not drive global state */
++    return (mm_shared_qmi_get_subscription (self) &&
++            g_getenv ("MM_QRTR_DSDS") && !g_getenv ("MM_QRTR_SIM_ONLY"));
++}
++
++QmiUimSessionType
++mm_shared_qmi_gw_session (gpointer self)
++{
++    return (mm_shared_qmi_get_subscription (self) ?
++            QMI_UIM_SESSION_TYPE_SECONDARY_GW_PROVISIONING :
++            QMI_UIM_SESSION_TYPE_PRIMARY_GW_PROVISIONING);
++}
++
++QmiUimSessionType
++mm_shared_qmi_card_slot_session (gpointer self)
++{
++    /* the m52xq modem maps subscription N to physical slot N + 1 */
++    return (mm_shared_qmi_get_subscription (self) ?
++            QMI_UIM_SESSION_TYPE_CARD_SLOT_2 :
++            QMI_UIM_SESSION_TYPE_CARD_SLOT_1);
++}
++
+ QmiClient *
+ mm_shared_qmi_peek_client (MMSharedQmi    *self,
+                            QmiService      service,
+diff --git a/src/mm-shared-qmi.h b/src/mm-shared-qmi.h
+index 014d87c..af1520f 100644
+--- a/src/mm-shared-qmi.h
++++ b/src/mm-shared-qmi.h
+@@ -52,6 +52,12 @@ struct _MMSharedQmi {
+ GType mm_shared_qmi_get_type (void);
+ G_DEFINE_AUTOPTR_CLEANUP_FUNC (MMSharedQmi, g_object_unref)
+ 
++/* m52xq DSDS: subscription of a QMI modem or SIM object (0 = SIM1), and the matching UIM sessions */
++guint             mm_shared_qmi_get_subscription      (gpointer self);
++gboolean          mm_shared_qmi_is_sim2_object        (gpointer self);
++QmiUimSessionType mm_shared_qmi_gw_session            (gpointer self);
++QmiUimSessionType mm_shared_qmi_card_slot_session     (gpointer self);
++
+ QmiClient *mm_shared_qmi_peek_client   (MMSharedQmi          *self,
+                                         QmiService            service,
+                                         MMPortQmiFlag         flag,
+diff --git a/src/mm-sim-qmi.c b/src/mm-sim-qmi.c
+index 3e7c599..364eee8 100644
+--- a/src/mm-sim-qmi.c
++++ b/src/mm-sim-qmi.c
+@@ -145,7 +145,7 @@ uim_get_card_status_ready (QmiClientUim *client,
+     output = qmi_client_uim_get_card_status_finish (client, res, &error);
+     if (!output ||
+         !qmi_message_uim_get_card_status_output_get_result (output, &error) ||
+-        (!mm_qmi_uim_get_card_status_output_parse (self, output, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &error) &&
++        (!mm_qmi_uim_get_card_status_output_parse_subscription (self, output, mm_shared_qmi_get_subscription (self), NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &error) &&
+          (g_error_matches (error, MM_MOBILE_EQUIPMENT_ERROR, MM_MOBILE_EQUIPMENT_ERROR_SIM_NOT_INSERTED) ||
+           g_error_matches (error, MM_CORE_ERROR, MM_CORE_ERROR_RETRY)))) {
+         mm_obj_dbg (self, "sim not yet considered ready... retrying");
+@@ -312,7 +312,7 @@ uim_read_send (GTask         *task,
+     aid = g_array_new (FALSE, FALSE, sizeof (guint8)); /* empty AID */
+     qmi_message_uim_read_transparent_input_set_session (
+         input,
+-        QMI_UIM_SESSION_TYPE_PRIMARY_GW_PROVISIONING,
++        mm_shared_qmi_gw_session (g_task_get_source_object (task)),
+         aid,
+         NULL);
+     g_array_unref (aid);
+@@ -1230,7 +1230,7 @@ uim_verify_pin (MMSimQmi *self,
+     aid = g_array_new (FALSE, FALSE, sizeof (guint8)); /* empty AID */
+     qmi_message_uim_verify_pin_input_set_session (
+         input,
+-        QMI_UIM_SESSION_TYPE_CARD_SLOT_1,
++        mm_shared_qmi_card_slot_session (self),
+         aid,
+         NULL);
+     g_array_unref (aid);
+@@ -1392,7 +1392,7 @@ uim_unblock_pin (MMSimQmi *self,
+     aid = g_array_new (FALSE, FALSE, sizeof (guint8)); /* empty AID */
+     qmi_message_uim_unblock_pin_input_set_session (
+         input,
+-        QMI_UIM_SESSION_TYPE_CARD_SLOT_1,
++        mm_shared_qmi_card_slot_session (self),
+         aid,
+         NULL);
+     g_array_unref (aid);
+@@ -1562,7 +1562,7 @@ uim_change_pin (MMSimQmi *self,
+     aid = g_array_new (FALSE, FALSE, sizeof (guint8)); /* empty AID */
+     qmi_message_uim_change_pin_input_set_session (
+         input,
+-        QMI_UIM_SESSION_TYPE_CARD_SLOT_1,
++        mm_shared_qmi_card_slot_session (self),
+         aid,
+         NULL);
+     g_array_unref (aid);
+@@ -1731,7 +1731,7 @@ uim_enable_pin (MMSimQmi *self,
+     aid = g_array_new (FALSE, FALSE, sizeof (guint8)); /* empty AID */
+     qmi_message_uim_set_pin_protection_input_set_session (
+         input,
+-        QMI_UIM_SESSION_TYPE_CARD_SLOT_1,
++        mm_shared_qmi_card_slot_session (self),
+         aid,
+         NULL);
+     g_array_unref (aid);

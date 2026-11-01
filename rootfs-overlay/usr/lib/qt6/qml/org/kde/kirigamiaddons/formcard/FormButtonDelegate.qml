@@ -1,0 +1,150 @@
+/*
+ * Copyright 2022 Devin Lin <devin@kde.org>
+ * SPDX-License-Identifier: LGPL-2.0-or-later
+ */
+
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+
+import org.kde.kirigami as Kirigami
+
+import "private" as Private
+
+/*!
+   \qmltype FormButtonDelegate
+   \inqmlmodule org.kde.kirigamiaddons.formcard
+   \brief A Form delegate that corresponds to a clickable button.
+
+   Use the inherited \l {AbstractButton::text} {AbstractButton.text} property to define
+   the main text of the button.
+
+   The trailingLogo property (right-most side of the button) includes an arrow
+   pointing to the right by default and cannot be overridden.
+
+   \since 0.11.0
+ */
+AbstractFormDelegate {
+    id: root
+
+    /*!
+       \qmlproperty string description
+       \brief A label containing secondary text that appears under the
+       inherited text property.
+
+       This provides additional information shown in a faint gray color.
+
+       This is supposed to be short text and the API user should avoid
+       making it longer than two lines.
+     */
+    property string description: ""
+
+    /*!
+       \qmlproperty Label descriptionItem
+       \brief This property allows overriding the internal description
+       item with a custom component.
+     */
+    property alias descriptionItem: internalDescriptionItem
+
+    /*!
+       \brief This property holds an item that will be displayed to the
+       left of the delegate's contents.
+
+       \default null
+     */
+    property Item leading: null
+
+    /*!
+       \brief This property holds the padding after the leading item.
+
+       It is recommended to use \l {Units} {Kirigami.Units} here instead of direct values.
+
+       \sa {Units} {Kirigami.Units}
+     */
+    property real leadingPadding: Kirigami.Units.largeSpacing
+
+    /*!
+       \brief This property holds an item that will be displayed to the
+       right of the delegate's contents.
+
+       \default null
+       \since 1.12.0
+     */
+    property Item trailing: null
+
+    /*!
+       \brief This property holds the padding before the trailing item.
+
+       It is recommended to use \l {Units} {Kirigami.Units} here instead of direct values.
+
+       \sa {Units} {Kirigami.Units}
+       \since 1.12.0
+     */
+    property real trailingPadding: Kirigami.Units.largeSpacing
+
+    /*!
+       \brief This property holds an alias to the internal FormArrow.
+
+       This allows hiding it completely or changing the direction (e.g. to
+       implement a collapsible section).
+
+       \since 1.7.0
+     */
+    readonly property alias trailingLogo: formArrow
+
+    focusPolicy: Qt.StrongFocus
+
+    contentItem: Private.FormDelegateLayout {
+        leading: root.leading
+        trailing: root.trailing
+        leadingPadding: root.leadingPadding
+        trailingPadding: root.trailingPadding
+
+        Kirigami.Icon {
+            visible: root.icon.name !== ""
+            source: root.icon.name
+            color: root.icon.color
+            Layout.rightMargin: (root.icon.name !== "") ? Private.FormCardUnits.horizontalSpacing : 0
+            implicitWidth: (root.icon.name !== "") ? root.icon.width : 0
+            implicitHeight: (root.icon.name !== "") ? root.icon.height : 0
+        }
+
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 0
+
+            Label {
+                Layout.fillWidth: true
+                text: root.text
+                elide: Text.ElideRight
+                wrapMode: Text.Wrap
+                maximumLineCount: 2
+                color: root.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+                Accessible.ignored: true // base class sets this text on root already
+            }
+
+            Label {
+                id: internalDescriptionItem
+                Layout.fillWidth: true
+                text: root.description
+                color: Kirigami.Theme.disabledTextColor
+                elide: Text.ElideRight
+                visible: root.description !== ""
+                wrapMode: Text.Wrap
+                Accessible.ignored: !visible
+            }
+        }
+
+        FormArrow {
+            id: formArrow
+
+            Layout.leftMargin: Kirigami.Units.smallSpacing
+            Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+            direction: Qt.RightArrow
+            visible: root.background.visible
+        }
+    }
+
+    Accessible.onPressAction: action ? action.trigger() : root.clicked()
+    Accessible.role: Accessible.Button
+}

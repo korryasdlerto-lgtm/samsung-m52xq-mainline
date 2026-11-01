@@ -1,0 +1,1 @@
+SUBSYSTEM=="video4linux", ATTR{name}=="fp5529*", MODE="0666"

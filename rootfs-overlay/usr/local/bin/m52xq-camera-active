@@ -1,0 +1,5 @@
+#!/bin/sh
+# M52XQ: "on" while a camera is in use (virtual camera in a call, plasma-camera, Megapixels) - for the status bar indicator.
+[ "$(m52xq-virtualcam status 2>/dev/null)" != off ] && { echo on; exit 0; }
+for p in plasma-camera megapixels; do pgrep -x "$p" >/dev/null && { echo on; exit 0; }; done
+echo off

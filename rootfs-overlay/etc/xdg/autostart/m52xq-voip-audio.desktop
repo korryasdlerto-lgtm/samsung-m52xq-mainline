@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=M52XQ VoIP audio route
+Exec=/usr/local/bin/m52xq-voip-audio
+X-KDE-autostart-phase=2
+NoDisplay=true

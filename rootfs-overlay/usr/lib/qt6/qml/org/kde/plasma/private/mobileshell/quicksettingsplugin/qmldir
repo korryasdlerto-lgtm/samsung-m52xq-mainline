@@ -1,0 +1,8 @@
+module org.kde.plasma.private.mobileshell.quicksettingsplugin
+linktarget quicksettingsplugin
+optional plugin quicksettingsplugin
+classname org_kde_plasma_private_mobileshell_quicksettingspluginPlugin
+typeinfo quicksettingsplugin.qmltypes
+prefer :/org/kde/plasma/private/mobileshell/quicksettingsplugin/
+depends QtQuick
+

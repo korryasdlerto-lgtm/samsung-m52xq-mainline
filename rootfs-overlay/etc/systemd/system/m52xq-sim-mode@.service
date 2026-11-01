@@ -1,0 +1,7 @@
+[Unit]
+Description=M52XQ: switch SIM mode to %i (both SIMs / only SIM1 / only SIM2)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/m52xq-sim-mode %i
+TimeoutStartSec=300

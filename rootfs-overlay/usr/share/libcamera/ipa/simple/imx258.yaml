@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: CC0-1.0
+# m52xq: tuning for imx258 (Galaxy M52 5G): the same colour and tone settings as the main camera (s5kgw3), as in the Pixel (Megapixels).
+# Agc IS listed for this sensor (the other cameras have none): libcamera has a sensor helper for the imx258 and its
+# software ISP overwrites the exposure and the gain written by plasma-camera within a few milliseconds, so the ultrawide
+# camera is exposed by libcamera itself (plasma-camera SensorAe is off for camera@10).
+# blackLevel is on the 16 bit scale: sensor pedestal 64 of 1023 (10 bit) = 4096.
+%YAML 1.1
+---
+version: 1
+algorithms:
+  - BlackLevel:
+      blackLevel: 4096
+  - Awb:
+  - Ccm:
+      ccms:
+        - ct: 2719
+          ccm: [ 1.99894, -0.41626, -0.58268,
+                -0.59321,  2.18167, -0.58846,
+                -0.42518, -1.21384,  2.63903 ]
+        - ct: 3474
+          ccm: [ 1.97712, -0.60854, -0.36858,
+                -0.47723,  1.91142, -0.43418,
+                -0.23092, -0.72246,  1.95339 ]
+        - ct: 6890
+          ccm: [ 1.93867, -0.67486, -0.26381,
+                -0.43049,  2.00702, -0.57652,
+                -0.15696, -0.51345,  1.67041 ]
+  - Adjust:
+  - Agc:
+...

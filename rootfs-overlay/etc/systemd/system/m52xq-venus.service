@@ -1,0 +1,12 @@
+[Unit]
+Description=M52XQ: load the Venus video codec (hardware video decoder + encoder, sec3 PERSIST)
+After=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/m52xq-venus-load
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target

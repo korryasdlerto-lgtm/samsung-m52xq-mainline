@@ -1,0 +1,75 @@
+#!/bin/sh
+# M52XQ: SIM mode menu: a full-screen window (qmlscene, /usr/local/share/m52xq/sim-mode-menu.qml; no kdialog/zenity
+# in the rootfs) with three rows of big buttons: SIM mode (both SIMs active = dual standby like the stock phone, or
+# only SIM1 / only SIM2), SIM of the mobile data, SIM cards off/on (flight mode: SIM cards and modem radio off).
+# With only one SIM inserted the mode and data buttons are off (only the SIM power button works).
+# The window stays open: every choice it prints ("m52xq-choice: <action>") is done here, one after another, and the
+# state file it reads every second shows the new selection and the result. The change itself is done by
+# m52xq-sim-mode@<mode>.service / m52xq-flight-mode@on|off.service (root, allowed for the active user by
+# /etc/polkit-1/rules.d/50-m52xq-sim-mode.rules).
+R=${XDG_RUNTIME_DIR:-/tmp}
+qml=$R/m52xq-sim-mode-menu.qml
+st=$R/m52xq-sim-mode-menu.state
+
+# card slots with a SIM inserted ("12", "1" or "2"): ModemManager shows "/" for an empty slot; no modem (flight mode,
+# ModemManager starting) -> "12"
+cards() {
+	m=$(mmcli -L 2>/dev/null | grep -o "Modem/[0-9]*" | head -n 1 | cut -d/ -f2)
+	[ -n "$m" ] && mmcli -m $m --output-keyvalue 2>/dev/null |
+		awk -F': ' '/sim-slots\.value\[/ { n++; gsub(/ /, "", $2); if ($2 != "/" && $2 != "--") s = s n } END { print s }'
+}
+
+state() {	# $1 "busy" or "", $2 message
+	c=$(cards)
+	set -- "$1" "$2" $(/usr/local/sbin/m52xq-sim-mode status 2>/dev/null)
+	printf '%s\n%s\n%s\n%s\n%s\n%s\n' "${3:-dsds}" "${4:-1}" "$5" "$1" "$2" "${c:-12}" > $st.new
+	mv -f $st.new $st
+}
+
+run() {	# $1 unit, $2 text when done
+	state busy "Switching… the modem restarts for ~30 s"
+	if systemctl start "$1"; then
+		state "" "$2"
+	else
+		state "" "Switching failed: journalctl -u $1"
+	fi
+}
+
+choice() {
+	set -- $(/usr/local/sbin/m52xq-sim-mode status 2>/dev/null)
+	cur=${1:-dsds} data=${2:-1} flight=$3
+	case $a in
+	flight)
+		if [ -n "$flight" ]; then
+			run m52xq-flight-mode@off.service "SIM cards are on again: they register in ~30 s."
+		else
+			run m52xq-flight-mode@on.service "SIM cards and the modem radio are off."
+		fi
+		;;
+	dsds | sim1 | sim2)
+		[ "$a" = "$cur" ] && { state "" "Already selected."; return; }
+		case $a in
+		sim1) run m52xq-sim-mode@sim1.service "Only SIM1 is active, mobile data on SIM1." ;;
+		sim2) run m52xq-sim-mode@sim2.service "Only SIM2 is active, mobile data on SIM2." ;;
+		*) run m52xq-sim-mode@dsds.service "Both SIMs are active, mobile data on SIM$data." ;;
+		esac
+		;;
+	data1 | data2)
+		if [ "$cur" != dsds ] || [ "${a#data}" = "$data" ]; then
+			state "" "Already selected."
+		else
+			run m52xq-sim-mode@$a.service "Both SIMs are active, mobile data on SIM${a#data}."
+		fi
+		;;
+	esac
+}
+
+state "" ""
+sed "s|@STATE@|$st|" /usr/local/share/m52xq/sim-mode-menu.qml > $qml
+QML_XHR_ALLOW_FILE_READ=1 /usr/lib/qt6/bin/qmlscene $qml 2>&1 | while read -r line; do
+	case $line in
+	*m52xq-choice:*) a=${line##*m52xq-choice: }; choice ;;
+	esac
+done
+rm -f $qml $st
+exit 0

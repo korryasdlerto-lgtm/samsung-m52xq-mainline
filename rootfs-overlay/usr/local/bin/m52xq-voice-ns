@@ -1,0 +1,84 @@
+#!/bin/sh
+# M52XQ: two-microphone voice processing with the stock Samsung topology (noise suppression in calls).
+# 1) register the Samsung ADSP topologies from Global_cal.acdb (q6core: map the shared memory, then
+#    AVCS_CMD_REGISTER_TOPOLOGIES; the address carries the SMMU SID in the upper 32 bits, acdb_msw=1),
+# 2) only if that succeeded: Tx topology 0x1000110A (Samsung CALL_HANDSET_MIC, 2 mics), Rx 0x10001000,
+#    2 Tx channels (AMIC1 on DEC0 + AMIC4 on DEC1, see m52xq-voice-mixers.sh).
+# Otherwise the calls keep the safe defaults (Tx NONE 0x10F70, Rx 0x10F77, 1 channel).
+# Tested live 2026-10-17 (boot v209): A/B call with a noise source, A clearly better.
+
+Q=/sys/module/q6core/parameters
+V=/sys/module/q6cvp/parameters
+log() { echo "m52xq-voice-ns: $*"; logger -t m52xq-voice-ns "$*" 2>/dev/null; }
+
+# wait for the ADSP audio services (q6core bound) - up to 120 s after boot
+i=0
+until [ -w "$Q/acdb_register" ] && ls /sys/bus/aprbus/drivers/qcom-q6core/ 2>/dev/null | grep -q aprsvc; do
+	i=$((i + 1))
+	[ $i -gt 120 ] && { echo 0x10F70 > "$V/tx_topology"; echo 0x10F77 > "$V/rx_topology"; echo 1 > "$V/tx_channels"; log "q6core not ready, safe default voice topology"; exit 0; }
+	sleep 1
+done
+sleep 2
+# after an ADSP restart (not at boot) the ADSP needs a few more seconds before it takes the shared
+# memory mapping: a too early attempt fails with an I/O error and leaves the region mapped in the ADSP
+# (every later attempt: "AVCS shared mem map failed, status 0x1")
+up=$(cut -d. -f1 /proc/uptime)
+[ "$up" -gt 90 ] && sleep 10
+
+# registered since the last ADSP start? (the topologies live in the ADSP: an ADSP restart drops them;
+# the udev rule 90-m52xq-voice-ns.rules restarts this service whenever q6core binds again)
+last_up=$(journalctl -k -b -o cat --no-pager 2>/dev/null | grep -n 'remote processor adsp is now up' | tail -1 | cut -d: -f1)
+last_reg=$(journalctl -k -b -o cat --no-pager 2>/dev/null | grep -n 'registered [0-9]* bytes of ACDB topologies.*status 0x0' | tail -1 | cut -d: -f1)
+safe_defaults() {
+	# never leave q6cvp pointing at a topology the ADSP does not know (after an ADSP restart)
+	echo 0x10F70 > "$V/tx_topology"
+	echo 0x10F77 > "$V/rx_topology"
+	echo 1 > "$V/tx_channels"
+	[ -w "$V/cal_enable" ] && echo N > "$V/cal_enable"
+	log "$1 - safe default voice topology (NONE, 1 mic, no calibration)"
+	exit 0
+}
+
+if [ -n "$last_reg" ] && [ "${last_reg:-0}" -gt "${last_up:-0}" ]; then
+	log "topologies already registered since the last ADSP start"
+else
+	# right after an ADSP (re)start q6core binds before the ADSP accepts the registration (I/O error):
+	# retry a few times
+	ok=0
+	# success is judged by NEW kernel log lines (journalctl -k counts): right after an ADSP restart dmesg
+	# is flooded by hexagonrpcd and "dmesg | tail" missed them -> re-registration -> status 0x2
+	klog() { journalctl -k -b -o cat --no-pager 2>/dev/null | grep -c "$1"; }
+	for try in 1 2 3 4 5 6; do
+		m0=$(klog 'ACDB buffer iova .* mapped, handle')
+		r0=$(klog 'registered [0-9]* bytes of ACDB topologies.*status 0x0')
+		echo 1 > "$Q/acdb_shmem_stage"
+		echo 1 > "$Q/acdb_register" 2>/dev/null
+		sleep 1
+		if [ "$(klog 'ACDB buffer iova .* mapped, handle')" -gt "$m0" ]; then
+			echo 2 > "$Q/acdb_shmem_stage"
+			echo 1 > "$Q/acdb_register" 2>/dev/null
+			sleep 1
+			if [ "$(klog 'registered [0-9]* bytes of ACDB topologies.*status 0x0')" -gt "$r0" ]; then
+				ok=1
+				break
+			fi
+		fi
+		log "registration attempt $try failed, retrying"
+		sleep 3
+	done
+	[ $ok = 1 ] || safe_defaults "topology registration failed"
+	log "Samsung topologies registered"
+fi
+
+echo 0x1000110A > "$V/tx_topology"
+echo 0x10001000 > "$V/rx_topology"
+echo 2 > "$V/tx_channels"
+log "two-mic Samsung voice topology active (tx 0x1000110A, rx 0x10001000, 2 ch)"
+
+# Samsung handset calibration (Handset_cal.acdb VSTI, tx 34 / rx 7), applied by q6cvp after the topology
+# commit; needs kernel v212+ (q6cvp cal_enable, cal_device, vol_index) and m52xq_voice_cal_<dev>_<rate>k.bin + m52xq_voice_vol_<dev>_<rate>k_<level>.bin in /lib/firmware.
+# Tested live 2026-10-17 (boot v211): 53 of 55 params accepted at 48 kHz, voice in noise "clean".
+if [ -w "$V/cal_enable" ] && [ -e /lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_handset_48k.bin ]; then
+	echo Y > "$V/cal_enable"
+	log "Samsung handset voice calibration enabled"
+fi

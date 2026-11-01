@@ -1,0 +1,27 @@
+#!/bin/sh
+# M52XQ: the speaker PCM (MultiMedia1) freezes ~1.5 s after Telegram starts its ringtone stream (hw_ptr stops, the buffer stays full,
+# PulseAudio logs "ALSA woke us up ... nothing to write"); the cause is not found yet. Re-opening the sink (suspend-sink 1 / 0)
+# revives it. This watches the PCM only while it is RUNNING and re-opens the sink as soon as hw_ptr stands still.
+P=/proc/asound/card0/pcm0p/sub0/status
+hw() { awk '/hw_ptr/{print $3}' $P 2>/dev/null; }
+st() { awk '/state:/{print $2}' $P 2>/dev/null; }
+while :; do
+	if [ "$(st)" = RUNNING ]; then
+		a=$(hw); sleep 0.5; b=$(hw)
+		if [ -n "$a" ] && [ "$a" = "$b" ]; then
+			sleep 0.3; c=$(hw)
+			if [ "$a" = "$c" ] && [ "$(st)" = RUNNING ]; then
+				# 31.10: the volume set by the user is re-applied after the re-open (a volume change made while the sink was frozen once
+				# never reached the device: the slider said 50, the sound was far louder)
+				v=$(pactl get-sink-volume @DEFAULT_SINK@ 2>/dev/null | awk '/front-left/{print $3}')
+				pactl suspend-sink @DEFAULT_SINK@ 1; sleep 0.3; pactl suspend-sink @DEFAULT_SINK@ 0
+				[ -n "$v" ] && pactl set-sink-volume @DEFAULT_SINK@ "$v"
+				echo "audio unstick: sink re-opened (hw_ptr stuck at $a), volume $v re-applied"
+				sleep 1
+			fi
+		fi
+		sleep 0.3
+	else
+		sleep 2
+	fi
+done

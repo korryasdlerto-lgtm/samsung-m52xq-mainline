@@ -1,0 +1,41 @@
+#!/bin/sh
+# M52XQ: while a VoIP call (Telegram) is playing, its sound goes to the earpiece (the speaker you hold to your ear);
+# after the call everything returns to the loud speaker. A plugged USB headset is left alone (PulseAudio uses it by itself),
+# and a route chosen by hand (quick setting "Sound output") during the call is respected until the call ends.
+export PULSE_SERVER=unix:/run/user/10000/pulse/native PULSE_COOKIE=/home/user/.config/pulse/cookie
+ROUTE=/usr/local/bin/m52xq-audio-route
+auto=0		# 1 while we switched to the earpiece ourselves
+manual=0	# 1 after the user changed the route during a call
+active=0	# consecutive seconds with a VoIP stream AND its microphone (= the call is answered)
+nomic=0		# consecutive seconds without the microphone of Telegram (31.10: the call is over / still ringing)
+idle=0
+# 31.10: a script (re)started while the earpiece is selected and no call is running must not leave the earpiece behind
+if [ "$($ROUTE status 2>/dev/null)" = earpiece ] && ! pactl list source-outputs 2>/dev/null | grep -qE 'application.name = "(Telegram|Telegram Desktop)"'; then
+	$ROUTE speaker >/dev/null
+fi
+while :; do
+	sleep 1
+	si=0; so=0
+	pactl list sink-inputs 2>/dev/null | grep -qE 'application.name = "(Telegram|Telegram Desktop)"' && si=1
+	pactl list source-outputs 2>/dev/null | grep -qE 'application.name = "(Telegram|Telegram Desktop)"' && so=1
+	# a call counts as active only when Telegram plays AND records: while the phone is still ringing the microphone is closed, and
+	# the ringtone must stay on the loud speaker (31.10: it moved to the earpiece 2 s after the ringing began)
+	if [ "$si" = 1 ] && [ "$so" = 1 ]; then
+		active=$((active + 1)); nomic=0; idle=0
+	else
+		active=0; nomic=$((nomic + 1))
+		if [ "$si" = 1 ]; then idle=0; else idle=$((idle + 1)); fi
+	fi
+	r=$($ROUTE status 2>/dev/null)
+	if [ "$active" -ge 2 ] && [ "$auto" = 0 ] && [ "$manual" = 0 ] && [ "$r" = speaker ]; then
+		$ROUTE earpiece >/dev/null && auto=1
+	elif [ "$auto" = 1 ] && [ "$r" != earpiece ]; then
+		manual=1; auto=0		# the user moved the sound elsewhere during the call
+	elif [ "$auto" = 1 ] && [ "$nomic" -ge 3 ]; then
+		# the microphone closed: the conversation is over; Telegram keeps its playback stream for 15-30 s, but the next ring
+		# must already come from the loud speaker (31.10: it stayed on the earpiece)
+		$ROUTE speaker >/dev/null; auto=0
+	elif [ "$idle" -ge 5 ]; then
+		auto=0; manual=0
+	fi
+done

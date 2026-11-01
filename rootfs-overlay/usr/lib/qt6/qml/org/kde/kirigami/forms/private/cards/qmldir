@@ -1,0 +1,16 @@
+module org.kde.kirigami.forms.private.cards
+linktarget KF6KirigamiFormsPrivateCardsplugin
+optional plugin KirigamiFormsPrivateCardsplugin
+classname org_kde_kirigami_forms_private_cardsPlugin
+typeinfo KirigamiFormsPrivateCards.qmltypes
+depends QtQuick
+depends org.kde.kirigami.platform
+depends org.kde.kirigami.primitives
+depends org.kde.kirigami.layouts
+prefer :/qt/qml/org/kde/kirigami/forms/private/cards/
+FormAction 2.0 FormAction.qml
+FormEntry 2.0 FormEntry.qml
+FormGroup 2.0 FormGroup.qml
+Form 2.0 Form.qml
+FormSeparator 2.0 FormSeparator.qml
+

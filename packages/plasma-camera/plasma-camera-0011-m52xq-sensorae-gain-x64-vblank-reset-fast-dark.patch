@@ -1,0 +1,44 @@
+diff -ruN pre30/src/sensorae.cpp plasma-camera-2.1.1/src/sensorae.cpp
+--- a/src/sensorae.cpp	2026-10-17 17:25:12.542573414 +0300
++++ b/src/sensorae.cpp	2026-10-17 17:46:23.625259230 +0300
+@@ -45,7 +45,9 @@
+ constexpr double kTargetMean = 100.0; // the main camera of the Pixel (Lineage reference: mean luma ~100)
+ constexpr double kClipLuma = 246.0;
+ constexpr double kClipFractionLimit = 0.02;
+-constexpr double kMaxAutoMultiplier = 16.0;
++// m52xq r30: was 16: the main sensor (s5kgw3) has x64 analogue, the front (imx616) x57; analogue gain is cleaner than the
++// digital gain added on top, so it is used up to the sensor maximum first (libcamera's hidden rewrites used to do that)
++constexpr double kMaxAutoMultiplier = 64.0;
+ // Longest frame of a lengthened frame (microseconds of exposure)
+ constexpr double kMaxExtendedExposureUs = 130000.0;
+ }
+@@ -116,6 +118,13 @@
+                 m_vblankMax = q.maximum;
+                 m_vblankDefault = q.default_value;
+                 getCtrl(V4L2_CID_VBLANK, &m_vblank);
++                // m52xq r30: the driver keeps a frame lengthened in an earlier session (macro: vblank 5814 = 130 ms
++                // frames, ~7 fps, and the long exposure range was taken as the normal one): start at the default length
++                if (m_vblank != m_vblankDefault && setCtrl(V4L2_CID_VBLANK, m_vblankDefault)) {
++                    qInfo() << "SensorAe: frame length reset, vblank" << m_vblank << "->" << m_vblankDefault;
++                    m_vblank = m_vblankDefault;
++                    requeryExposureRange();
++                }
+                 m_expMaxDefault = m_expMax;
+             } else {
+                 m_extendable = false;
+@@ -578,7 +587,14 @@
+     m_stable = 0;
+     m_saved = false;
+     // m52xq r18: small steps (a big sensor jump shows as a visible stair in the viewfinder)
+-    ratio = std::clamp(ratio, 0.7, 1.5);
++    // m52xq r30: but a (nearly) black or blown-out picture moves in big steps: from a dark start x1.5 steps took ~5 s
++    if (mean < 10.0) {
++        ratio = std::clamp(ratio, 0.7, 4.0);
++    } else if (mean > 240.0) {
++        ratio = std::clamp(ratio, 0.25, 1.5);
++    } else {
++        ratio = std::clamp(ratio, 0.7, 1.5);
++    }
+ 
+     const double curExp = m_expRaw * lineUs();
+     const double curGain = rawToGain(m_gainRaw);

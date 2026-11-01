@@ -1,0 +1,20 @@
+diff -ruN plasma-mobile-6.7.5.orig/components/mobileshell/qml/dataproviders/SignalStrengthInfo.qml plasma-mobile-6.7.5/components/mobileshell/qml/dataproviders/SignalStrengthInfo.qml
+--- a/components/mobileshell/qml/dataproviders/SignalStrengthInfo.qml	2026-10-23 14:55:07.548427472 +0300
++++ b/components/mobileshell/qml/dataproviders/SignalStrengthInfo.qml	2026-10-23 14:55:07.668418578 +0300
+@@ -49,8 +49,14 @@
+ 
+     readonly property string icon2: dualSim ? _icon(_sim2Modem) : ""
+     readonly property string label2: dualSim ? _label(_sim2Modem) : ""
+-    // both operators, e.g. "life:) | KYIVSTAR"
+-    readonly property string labels: dualSim ? label + " | " + label2 : label
++
++    // the SIM with the mobile data: only its modem object has the SoC data port (driver "ipa")
++    function _hasData(modem) {
++        return modem && modem.details && modem.details.drivers && modem.details.drivers.indexOf("ipa") >= 0;
++    }
++    readonly property bool dataOnSim2: dualSim && _hasData(_sim2Modem)
++    // both operators, the data SIM marked with ⇅, e.g. "life:) ⇅ | KYIVSTAR"
++    readonly property string labels: dualSim ? label + (dataOnSim2 ? "" : " ⇅") + " | " + label2 + (dataOnSim2 ? " ⇅" : "") : label
+ 
+     readonly property bool showIndicator: _modemList.modemAvailable
+ }

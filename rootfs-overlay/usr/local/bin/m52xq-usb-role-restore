@@ -1,0 +1,25 @@
+#!/bin/sh
+# M52XQ: usb-signaller (0.4.2) always switches the dwc3 role switch to "device"
+# when it applies its default mode at startup, even if the SM5714 Type-C port
+# already runs as host (flash drive / USB-C DAC attached at boot) -- the device
+# then disconnects (live 2026-10-02: "Switching from host to device role").
+# Runs as ExecStartPost of usb-signaller.service: for up to 30 s, if the Type-C
+# port's data role is host but the role switch is not, put host back. With a PC
+# or charger attached the port is "device" and nothing is touched.
+PORT=/sys/class/typec/port0/data_role
+URS=/sys/class/usb_role/a600000.ssusb-role-switch/role
+
+i=0
+while [ $i -lt 30 ]; do
+	sleep 1
+	i=$((i + 1))
+	[ -r "$PORT" ] && [ -w "$URS" ] || continue
+	case "$(cat "$PORT")" in
+	*"[host]"*) ;;
+	*) continue ;;
+	esac
+	if [ "$(cat "$URS")" != host ]; then
+		echo host > "$URS" && echo "m52xq: Type-C port is host, restored role switch to host"
+	fi
+done
+exit 0

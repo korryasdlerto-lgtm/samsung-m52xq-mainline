@@ -1,0 +1,148 @@
+diff --git a/src/mm-shared-qmi.c b/src/mm-shared-qmi.c
+index d93698a..ed6a5ac 100644
+--- a/src/mm-shared-qmi.c
++++ b/src/mm-shared-qmi.c
+@@ -3406,8 +3406,12 @@ uim_get_slot_status_ready (QmiClientUim *client,
+         slot_status = &g_array_index (physical_slots, QmiPhysicalSlotStatusSlot, i);
+         if (slot_status->physical_slot_status == QMI_UIM_SLOT_STATE_ACTIVE) {
+             sim_active = TRUE;
+-            ctx->active_logical_id = slot_status->logical_slot;
+-            ctx->active_slot_number = i + 1;
++            /* DSDS modems report every slot as active: the primary one is
++             * the slot mapped to logical slot 1 (primary GW provisioning) */
++            if (!ctx->active_slot_number || slot_status->logical_slot == 1) {
++                ctx->active_logical_id = slot_status->logical_slot;
++                ctx->active_slot_number = i + 1;
++            }
+         }
+ 
+         if (!slot_status->iccid->len) {
+diff --git a/src/mm-sim-qmi.c b/src/mm-sim-qmi.c
+index f06f480..3e7c599 100644
+--- a/src/mm-sim-qmi.c
++++ b/src/mm-sim-qmi.c
+@@ -50,6 +50,8 @@ struct _MMSimQmiPrivate {
+ 
+ static const guint16 mf_file_path[]  = { 0x3F00 };
+ static const guint16 adf_file_path[] = { 0x3F00, 0x7FFF };
++/* 2G (ICC) SIM cards have no USIM ADF; the same EFs live under DF_GSM */
++static const guint16 gsm_file_path[] = { 0x3F00, 0x7F20 };
+ 
+ /*****************************************************************************/
+ 
+@@ -224,6 +226,17 @@ uim_read_finish (QmiClientUim  *client,
+     return g_task_propagate_pointer (G_TASK (res), error);
+ }
+ 
++typedef struct {
++    guint16  file_id;
++    gboolean gsm_fallback;
++} UimReadContext;
++
++static void uim_read_send (GTask         *task,
++                           QmiClientUim  *client,
++                           guint16        file_id,
++                           const guint16 *file_path,
++                           gsize          file_path_len);
++
+ static void
+ uim_read_ready (QmiClientUim *client,
+                 GAsyncResult *res,
+@@ -231,8 +244,21 @@ uim_read_ready (QmiClientUim *client,
+ {
+     QmiMessageUimReadTransparentOutput *output;
+     GError *error = NULL;
++    UimReadContext *ctx;
+ 
++    ctx = g_task_get_task_data (task);
+     output = qmi_client_uim_read_transparent_finish (client, res, &error);
++    if (output &&
++        ctx->gsm_fallback &&
++        !qmi_message_uim_read_transparent_output_get_result (output, NULL)) {
++        /* USIM ADF path failed: retry once under DF_GSM for 2G SIM cards */
++        ctx->gsm_fallback = FALSE;
++        qmi_message_uim_read_transparent_output_unref (output);
++        mm_obj_dbg (g_task_get_source_object (task),
++                    "retrying UIM read of file 0x%04X under DF_GSM", ctx->file_id);
++        uim_read_send (task, client, ctx->file_id, gsm_file_path, G_N_ELEMENTS (gsm_file_path));
++        return;
++    }
+     if (!output) {
+         g_prefix_error (&error, "QMI operation failed: ");
+         g_task_return_error (task, error);
+@@ -261,27 +287,17 @@ uim_read_ready (QmiClientUim *client,
+ }
+ 
+ static void
+-uim_read (MMSimQmi            *self,
+-          guint16              file_id,
+-          const guint16       *file_path,
+-          gsize                file_path_len,
+-          GAsyncReadyCallback  callback,
+-          gpointer             user_data)
++uim_read_send (GTask         *task,
++               QmiClientUim  *client,
++               guint16        file_id,
++               const guint16 *file_path,
++               gsize          file_path_len)
+ {
+-    GTask *task;
+-    QmiClient *client = NULL;
+     GArray *file_path_bytes;
+     gsize i;
+     QmiMessageUimReadTransparentInput *input;
+     GArray *aid;
+ 
+-    task = g_task_new (self, NULL, callback, user_data);
+-
+-    if (!ensure_qmi_client (task,
+-                            self,
+-                            QMI_SERVICE_UIM, &client))
+-        return;
+-
+     file_path_bytes = g_array_sized_new (FALSE, FALSE, 1, file_path_len * 2);
+     for (i = 0; i < file_path_len; ++i) {
+         guint8 byte;
+@@ -310,7 +326,7 @@ uim_read (MMSimQmi            *self,
+                                                                  NULL);
+     g_array_unref (file_path_bytes);
+ 
+-    qmi_client_uim_read_transparent (QMI_CLIENT_UIM (client),
++    qmi_client_uim_read_transparent (client,
+                                      input,
+                                      10,
+                                      NULL,
+@@ -319,6 +335,33 @@ uim_read (MMSimQmi            *self,
+     qmi_message_uim_read_transparent_input_unref (input);
+ }
+ 
++static void
++uim_read (MMSimQmi            *self,
++          guint16              file_id,
++          const guint16       *file_path,
++          gsize                file_path_len,
++          GAsyncReadyCallback  callback,
++          gpointer             user_data)
++{
++    GTask *task;
++    QmiClient *client = NULL;
++    UimReadContext *ctx;
++
++    task = g_task_new (self, NULL, callback, user_data);
++
++    if (!ensure_qmi_client (task,
++                            self,
++                            QMI_SERVICE_UIM, &client))
++        return;
++
++    ctx = g_new0 (UimReadContext, 1);
++    ctx->file_id = file_id;
++    ctx->gsm_fallback = (file_path == adf_file_path);
++    g_task_set_task_data (task, ctx, g_free);
++
++    uim_read_send (task, QMI_CLIENT_UIM (client), file_id, file_path, file_path_len);
++}
++
+ static gchar *
+ load_sim_identifier_finish (MMBaseSim     *self,
+                             GAsyncResult  *res,

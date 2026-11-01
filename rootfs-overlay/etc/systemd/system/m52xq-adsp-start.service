@@ -1,0 +1,15 @@
+[Unit]
+Description=M52XQ: start ADSP remoteproc once /lib/firmware on rootfs is available
+Documentation=file:///README-PORTIROVANIE-M52-MAINLINE.md
+After=local-fs.target
+DefaultDependencies=no
+Before=sound.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# The kernel tries at ~0.6s, before rootfs is mounted, and gives up (-ENOENT).
+ExecStart=/bin/sh -c 'for r in /sys/class/remoteproc/remoteproc*; do [ "$(cat $r/name)" = adsp ] || continue; [ "$(cat $r/state)" = running ] || echo start > $r/state; done; exit 0'
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,259 @@
+// Copyright 2023 Carl Schwan <carl@carlschwan.eu>
+// SPDX-License-Identifier: LGPL-2.0-or-later
+
+import QtQuick
+import QtQuick.Controls as QQC2
+import QtQuick.Layouts
+
+import org.kde.kirigami as Kirigami
+import 'private' as Private
+
+/*!
+   \qmltype FormSpinBoxDelegate
+   \inqmlmodule org.kde.kirigamiaddons.formcard
+   \brief A Form delegate that corresponds to a spinbox.
+
+   This component is used to select a number. By default, the spinbox will be
+   initialized with a minimum of 0 and a maximum of 99.
+
+   Example code:
+   \qml
+   FormCard.FormCardHeader {
+       title: "Information"
+   }
+
+   FormCard.FormCard {
+       FormCard.FormSpinBoxDelegate {
+           label: "Amount"
+       }
+   }
+   \endqml
+
+   \since 0.11.0
+ */
+AbstractFormDelegate {
+    id: root
+
+    /*!
+       \brief A label that appears above the spinbox.
+     */
+    required property string label
+
+    /*!
+       \brief A label containing secondary text that appears under the
+       inherited text property.
+
+       This provides additional information shown in a faint gray color.
+
+       \default ""
+       \since 1.12.0
+     */
+    property string description: ""
+
+    /*!
+       \qmlproperty int value
+       \brief This property holds the \l {SpinBox::value} {value} of the internal spinbox.
+     */
+    property alias value: spinbox.value
+
+    /*!
+       \qmlproperty int from
+       \brief This property holds the \l {SpinBox::from} {from} of the internal spinbox.
+     */
+    property alias from: spinbox.from
+
+    /*!
+       \qmlproperty int to
+       \brief This property holds the \l {SpinBox::to} {to} of the internal spinbox.
+     */
+    property alias to: spinbox.to
+
+    /*!
+       \qmlproperty int stepSize
+       \brief This property holds the \l {SpinBox::stepSize} {stepSize} of the internal spinbox.
+     */
+    property alias stepSize: spinbox.stepSize
+
+    /*!
+       \qmlproperty function textFromValue
+       \brief This property holds the \l {SpinBox::textFromValue} {textFromValue} of the internal spinbox.
+     */
+    property alias textFromValue: spinbox.textFromValue
+
+    /*!
+       \qmlproperty function valueFromText
+       \brief This property holds the \l {SpinBox::valueFromText} {valueFromText} of the internal spinbox.
+     */
+    property alias valueFromText: spinbox.valueFromText
+
+    /*!
+       \qmlproperty string displayText
+       \brief This property holds the \l {SpinBox::displayText} {displayText} of the internal spinbox.
+     */
+    property alias displayText: spinbox.displayText
+
+    /*!
+       \qmlproperty bool inputMethodComposing
+       \brief This property holds the \l {SpinBox::inputMethodComposing} {inputMethodComposing} of the internal spinbox.
+     */
+    property alias inputMethodComposing: spinbox.inputMethodComposing
+
+    /*!
+       \qmlproperty enumeration inputMethodHints
+       \brief This property holds the \l {SpinBox::inputMethodHints} {inputMethodHints} of the internal spinbox.
+     */
+    property alias inputMethodHints: spinbox.inputMethodHints
+
+    /*!
+       \qmlproperty bool wrap
+       \brief This property holds the \l {SpinBox::wrap} {wrap} of the internal spinbox.
+     */
+    property alias wrap: spinbox.wrap
+
+    /*!
+       \qmlproperty bool fieldActiveFocus
+       \brief The \l {Item::activeFocus} {activeFocus} state of the internal spinbox.
+    */
+    property alias fieldActiveFocus: spinbox.activeFocus
+
+    /*!
+       \qmlproperty Validator validator
+       \brief This property holds the \l {SpinBox::validator} {validator} of the internal spinbox.
+     */
+    property alias validator: spinbox.validator
+
+    /*!
+       \qmlproperty var status
+       \brief This property holds the current type of status displayed in
+       the text field.
+
+       Depending on the status of the text field, the statusMessage property
+       will look different.
+
+       Accepted values:
+       \value Kirigami.MessageType.Information
+       \value Kirigami.MessageType.Positive
+       \value Kirigami.MessageType.Warning
+       \value Kirigami.MessageType.Error
+
+       \sa Kirigami.MessageType
+     */
+    property var status: Kirigami.MessageType.Information
+
+    /*!
+       This property holds the current status message of the text field.
+       \default ""
+     */
+    property string statusMessage: ""
+
+    /*!
+       \brief This property holds an item that will be displayed before the
+       spinbox.
+
+       \default null
+    */
+    property Item leading: null
+
+    /*!
+       \brief This property holds an item that will be displayed after the
+       delegate's contents.
+
+       \default null
+       \since 1.12.0
+     */
+    property Item trailing: null
+
+    /*!
+       \brief This signal is emitted when the spin box value has been interactively modified by the user.
+
+       By either touch, mouse, wheel, or keys. In the case of interaction via keyboard, the signal is only emitted
+       when the text has been accepted; meaning when the enter or return keys are pressed, or the input field loses
+       focus.
+     */
+    signal valueModified()
+
+    /*!
+       Increases the value by stepSize, or 1 if stepSize is not defined.
+     */
+    function increase() {
+        spinbox.increase();
+    }
+
+    /*!
+       Decreases the value by stepSize, or 1 if stepSize is not defined.
+     */
+    function decrease() {
+        spinbox.decrease();
+    }
+
+    focusPolicy: Kirigami.Settings.isMobile ? Qt.StrongFocus : Qt.NoFocus
+    Accessible.description: description
+
+    onActiveFocusChanged: { // propagate focus to the spinbox
+        if (activeFocus) {
+            spinbox.forceActiveFocus();
+        }
+    }
+
+    onClicked: spinbox.forceActiveFocus()
+    background: null
+
+    contentItem: ColumnLayout {
+        spacing: Private.FormCardUnits.verticalSpacing
+
+        QQC2.Label {
+            Layout.fillWidth: true
+            text: label
+            elide: Text.ElideRight
+            color: root.enabled ? Kirigami.Theme.textColor : Kirigami.Theme.disabledTextColor
+            wrapMode: Text.Wrap
+            maximumLineCount: 2
+        }
+
+        RowLayout {
+            id: innerRow
+
+            spacing: Kirigami.Units.smallSpacing
+
+            Layout.fillWidth: true
+
+            LayoutItemProxy {
+                target: root.leading
+                visible: target && target.visible
+                Layout.rightMargin: visible ? Kirigami.Units.smallSpacing : 0
+            }
+
+            QQC2.SpinBox {
+                id: spinbox
+                Layout.fillWidth: true
+                locale: root.locale
+                onValueModified: root.valueModified()
+            }
+
+            LayoutItemProxy {
+                target: root.trailing
+                visible: target && target.visible
+                Layout.leftMargin: visible ? Kirigami.Units.smallSpacing : 0
+            }
+        }
+
+        Private.FormInlineMessage {
+            id: formErrorHandler
+            visible: root.statusMessage.length > 0
+            Layout.topMargin: visible ? Kirigami.Units.smallSpacing : 0
+            Layout.fillWidth: true
+            text: root.statusMessage
+            type: root.status
+        }
+
+        QQC2.Label {
+            id: internalDescriptionItem
+
+            Layout.fillWidth: true
+            text: root.description
+            color: Kirigami.Theme.disabledTextColor
+            visible: root.description !== ""
+            wrapMode: Text.Wrap
+        }
+    }
+}

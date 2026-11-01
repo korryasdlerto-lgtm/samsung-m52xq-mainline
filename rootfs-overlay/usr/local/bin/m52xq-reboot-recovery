@@ -1,0 +1,31 @@
+#!/bin/sh
+# M52XQ: power menu - reboot, reboot into TWRP (no USB cable or key combo), power off, cancel. A qmlscene window
+# (/usr/local/share/m52xq/power-menu.qml) with four big buttons replaces the old notification "Reboot to Recovery" (snap decision):
+# its "Cancel" never closed the notification and the script hung.
+# TWRP: the Samsung bootloader boots recovery when restart_reason (IMEM 0x146aa65c) holds 0x77665502 after a warm reset:
+# syscon-reboot-mode (DT v89) + reboot=warm (boot v119) do that for "reboot recovery"; logind's SetRebootParameter is
+# allowed for the active session (polkit allow_active); "systemctl reboot recovery" does not work on this systemd.
+# The window must belong to the process Lomiri started: qmlscene is exec'd, the choices are read by a background loop from a fifo
+# (same as m52xq-sim-mode-menu).
+R=${XDG_RUNTIME_DIR:-/tmp}
+fifo=$R/m52xq-power-menu.fifo
+rm -f $fifo
+mkfifo $fifo
+(
+	while read -r line; do
+		case $line in
+		*m52xq-power:*)
+			case ${line##*m52xq-power: } in
+			reboot) exec systemctl reboot ;;
+			recovery)
+				busctl call org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager SetRebootParameter s recovery \
+					&& exec systemctl reboot
+				;;
+			poweroff) exec systemctl poweroff ;;
+			esac
+			;;
+		esac
+	done < $fifo
+	rm -f $fifo
+) &
+exec /usr/lib/qt6/bin/qmlscene /usr/local/share/m52xq/power-menu.qml > $fifo 2>&1

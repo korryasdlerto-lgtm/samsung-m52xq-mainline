@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=M52XQ safe start volume
+Exec=/usr/local/bin/m52xq-volume-init
+X-KDE-autostart-phase=2
+NoDisplay=true

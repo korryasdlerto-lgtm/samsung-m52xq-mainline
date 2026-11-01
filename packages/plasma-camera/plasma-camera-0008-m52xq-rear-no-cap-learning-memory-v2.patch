@@ -1,0 +1,57 @@
+diff --git a/src/sensorae.cpp b/src/sensorae.cpp
+--- a/src/sensorae.cpp	2026-10-10 17:05:57.400751362 +0300
++++ b/src/sensorae.cpp	2026-10-10 17:23:28.193899462 +0300
+@@ -9,6 +9,7 @@
+ #include <algorithm>
+ #include <cmath>
+ #include <cstdio>
++#include <cstring>
+ #include <fcntl.h>
+ #include <linux/v4l2-subdev.h>
+ #include <linux/videodev2.h>
+@@ -183,6 +184,7 @@
+             m_extendable = s.extendable;
+             m_maxAutoExpUs = kMaxAutoExposureUs;
+             m_lineScale = s.lineScale;
++            m_learnCap = false; // r26/r27: no sensor needs it any more (the rear plateau was a driver byte-order bug); on the macro it toggled the exposure 1980 <-> 3951 lines after every frame extension = visible flicker
+             m_digital = 1.0;
+             m_digitalShown = 1.0;
+             m_expCapUs = 1e9;
+@@ -214,7 +216,7 @@
+ {
+     QFile f(memoryPath());
+     if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+-        f.write(QStringLiteral("exp=%1 gain=%2 dg=%3 cap=%4\n").arg(m_expRaw).arg(m_gainRaw).arg(m_digital, 0, 'f', 4).arg(m_expCapUs < 1e8 ? m_expCapUs : 0.0, 0, 'f', 1).toUtf8());
++        f.write(QStringLiteral("v2 exp=%1 gain=%2 dg=%3 cap=%4\n").arg(m_expRaw).arg(m_gainRaw).arg(m_digital, 0, 'f', 4).arg(m_expCapUs < 1e8 ? m_expCapUs : 0.0, 0, 'f', 1).toUtf8());
+     }
+     m_saved = true;
+ }
+@@ -227,7 +229,7 @@
+     }
+     int exp = 0, gain = 0;
+     double dg = 1.0, cap = 0.0;
+-    const int fields = std::sscanf(f.readAll().constData(), "exp=%d gain=%d dg=%lf cap=%lf", &exp, &gain, &dg, &cap);
++    const int fields = std::sscanf(f.readAll().constData(), "v2 exp=%d gain=%d dg=%lf cap=%lf", &exp, &gain, &dg, &cap);
+     if (fields < 3) {
+         return;
+     }
+@@ -505,7 +507,7 @@
+     // m52xq r20: the exposure was raised by 15 % or more, the picture is steady and still not brighter than before:
+     // the sensor does not expose longer than this. Keep the exposure there, the rest comes from gain.
+     if (m_raisedExposure && m_meanBefore > 0.0) {
+-        if (mean < kTargetMean * 0.9 && mean < m_meanBefore * 1.04 && m_sinceApply >= 4) {
++        if (m_learnCap && mean < kTargetMean * 0.9 && mean < m_meanBefore * 1.04 && m_sinceApply >= 4) {
+             m_expCapUs = std::max(m_expMin * lineUs(), m_expBeforeUs);
+             qInfo() << "SensorAe: exposure above" << m_expCapUs / displayLineUs() * lineUs() << "us has no effect, using gain";
+         }
+diff --git a/src/sensorae.h b/src/sensorae.h
+--- a/src/sensorae.h	2026-10-10 17:05:57.400751362 +0300
++++ b/src/sensorae.h	2026-10-10 17:06:21.272461106 +0300
+@@ -103,6 +103,7 @@
+     double m_meanBefore = 0.0;
+     bool m_raisedExposure = false;
+     double m_maxDigital = 1.0;
++    bool m_learnCap = true; // r26: false for the rear sensor
+     double m_lineScale = 1.0; // real line time / nominal line time (the sensors run slower than their tables say)
+     double displayLineUs() const { return m_lineUs * m_lineScale; }
+ };

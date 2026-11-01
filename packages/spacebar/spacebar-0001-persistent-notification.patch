@@ -1,0 +1,11 @@
+--- a/daemon/channellogger.cpp
++++ b/daemon/channellogger.cpp
+@@ -594,7 +594,7 @@
+ 
+ void ChannelLogger::createNotification(Message &message)
+ {
+-    auto *notification = new KNotification(QStringLiteral("incomingMessage"));
++    auto *notification = new KNotification(QStringLiteral("incomingMessage"), KNotification::Persistent);
+     notification->setComponentName(SL("spacebar"));
+     notification->setIconName(SL("message-new"));
+ 

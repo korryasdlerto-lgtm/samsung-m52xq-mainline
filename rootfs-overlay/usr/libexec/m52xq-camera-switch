@@ -1,0 +1,114 @@
+#!/bin/sh
+# M52XQ camera stack switch (DT v147 / vendor_boot v237 and later).
+#
+# The DT carries both camera stacks:
+#   - mainline: qcom-camss (isp@acb3000) + i2c-qcom-cci (cci@ac4a000, cci@ac4b000)
+#     + mainline sensor drivers -> default, works without anything extra;
+#   - Qualcomm camera-driver (camera_qcm6490.ko + m52xq-gdsc-reg.ko) + CamX
+#     userspace in a glibc chroot (CAMX_ROOT) -> stock ISP pipeline.
+# Both drive the same hardware, so only one may be bound at a time.
+#
+# usage: m52xq-camera-switch [auto|mainline|camx|status]
+#   auto     - CamX only if the chroot is installed AND it carries a CamX-V7
+#              sensor module for one of our sensors; otherwise mainline
+#   mainline - mainline camera; releases the sync_state hold that the
+#              driverless downstream camera nodes put on rpmhpd/interconnects
+#   camx     - unbind mainline camss/cci, load the Qualcomm driver, start cam-server
+
+CONF=/etc/m52xq-camera.conf
+CAMX_ROOT=/mnt/userdata/camx-ubuntu
+MODDIR=/usr/lib/m52xq-camx
+[ -r "$CONF" ] && . "$CONF"
+
+CAMX_LIB="$CAMX_ROOT/usr/lib/aarch64-linux-gnu/camx/kodiak"
+STATE=/run/m52xq-camera-mode
+log() { echo "m52xq-camera-switch: $*"; logger -t m52xq-camera-switch "$*" 2>/dev/null; }
+
+camx_usable() {
+	[ -x "$CAMX_ROOT/usr/bin/cam-server" ] || return 1
+	[ -e "$MODDIR/camera_qcm6490.ko" ] && [ -e "$MODDIR/m52xq-gdsc-reg.ko" ] || return 1
+	for f in "$CAMX_LIB"/camera/com.*.sensormodule.*s5kgw3*.bin \
+		 "$CAMX_LIB"/camera/com.*.sensormodule.*imx616*.bin \
+		 "$CAMX_LIB"/camera/com.*.sensormodule.*imx258*.bin \
+		 "$CAMX_LIB"/camera/com.*.sensormodule.*gc5035*.bin; do
+		[ -e "$f" ] || continue
+		# CamX in this chroot only accepts modules from its own parser generation
+		grep -aq 'Parameter Parser V7' "$f" && return 0
+	done
+	return 1
+}
+
+release_sync_state() {
+	# (the kernel accepts exactly "1", no newline: echo 1 gives EINVAL)
+	# Downstream camera nodes (cpas, csid, vfe, ...) list rpmhpd/ICC as
+	# suppliers but have no driver in mainline mode, which keeps the
+	# providers at boot-time max votes. Let them settle to real votes.
+	for d in /sys/devices/platform/soc/18200000.rsc/18200000.rsc:power-controller \
+		 /sys/devices/platform/soc/1740000.interconnect \
+		 /sys/devices/platform/soc/1500000.interconnect \
+		 /sys/devices/platform/soc/9100000.interconnect \
+		 /sys/devices/platform/soc/1580000.interconnect; do
+		[ -w "$d/state_synced" ] || continue
+		[ "$(cat "$d/state_synced")" = 1 ] && continue
+		printf 1 > "$d/state_synced" && log "sync_state released: ${d##*/}"
+	done
+}
+
+mode_mainline() {
+	if lsmod | grep -q '^camera_qcm6490'; then
+		log "camera_qcm6490 loaded; reboot to return to the mainline camera"
+		return 1
+	fi
+	release_sync_state
+	echo mainline > "$STATE"
+	log "mainline camera active"
+}
+
+mount_chroot() {
+	for m in proc sys dev run; do
+		mountpoint -q "$CAMX_ROOT/$m" && continue
+		case $m in
+		proc) mount -t proc proc "$CAMX_ROOT/proc" ;;
+		run)  mount -t tmpfs tmpfs "$CAMX_ROOT/run" ;;
+		*)    mount --rbind "/$m" "$CAMX_ROOT/$m" ;;
+		esac
+	done
+	mkdir -p "$CAMX_ROOT/run/systemd/journal" "$CAMX_ROOT/run/cam_server" "$CAMX_ROOT/var/cache/camera"
+	mountpoint -q "$CAMX_ROOT/run/systemd/journal" || mount --bind /run/systemd/journal "$CAMX_ROOT/run/systemd/journal"
+}
+
+mode_camx() {
+	camx_usable || [ "$FORCE" = 1 ] || { log "CamX not usable (no chroot / modules / V7 sensor modules)"; return 1; }
+	for dev in acb3000.isp; do
+		[ -e /sys/bus/platform/drivers/qcom-camss/$dev ] && echo $dev > /sys/bus/platform/drivers/qcom-camss/unbind
+	done
+	for dev in ac4a000.cci ac4b000.cci; do
+		[ -e /sys/bus/platform/drivers/i2c-qcom-cci/$dev ] && echo $dev > /sys/bus/platform/drivers/i2c-qcom-cci/unbind
+	done
+	log "mainline camss/cci unbound"
+	# ICP firmware matching this CamX (kernel looks up qcom/qcm6490/CAMERA_ICP_170.elf)
+	if [ -d "$CAMX_ROOT/usr/lib/firmware/qcom/qcm6490" ]; then
+		mkdir -p /lib/firmware/qcom/qcm6490
+		mountpoint -q /lib/firmware/qcom/qcm6490 || mount --bind "$CAMX_ROOT/usr/lib/firmware/qcom/qcm6490" /lib/firmware/qcom/qcm6490
+	fi
+	lsmod | grep -q '^m52xq_gdsc_reg' || insmod "$MODDIR/m52xq-gdsc-reg.ko" || return 1
+	lsmod | grep -q '^camera_qcm6490' || insmod "$MODDIR/camera_qcm6490.ko" || return 1
+	mount_chroot
+	if ! pgrep -x cam-server >/dev/null; then
+		systemd-run --unit=m52xq-cam-server --property=Restart=on-failure \
+			chroot "$CAMX_ROOT" /usr/bin/env \
+			LD_LIBRARY_PATH=/usr/lib/camera/components/:/usr/lib/camera/ /usr/bin/cam-server
+	fi
+	echo camx > "$STATE"
+	log "CamX camera active"
+}
+
+case "${1:-auto}" in
+auto)     if camx_usable; then mode_camx; else mode_mainline; fi ;;
+mainline) mode_mainline ;;
+camx)     mode_camx ;;
+status)   echo "mode: $(cat $STATE 2>/dev/null || echo unknown)"
+	  camx_usable && echo "camx: usable" || echo "camx: not usable"
+	  lsmod | grep -E '^(camera_qcm6490|m52xq_gdsc_reg)' ;;
+*)        echo "usage: $0 [auto|mainline|camx|status]"; exit 2 ;;
+esac

@@ -1,0 +1,69 @@
+# The group tag is just to easily find this APKBUILD by some scripts for automation
+# group=kde-plasma
+maintainer="team/kde <bribbers@disroot.org>"
+pkgname=plasma-keyboard
+pkgver=6.7.5
+pkgrel=93
+# armhf blocked by qt6-qtdeclarative
+arch="all !armhf"
+url="https://invent.kde.org/plasma/plasma-keyboard"
+pkgdesc="Virtual keyboard for Qt-based desktops"
+license="(GPL-2.0-only OR GPL-3.0-only) AND (LGPL-2.1-only OR LGPL-3.0-only)"
+makedepends="
+	extra-cmake-modules
+	kcmutils-dev
+	kcoreaddons-dev
+	ki18n-dev
+	libplasma-dev
+	qt6-qtbase-dev
+	qt6-qtdeclarative-dev
+	qt6-qtdeclarative-private-dev
+	qt6-qtvirtualkeyboard-dev
+	qt6-qtwayland-dev
+	samurai
+	wayland-dev
+	wayland-protocols
+	"
+subpackages="$pkgname-lang"
+
+case "$pkgver" in
+	*.*.9*) _rel=unstable;;
+	*) _rel=stable;;
+esac
+
+# strip fourth version component for source URL
+case "$pkgver" in
+	*.*.*.*) _pkgver="${pkgver%.*}" ;;
+	*) _pkgver="$pkgver" ;;
+esac
+
+_repo_url="https://invent.kde.org/plasma/plasma-keyboard.git"
+source="https://download.kde.org/$_rel/plasma/$_pkgver/plasma-keyboard-$pkgver.tar.xz
+	plasma-keyboard-0001-fix-sound-option-name.patch
+	keyboard_tick2_m52xq_x40soft.wav
+	"
+options="!check" # No tests
+
+prepare() {
+	default_prepare
+	# m52xq: stock tick peaks at -21 dBFS, inaudible on the phone speaker; same click x40 with tanh soft clip
+	cp "$srcdir"/keyboard_tick2_m52xq_x40soft.wav src/sounds/keyboard_tick2_quiet.wav
+}
+
+build() {
+	cmake -B build -G Ninja \
+		-DCMAKE_BUILD_TYPE=MinSizeRel \
+		-DCMAKE_INSTALL_PREFIX=/usr \
+		-DCMAKE_INSTALL_LIBDIR=lib
+	cmake --build build
+}
+
+package() {
+	DESTDIR="$pkgdir" cmake --install build
+}
+
+sha512sums="
+c9aa98fc99de5f62fa05a91b03732c4ccfafcc1bdef439e24a20b72efbf5f6be014164de337a9b549e923968736367f53461d45f7f01c1ac6741d84646b766e0  plasma-keyboard-6.7.5.tar.xz
+6a463009823ef09056f5599c3bd3375689782c2d671ef0e17924bb13cbbc712db40f3548679b1ff205539aff790a4e4c62a492dc73424c1066450eaf36e87c27  plasma-keyboard-0001-fix-sound-option-name.patch
+ce172c47ffa5503d2786945d7b5891c896e930530ef737fe6a2f01077d2aca9f7de3731945af30c7cbae3141e494c198a3693660794d2fad70d0c954c6bd81bf  keyboard_tick2_m52xq_x40soft.wav
+"

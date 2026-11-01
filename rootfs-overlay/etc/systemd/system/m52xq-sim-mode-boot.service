@@ -1,0 +1,12 @@
+[Unit]
+Description=M52XQ: modem SIM subscriptions of the saved SIM mode (/etc/m52xq/sim-mode)
+After=m52xq-modem-setup.service
+Wants=m52xq-modem-setup.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/m52xq-sim-mode apply
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

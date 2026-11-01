@@ -1,0 +1,10 @@
+{
+    "KPackageStructure": "KPackage/GenericQML",
+    "KPlugin": {
+        "Description": "Location (GPS) quick setting for the Samsung M52",
+        "Icon": "gps-symbolic",
+        "Id": "org.kde.plasma.quicksetting.gps",
+        "License": "GPL-2.0+",
+        "Name": "Location"
+    }
+}

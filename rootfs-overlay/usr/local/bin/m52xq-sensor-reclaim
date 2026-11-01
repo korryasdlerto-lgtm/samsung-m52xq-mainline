@@ -1,0 +1,18 @@
+#!/bin/sh
+# M52XQ: after iio-sensor-proxy (re)starts while KWin is running - e.g. after an ADSP restart (SSR), which
+# drops the SSC sensor sessions - KWin keeps its old accelerometer claim and autorotation stays dead.
+# Toggle the output's auto-rotate policy and put it back: KWin claims the accelerometer again.
+# Run from iio-sensor-proxy.service ExecStartPost (in the background); does nothing at boot (no KWin yet).
+sleep 4
+pgrep -x kwin_wayland >/dev/null || exit 0
+U=$(stat -c %U /run/user/10000 2>/dev/null) || exit 0
+E="XDG_RUNTIME_DIR=/run/user/10000 WAYLAND_DISPLAY=wayland-0 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/10000/bus"
+kd() { su "$U" -c "env $E kscreen-doctor $*" 2>/dev/null; }
+out=DSI-1
+pol=$(kd -o | sed 's/\x1b\[[0-9;]*m//g' | sed -n 's/^[[:space:]]*Auto Rotate Policy:[[:space:]]*//p' | head -1)
+[ -n "$pol" ] || exit 0
+[ "$pol" = never ] && exit 0
+kd output.$out.autoRotatePolicy.never
+sleep 1
+kd output.$out.autoRotatePolicy.$pol
+logger -t m52xq-sensor-reclaim "iio-sensor-proxy restarted while KWin runs: auto-rotate re-claimed (policy $pol)"

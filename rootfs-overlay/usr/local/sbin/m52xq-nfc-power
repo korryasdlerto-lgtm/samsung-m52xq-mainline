@@ -1,0 +1,31 @@
+#!/bin/sh
+# M52XQ: root side of the NFC switch (m52xq-nfc@on|off.service, m52xq-nfc-boot.service).
+#   m52xq-nfc-power on|off|boot
+# NFC = Samsung chip on i2c@a84000 (s3fwrn5, kernel v241 + vendor_boot v238). "off" keeps it rfkill-blocked, so a
+# D-Bus activation of neard (DefaultPowered) cannot switch it on behind the user's back. "boot" applies the saved state.
+STATE=/var/lib/m52xq/nfc
+DEV=nfc0
+
+case "$1" in
+on)
+	mkdir -p "${STATE%/*}" && echo on > "$STATE"
+	rfkill unblock nfc
+	nfctool -d $DEV -1 >/dev/null 2>&1
+	systemctl start neard.service
+	;;
+off)
+	mkdir -p "${STATE%/*}" && echo off > "$STATE"
+	systemctl stop neard.service
+	nfctool -d $DEV -0 >/dev/null 2>&1
+	rfkill block nfc
+	;;
+boot)
+	# the NFC device appears when the i2c driver probes: wait for it a little
+	for i in $(seq 1 20); do [ -e /sys/class/nfc/$DEV ] && break; sleep 1; done
+	if [ "$(cat "$STATE" 2>/dev/null)" = on ]; then exec "$0" on; else exec "$0" off; fi
+	;;
+*)
+	echo "usage: $0 on|off|boot" >&2
+	exit 2
+	;;
+esac

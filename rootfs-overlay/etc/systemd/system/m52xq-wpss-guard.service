@@ -1,0 +1,11 @@
+[Unit]
+Description=M52XQ: stop a WPSS (Wi-Fi) crash loop, restart it after a pause
+# 2026-10-24: after a Wi-Fi firmware failure at suspend entry remoteproc recovery restarted WPSS ~6 times a second for hours
+
+[Service]
+ExecStart=/usr/local/sbin/m52xq-wpss-guard
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

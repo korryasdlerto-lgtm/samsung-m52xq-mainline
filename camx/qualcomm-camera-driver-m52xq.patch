@@ -1,0 +1,172 @@
+diff --git a/camera_kt/drivers/cam_req_mgr/cam_mem_mgr.c b/camera_kt/drivers/cam_req_mgr/cam_mem_mgr.c
+index 5e057c1..9978093 100644
+--- a/camera_kt/drivers/cam_req_mgr/cam_mem_mgr.c
++++ b/camera_kt/drivers/cam_req_mgr/cam_mem_mgr.c
+@@ -368,7 +368,7 @@ int cam_mem_get_cpu_buf(int32_t buf_handle, uintptr_t *vaddr_ptr, size_t *len)
+ int cam_mem_mgr_cache_ops(struct cam_mem_cache_ops_cmd *cmd)
+ {
+ 	int rc = 0, idx;
+-	uint32_t cache_dir;
++	uint32_t cache_dir = DMA_BIDIRECTIONAL; /* m52xq: no DMABUF_HEAPS/ION path */
+ 
+ 	if (!atomic_read(&cam_mem_mgr_state)) {
+ 		CAM_ERR(CAM_MEM, "failed. mem_mgr not initialized");
+diff --git a/camera_kt/drivers/cam_utils/cam_soc_util.c b/camera_kt/drivers/cam_utils/cam_soc_util.c
+index 23eb1a0..a71b93c 100644
+--- a/camera_kt/drivers/cam_utils/cam_soc_util.c
++++ b/camera_kt/drivers/cam_utils/cam_soc_util.c
+@@ -18,6 +18,20 @@
+ #include "cam_mem_mgr.h"
+ #include "cam_compat.h"
+ 
++/* M52XQ: stock Samsung DT camera nodes carry clock-rates but no OPP table;
++ * then skip OPP and let cam_soc_util_set_clk_rate() set the clock directly. */
++static inline bool m52xq_has_opp(struct device *dev)
++{
++	return dev && of_property_present(dev->of_node, "operating-points-v2");
++}
++
++static inline int m52xq_opp_set_rate(struct device *dev, unsigned long freq)
++{
++	if (!m52xq_has_opp(dev))
++		return 0;
++	return dev_pm_opp_set_rate(dev, freq);
++}
++
+ static char supported_clk_info[256];
+ 
+ int cam_soc_util_get_clk_level(struct cam_hw_soc_info *soc_info,
+@@ -504,7 +518,7 @@ int cam_soc_util_set_src_clk_rate(struct cam_hw_soc_info *soc_info,
+ 			apply_level);
+ 	}
+ 
+-	rc = dev_pm_opp_set_rate(soc_info->dev,
++	rc = m52xq_opp_set_rate(soc_info->dev,
+ 			  soc_info->clk_rate[apply_level][soc_info->src_clk_idx]);
+ 	if (rc) {
+ 		CAM_ERR(CAM_UTIL,
+@@ -709,7 +723,7 @@ int cam_soc_util_clk_enable_default(struct cam_hw_soc_info *soc_info,
+ 	if (soc_info->cam_cx_ipeak_enable)
+ 		cam_cx_ipeak_update_vote_cx_ipeak(soc_info, apply_level);
+ 
+-	rc = dev_pm_opp_set_rate(soc_info->dev,
++	rc = m52xq_opp_set_rate(soc_info->dev,
+ 			soc_info->clk_rate[apply_level][soc_info->src_clk_idx]);
+ 	if (rc) {
+ 		CAM_ERR(CAM_UTIL,
+@@ -774,7 +788,7 @@ void cam_soc_util_clk_disable_default(struct cam_hw_soc_info *soc_info)
+ 	if (soc_info->cam_cx_ipeak_enable)
+ 		cam_cx_ipeak_unvote_cx_ipeak(soc_info);
+ 
+-	dev_pm_opp_set_rate(soc_info->dev, 0);
++	m52xq_opp_set_rate(soc_info->dev, 0);
+ 	for (i = soc_info->num_clk - 1; i >= 0; i--)
+ 		cam_soc_util_clk_disable(soc_info->clk[i],
+ 			soc_info->clk_name[i]);
+@@ -1007,7 +1021,7 @@ int cam_soc_util_set_clk_rate_level(struct cam_hw_soc_info *soc_info,
+ 	if (soc_info->cam_cx_ipeak_enable)
+ 		cam_cx_ipeak_update_vote_cx_ipeak(soc_info, apply_level);
+ 
+-	rc = dev_pm_opp_set_rate(soc_info->dev,
++	rc = m52xq_opp_set_rate(soc_info->dev,
+ 			  soc_info->clk_rate[apply_level][soc_info->src_clk_idx]);
+ 	if (rc) {
+ 		CAM_ERR(CAM_UTIL,
+@@ -1790,6 +1804,11 @@ int cam_soc_util_configure_opp(struct cam_hw_soc_info *soc_info)
+ {
+ 	int rc = 0;
+ 
++	if (!m52xq_has_opp(soc_info->dev)) {
++		CAM_DBG(CAM_UTIL, "no OPP table for %s", soc_info->dev_name);
++		return 0;
++	}
++
+ 	rc = devm_pm_opp_set_clkname(soc_info->dev, soc_info->clk_name[soc_info->src_clk_idx]);
+ 	if (rc) {
+ 		CAM_ERR(CAM_UTIL,
+diff --git a/camera_kt/drivers/camera_main.c b/camera_kt/drivers/camera_main.c
+index b894683..9667535 100644
+--- a/camera_kt/drivers/camera_main.c
++++ b/camera_kt/drivers/camera_main.c
+@@ -314,6 +314,12 @@ static int cam_main_probe(struct platform_device *pdev)
+ 	}
+ 
+ 	/* Populate all the parrent + child nodes here. */
++	/* M52XQ: stock Samsung DT has the camera nodes directly under /soc
++	 * (already populated), no qcom,camera_kt container node. */
++	if (!node) {
++		CAM_INFO(CAM_UTIL, "Spectra camera_kt driver initialized (no container node)");
++		return 0;
++	}
+ 	rc = of_platform_populate(node, of_camera_bus_match_table, NULL, &pdev->dev);
+ 	if (rc) {
+ 		CAM_ERR(CAM_UTIL,"Camera main populate failed %d", rc);
+@@ -348,6 +354,8 @@ static struct platform_driver camera_main_driver = {
+ 	},
+ };
+ 
++static struct platform_device *m52xq_camera_main_pdev;
++
+ static int camera_init(void)
+ {
+ 	struct device_node *node;
+@@ -365,6 +373,20 @@ static int camera_init(void)
+ 		}
+ 	}
+ 
++	if (rc == -ENODEV && of_find_compatible_node(NULL, NULL, "qcom,cam-cpas")) {
++		/* M52XQ: no qcom,camera_kt node; stock camera nodes live under /soc */
++		rc = platform_driver_register(&camera_main_driver);
++		if (!rc) {
++			m52xq_camera_main_pdev = platform_device_register_simple(
++				"camera_kt_main", -1, NULL, 0);
++			if (IS_ERR(m52xq_camera_main_pdev)) {
++				rc = PTR_ERR(m52xq_camera_main_pdev);
++				m52xq_camera_main_pdev = NULL;
++				platform_driver_unregister(&camera_main_driver);
++			}
++		}
++	}
++
+ 	if (rc == -ENODEV) {
+ 		CAM_INFO(CAM_UTIL, "No matching device found for camera_kt driver = %d", rc);
+ 	}
+@@ -373,6 +395,8 @@ static int camera_init(void)
+ 
+ static void camera_exit(void)
+ {
++	if (m52xq_camera_main_pdev)
++		platform_device_unregister(m52xq_camera_main_pdev);
+ 	platform_driver_unregister(&camera_main_driver);
+ }
+ 
+diff --git a/common/cam_soc_icc.c b/common/cam_soc_icc.c
+index 81a392f..869e834 100644
+--- a/common/cam_soc_icc.c
++++ b/common/cam_soc_icc.c
+@@ -136,8 +136,23 @@ int cam_soc_bus_client_register(struct platform_device *pdev,
+ 
+ 	bus_client->client_data = bus_client_data;
+ 	bus_client->common_data = common_data;
+-	bus_client_data->icc_data = of_icc_get(&pdev->dev,
+-		bus_client->common_data->name);
++	/*
++	 * M52XQ: the stock DT describes the AXI paths (cam_hf_0, cam_sf_0,
++	 * cam_sf_icp) in child axi-port nodes passed as dev_node, while
++	 * of_icc_get() only looks at dev->of_node. Look the path up in
++	 * dev_node (probe is single threaded).
++	 */
++	if (dev_node && dev_node != pdev->dev.of_node) {
++		struct device_node *saved = pdev->dev.of_node;
++
++		pdev->dev.of_node = dev_node;
++		bus_client_data->icc_data = of_icc_get(&pdev->dev,
++			bus_client->common_data->name);
++		pdev->dev.of_node = saved;
++	} else {
++		bus_client_data->icc_data = of_icc_get(&pdev->dev,
++			bus_client->common_data->name);
++	}
+ 	if (IS_ERR_OR_NULL(bus_client_data->icc_data)) {
+ 		CAM_ERR(CAM_UTIL, "failed in register bus client");
+ 		rc = -EINVAL;

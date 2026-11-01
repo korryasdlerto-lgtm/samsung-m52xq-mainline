@@ -1,0 +1,175 @@
+diff -ruN a/src/contents/ui/camera/CameraPage.qml b/src/contents/ui/camera/CameraPage.qml
+--- a/src/contents/ui/camera/CameraPage.qml	2026-10-17 17:25:12.502573411 +0300
++++ b/src/contents/ui/camera/CameraPage.qml	2026-10-19 02:06:11.494551840 +0300
+@@ -114,6 +114,37 @@
+         camera: root.camera
+         bottomMargin: controlContainer.height
+ 
++        // m52xq r33: tap to focus (main camera with the lens): white frame at the tapped point, search around it
++        TapHandler {
++            enabled: root.captureSession.focusAvailable
++            onTapped: (eventPoint) => {
++                const r = viewfinder.contentRect;
++                const p = eventPoint.position;
++                if (r.width <= 0 || r.height <= 0 || p.x < r.x || p.y < r.y || p.x > r.x + r.width || p.y > r.y + r.height)
++                    return;
++                root.captureSession.focusAt((p.x - r.x) / r.width, (p.y - r.y) / r.height);
++                focusFrame.x = p.x - focusFrame.width / 2;
++                focusFrame.y = p.y - focusFrame.height / 2;
++                focusFrame.opacity = 1;
++                focusFrameTimer.restart();
++            }
++        }
++        Rectangle {
++            id: focusFrame
++            width: Kirigami.Units.gridUnit * 3
++            height: width
++            color: "transparent"
++            border.color: "white"
++            border.width: 2
++            opacity: 0
++            Behavior on opacity { NumberAnimation { duration: 200 } }
++            Timer {
++                id: focusFrameTimer
++                interval: 1200
++                onTriggered: focusFrame.opacity = 0
++            }
++        }
++
+         // m52xq: pinch to zoom (digital zoom of the viewfinder, photos and video)
+         PinchHandler {
+             id: pinchZoom
+diff -ruN a/src/contents/ui/camera/Viewfinder.qml b/src/contents/ui/camera/Viewfinder.qml
+--- a/src/contents/ui/camera/Viewfinder.qml	2025-12-05 16:55:48.000000000 +0200
++++ b/src/contents/ui/camera/Viewfinder.qml	2026-10-19 02:06:11.494551840 +0300
+@@ -19,6 +19,7 @@
+     property real bottomMargin: 0
+ 
+     property alias videoSink: viewfinder.videoSink
++    property alias contentRect: viewfinder.contentRect // m52xq r33: the area of the shown picture
+ 
+     color: "black"
+ 
+diff -ruN a/src/lensautofocus.cpp b/src/lensautofocus.cpp
+--- a/src/lensautofocus.cpp	2026-10-17 17:25:12.518573413 +0300
++++ b/src/lensautofocus.cpp	2026-10-19 02:06:11.494551840 +0300
+@@ -91,6 +91,7 @@
+     }
+     m_cameraId = cameraId;
+     m_available = false;
++    m_roiU = m_roiV = -1.0; // m52xq r33: another camera focuses on the middle again
+     // The lens belongs to the rear main camera (sensor camera@2d); override with M52XQ_AF_CAMERA if needed.
+     const QString match = qEnvironmentVariableIsSet("M52XQ_AF_CAMERA") ? qEnvironmentVariable("M52XQ_AF_CAMERA") : QStringLiteral("camera@2d");
+     if (!cameraId.contains(match) || !openLens()) {
+@@ -135,6 +136,18 @@
+     startScan();
+ }
+ 
++void LensAutofocus::focusAt(double u, double v)
++{
++    if (!m_available || m_manual) {
++        return;
++    }
++    m_roiU = qBound(0.0, u, 1.0);
++    m_roiV = qBound(0.0, v, 1.0);
++    m_hold = 0;
++    qInfo() << "Autofocus: tap at" << m_roiU << m_roiV;
++    startScan();
++}
++
+ void LensAutofocus::trigger()
+ {
+     if (m_available && !m_manual) {
+@@ -248,10 +261,12 @@
+         *mean = 0.0;
+         return 0.0;
+     }
+-    const int roiW = (width * 2 / 5) & ~3;
+-    const int roiH = (height * 2 / 5) & ~3;
+-    const int x0 = ((width - roiW) / 2) & ~3;
+-    const int y0 = ((height - roiH) / 2) & ~3;
++    // m52xq r33: after a tap a square of 1/5 of the frame around the tapped point (like Megapixels), else the middle 2/5
++    const bool tapped = m_roiU >= 0.0;
++    const int roiW = (tapped ? width / 5 : width * 2 / 5) & ~3;
++    const int roiH = (tapped ? height / 5 : height * 2 / 5) & ~3;
++    const int x0 = tapped ? qBound(0, int(m_roiU * width) - roiW / 2, width - roiW) & ~3 : ((width - roiW) / 2) & ~3;
++    const int y0 = tapped ? qBound(0, int(m_roiV * height) - roiH / 2, height - roiH) & ~3 : ((height - roiH) / 2) & ~3;
+     const int bw = roiW / 4;
+     const int bh = roiH / 4;
+ 
+diff -ruN a/src/lensautofocus.h b/src/lensautofocus.h
+--- a/src/lensautofocus.h	2026-10-17 17:25:12.518573413 +0300
++++ b/src/lensautofocus.h	2026-10-19 02:06:11.494551840 +0300
+@@ -19,6 +19,8 @@
+     void processFrame(const QImage &image);
+     // Restart the focus search.
+     void trigger();
++    // m52xq r33: tap to focus: search with the sharpness measured around (u, v) of the viewfinder frame (0..1, top-left)
++    void focusAt(double u, double v);
+     // m52xq r18: a photo is taken or a video starts: finish the search at the best position found so far and leave the lens alone
+     void captureStarted();
+ 
+@@ -71,4 +73,5 @@
+     int m_lowFrames = 0;
+     int m_current = -1;
+     int m_hold = 0; // frames to leave the lens alone after a capture / at the start of a video
++    double m_roiU = -1.0, m_roiV = -1.0; // m52xq r33: tapped point, -1 = the middle of the frame
+ };
+diff -ruN a/src/plasmacameramanager.cpp b/src/plasmacameramanager.cpp
+--- a/src/plasmacameramanager.cpp	2026-10-17 17:25:12.542573414 +0300
++++ b/src/plasmacameramanager.cpp	2026-10-19 02:06:41.578779168 +0300
+@@ -843,6 +843,41 @@
+     Q_EMIT focusChanged();
+ }
+ 
++void PlasmaCameraManager::focusAt(qreal x, qreal y)
++{
++    if (!m_plasmaCamera || !m_autofocus.available()) {
++        return;
++    }
++    // the shown picture = the frame rotated clockwise by the viewfinder angle, then mirrored (see the frame code above)
++    int deg = (static_cast<int>(outputOrientationDegrees()) % 360 + 360) % 360;
++    if (m_plasmaCamera->mirrorOutput()) {
++        deg = (180 - deg + 360) % 360;
++        x = 1.0 - x;
++    }
++    qreal u = x, v = y;
++    switch (deg) {
++    case 90: // shown (1 - v, u)
++        u = y;
++        v = 1.0 - x;
++        break;
++    case 180:
++        u = 1.0 - x;
++        v = 1.0 - y;
++        break;
++    case 270: // shown (v, 1 - u)
++        u = 1.0 - y;
++        v = x;
++        break;
++    default:
++        break;
++    }
++    // the viewfinder shows the middle 1/z of the frame (applyZoom), the autofocus gets the whole frame
++    const qreal z = effectiveZoom();
++    u = 0.5 + (u - 0.5) / z;
++    v = 0.5 + (v - 0.5) / z;
++    m_autofocus.focusAt(u, v);
++}
++
+ void PlasmaCameraManager::setFocusAuto()
+ {
+     m_autofocus.setAuto();
+diff -ruN a/src/plasmacameramanager.h b/src/plasmacameramanager.h
+--- a/src/plasmacameramanager.h	2026-10-17 17:25:12.506573412 +0300
++++ b/src/plasmacameramanager.h	2026-10-19 02:12:59.324543185 +0300
+@@ -169,6 +169,9 @@
+      * Stop the current video recording, and save to disk.
+      */
+     Q_INVOKABLE void stopRecordingVideo();
++    // m52xq r33: tap to focus, (x, y) = the tapped point in the shown viewfinder picture, 0..1 from the top left
++    // (public: QML cannot call the private Q_INVOKABLE methods)
++    Q_INVOKABLE void focusAt(qreal x, qreal y);
+ 
+ Q_SIGNALS:
+     void errorChanged();

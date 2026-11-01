@@ -1,0 +1,9 @@
+[Unit]
+Description=Apply per-app location permissions to GeoClue when the list changes
+
+[Service]
+ExecStart=/usr/local/bin/m52xq-gps-perms-watch
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,52 @@
+# Contributor: Dylan Van Assche <dylan@postmarketos.org>
+# Maintainer: Dylan Van Assche <dylan@postmarketos.org>
+pkgname=libssc
+pkgver=0.4.4
+pkgrel=91
+# m52xq: codeberg regenerated the v0.4.4 archive (same content), sha512 updated
+pkgdesc="Library to expose Qualcomm Sensor Core sensors"
+url="https://codeberg.org/DylanVanAssche/libssc"
+arch="all"
+license="GPL-3.0-or-later"
+makedepends="
+	eudev-dev
+	glib-dev
+	libgudev-dev
+	linux-headers
+	libqmi-dev
+	meson
+	protobuf-c-dev
+	protobuf-dev
+	python3-dev
+	py3-gobject3
+	py3-protobuf
+	qrtr-libs
+"
+subpackages="$pkgname-dbg $pkgname-dev $pkgname-pyc"
+builddir="$srcdir/$pkgname"
+source="$pkgname-$pkgver.tar.gz::https://codeberg.org/DylanVanAssche/libssc/archive/v$pkgver.tar.gz
+	libssc-m52xq-0003-proximity-report-dump.patch
+	"
+
+# Tests suddenly fail on s390x, disable them for now
+options="!check" # m52xq: cross build
+
+build() {
+	abuild-meson \
+		-Db_lto=true \
+		. output
+	meson compile -C output
+}
+
+package() {
+	DESTDIR="$pkgdir" meson install --no-rebuild -C output
+}
+
+check() {
+	meson test --print-errorlogs -C output
+}
+
+sha512sums="
+9240970f6a70f4900ef2d8fad337dac815ea2602b3b395943326fb086f59d24dcf59b76bdbc6014ebd3c450eaad5393465ca038c165845ffe99bf8e282a5c170  libssc-0.4.4.tar.gz
+9a98fe00b1911c2f83a117de4c6874e29a613490705cd2180af4f2eddd13cd7ee5e0dfcf30cf5576871492fe58179af23bdbab0da3f6ef9e7b12feac76dcf7ba  libssc-m52xq-0003-proximity-report-dump.patch
+"

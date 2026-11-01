@@ -1,0 +1,35 @@
+#!/usr/bin/python3
+# m52xq: raw SM5714 fuel gauge readout through raw I2C messages (the SMBus ioctl returns zeros here).
+# prints: epoch soc_raw soc_percent current_avg_mA vbat_mV   (SOC raw = 1/256 %, ~0.18 mAh at 4500 mAh)
+import fcntl, os, ctypes, time
+I2C_RDWR = 0x0707
+class Msg(ctypes.Structure):
+    _fields_ = [("addr", ctypes.c_uint16), ("flags", ctypes.c_uint16), ("len", ctypes.c_uint16), ("buf", ctypes.POINTER(ctypes.c_uint8))]
+class Rd(ctypes.Structure):
+    _fields_ = [("msgs", ctypes.POINTER(Msg)), ("nmsgs", ctypes.c_uint32)]
+fd = os.open("/dev/i2c-24", os.O_RDWR)
+def xfer(msgs):
+    arr = (Msg * len(msgs))(*msgs)
+    fcntl.ioctl(fd, I2C_RDWR, Rd(arr, len(msgs)))
+def wr(bs):
+    b = (ctypes.c_uint8 * len(bs))(*bs)
+    xfer([Msg(0x71, 0, len(bs), b)])
+def rd(reg):
+    w = (ctypes.c_uint8 * 1)(reg)
+    r = (ctypes.c_uint8 * 2)()
+    xfer([Msg(0x71, 0, 1, w), Msg(0x71, 1, 2, r)])
+    return r[0] | (r[1] << 8)
+def sram(a):
+    wr([0x8c, a & 0xff, (a >> 8) & 0xff])
+    return rd(0x8d)
+soc = sram(0x00)
+cur = sram(0x09)
+vb = sram(0x08)
+aux = rd(0x22)
+ma = ((cur & 0x7fff) * 1000) // 2044
+if cur & 0x8000:
+    ma = -ma
+if aux & (1 << 10):
+    ma = ma * 25 // 10
+mv = 2700 - ((vb & 0x7fff) * 10) // 109 if vb & 0x8000 else (vb * 10) // 109 + 2700
+print("%d %d %.3f %d %d" % (time.time(), soc, soc / 256.0, ma, mv))

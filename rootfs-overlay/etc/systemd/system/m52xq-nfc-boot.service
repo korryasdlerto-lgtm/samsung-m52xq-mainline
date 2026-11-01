@@ -1,0 +1,9 @@
+[Unit]
+Description=M52XQ: NFC on/off as saved by the quick setting (off by default)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/m52xq-nfc-power boot
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,40 @@
+--- a/plasma-dialer/src/qml/dialpad/Dialpad.qml	2026-10-03 00:19:36.707271695 +0300
++++ b/plasma-dialer/src/qml/dialpad/Dialpad.qml	2026-10-03 00:19:36.723271291 +0300
+@@ -8,6 +8,7 @@
+ import QtQuick
+ import QtQuick.Layouts
+ import QtQuick.Controls as Controls
++import QtMultimedia
+ import org.kde.kirigami as Kirigami
+ import org.kde.telephony
+ 
+@@ -243,6 +244,17 @@
+ 
+     }
+ 
++    // m52xq: own tones for delete (one digit) and clear (hold)
++    SoundEffect {
++        id: deleteTone
++        source: "file:///usr/share/sounds/m52xq/dtmf-delete.wav"
++    }
++
++    SoundEffect {
++        id: clearTone
++        source: "file:///usr/share/sounds/m52xq/dtmf-clear.wav"
++    }
++
+     DialerIconButton {
+         id: delButton
+ 
+@@ -254,9 +266,11 @@
+         source: "edit-clear"
+         size: Kirigami.Units.gridUnit * 2
+         onPressed: {
++            deleteTone.play();
+             pad.number = pad.number.slice(0, -1);
+         }
+         onPressAndHold: {
++            clearTone.play();
+             clear();
+         }
+     }

@@ -1,0 +1,10 @@
+{
+    "KPackageStructure": "KPackage/GenericQML",
+    "KPlugin": {
+        "Description": "Sound output (speaker / earpiece / USB headset) quick setting for the Samsung M52",
+        "Icon": "audio-speakers",
+        "Id": "org.kde.plasma.quicksetting.audioroute",
+        "License": "GPL-2.0+",
+        "Name": "Sound output"
+    }
+}

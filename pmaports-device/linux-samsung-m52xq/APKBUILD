@@ -2,8 +2,8 @@
 maintainer=""
 pkgname=linux-samsung-m52xq
 pkgver=7.1.2
-pkgrel=0
-_commit=62d7700919fd2a8ae6b3dfec822d6388eb570916
+pkgrel=1
+_commit=17425f528fe51fef6e86847e92baffab3b78623e
 pkgdesc="Samsung Galaxy M52 5G kernel fork"
 arch="aarch64"
 url="https://kernel.org"
@@ -18,14 +18,13 @@ makedepends="
 	openssl-dev
 	perl
 	postmarketos-installkernel
-	python3
 	zstd
 	"
 source="
-	$pkgname-$_commit.tar.gz::https://github.com/korryasdlerto-lgtm/sc7280-mainline-linux-m52xq/archive/$_commit.tar.gz
+	$pkgname-$_commit.tar.gz::https://github.com/sc7280-mainline/linux/archive/$_commit.tar.gz
 	config-${pkgname#linux-}.$arch
 	"
-builddir="$srcdir/sc7280-mainline-linux-m52xq-$_commit"
+builddir="$srcdir/linux-$_commit"
 options="
 	!check
 	!strip
@@ -46,28 +45,28 @@ prepare() {
 }
 
 build() {
-	unset LDFLAGS
-	make ARCH="$_carch" LLVM=1 \
-		KBUILD_BUILD_VERSION="$((pkgrel + 1 ))"-postmarketOS
+	# Dummy stub: the real kernel/vendor_boot for this device is built and
+	# flashed separately (surgical devicetree-blob editing + Alpine-chroot
+	# clang build against the actual local kernel tree). This package only
+	# needs to exist to satisfy pmbootstrap's dependency chain when
+	# generating the userspace rootfs image, so its actual kernel binary
+	# content is never used or flashed.
+	:
 }
 
 package() {
 	mkdir -p "$pkgdir"/boot
-	make zinstall modules_install dtbs_install \
-		ARCH="$_carch" \
-		LLVM=1 \
-		INSTALL_MOD_STRIP=1 \
-		INSTALL_PATH="$pkgdir"/boot \
-		INSTALL_MOD_PATH="$pkgdir"/usr \
-		INSTALL_DTBS_PATH="$pkgdir"/boot/dtbs
+	mkdir -p "$pkgdir"/usr/share/kernel/"${pkgname#linux-}"
+	echo "dummy" > "$pkgdir"/usr/share/kernel/"${pkgname#linux-}"/kernel.release
 
-	rm -f "$pkgdir"/usr/lib/modules/*/build "$pkgdir"/usr/lib/modules/*/source
-
-	install -D "$builddir"/include/config/kernel.release \
-		"$pkgdir"/usr/share/kernel/"${pkgname#linux-}"/kernel.release
+	# boot-deploy just copies whatever matches /boot/vmlinuz* -- it's
+	# never flashed (real kernel/vendor_boot are built and flashed
+	# separately, see build() above), it only needs to exist so
+	# boot-deploy's mkinitfs trigger doesn't abort the apk transaction.
+	echo "dummy" > "$pkgdir"/boot/vmlinuz-"${pkgname#linux-}"
 }
 
 sha512sums="
-c32e66648ea43bdb50646a519b95d91401f564bba396423675cebe4a9cf86f9085e9b4374455952eac0647592eb115ccbc70528e628fae87ea27df9507920e86  linux-samsung-m52xq-62d7700919fd2a8ae6b3dfec822d6388eb570916.tar.gz
-b4a75cfbfbf03046cac61262278d9457f0dcc5d6016e6ba0af5c8e5d4dd8ce93ee295f7ea84722a47fb53d4e247f31e56b984c1fd1626603caff85c70d8191d3  config-samsung-m52xq.aarch64
+a0dff8324718f3ababfe058cdfd180ab2f48cb09da4aa6a8086617ff91d5121ff4bf68dbc7f0711deaf87d87653e3baff996e72fd1d140d4f8664909929d9fc8  linux-samsung-m52xq-17425f528fe51fef6e86847e92baffab3b78623e.tar.gz
+2da70ac8783cad4d66383f424ff07d0e71933ad6caf5ea2a5e62c6dc8c76a7ffd878e98b3e86a9c8657145c59463ff9ca28b64107305b085f8cb931bdff21650  config-samsung-m52xq.aarch64
 "

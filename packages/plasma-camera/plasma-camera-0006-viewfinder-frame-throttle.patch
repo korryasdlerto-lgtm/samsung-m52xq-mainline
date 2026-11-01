@@ -1,0 +1,71 @@
+diff -ruN a/src/plasmacamera/worker.cpp pcD/src/plasmacamera/worker.cpp
+--- a/src/plasmacamera/worker.cpp	2026-10-05 00:49:56.335580444 +0300
++++ b/src/plasmacamera/worker.cpp	2026-10-05 00:49:56.351580675 +0300
+@@ -1,6 +1,7 @@
+ // SPDX-FileCopyrightText: 2025 Andrew Wang
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
++#include <chrono>
+ #include "worker.h"
+ 
+ static const QMap<libcamera::PixelFormat, QImage::Format> NATIVE_FORMATS{
+@@ -213,6 +214,16 @@
+         }
+     }
+ 
++    // m52xq: do not queue a new viewfinder frame while the previous one is still waiting for the GUI thread (drop it).
++    // A frame that has waited for more than 250 ms counts as lost (e.g. its receiver was disconnected), so the counter
++    // can never get stuck.
++    const long long nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
++    if (g_vfInFlight.load() > 0 && nowMs - g_vfLastEmitMs.load() < 250) {
++        return;
++    }
++    g_vfInFlight.store(1);
++    g_vfLastEmitMs.store(nowMs);
++
+     // Emit view finder frame, m_image is moved for performance
+     Q_EMIT viewFinderFrame(std::move(m_image));
+ }
+diff -ruN a/src/plasmacamera/worker.h pcD/src/plasmacamera/worker.h
+--- a/src/plasmacamera/worker.h	2026-10-05 00:49:56.335580444 +0300
++++ b/src/plasmacamera/worker.h	2026-10-05 00:49:56.351580675 +0300
+@@ -12,6 +12,7 @@
+ #include <QMetaType>
+ #include <QCameraFormat>
+ 
++#include <atomic>
+ #include <memory>
+ #include <libcamera/libcamera.h>
+ #include <libcamera/framebuffer.h>
+@@ -20,6 +21,12 @@
+ #include "image.h"
+ #include "settings.h"
+ 
++// m52xq: viewfinder frames that the worker has emitted but the GUI thread has not taken yet, and when the last one was emitted.
++// The GUI thread needs longer per frame (zoom, rotation, autofocus, auto exposure on 50 MB frames) than the camera needs to
++// produce one, and without a limit the queued frames grew to gigabytes (1.3-1.8 GB per session -> out of memory).
++inline std::atomic<int> g_vfInFlight{0};
++inline std::atomic<long long> g_vfLastEmitMs{0};
++
+ // needed to pass shared_ptr via signals
+ Q_DECLARE_METATYPE(const std::shared_ptr<libcamera::Camera>)
+ 
+diff -ruN a/src/plasmacameramanager.cpp pcD/src/plasmacameramanager.cpp
+--- a/src/plasmacameramanager.cpp	2026-10-05 00:49:56.335580444 +0300
++++ b/src/plasmacameramanager.cpp	2026-10-05 00:49:56.351580675 +0300
+@@ -2,6 +2,7 @@
+ // SPDX-FileCopyrightText: 2025 Devin Lin <devin@kde.org>
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
++#include "plasmacamera/worker.h"
+ #include <QSize>
+ 
+ #include "camerasettings.h"
+@@ -523,6 +524,7 @@
+ 
+ void PlasmaCameraManager::processViewfinderFrame(const QImage &image)
+ {
++    g_vfInFlight.store(0); // m52xq: this frame has been taken by the GUI thread, the worker may send the next one
+     if (image.isNull()) {
+         return;
+     }

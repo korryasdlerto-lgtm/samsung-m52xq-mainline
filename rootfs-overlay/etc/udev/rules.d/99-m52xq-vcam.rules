@@ -1,0 +1,1 @@
+KERNEL=="video2[01]", SUBSYSTEM=="video4linux", GROUP="video", MODE="0666"

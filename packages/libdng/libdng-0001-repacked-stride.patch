@@ -1,0 +1,14 @@
+--- a/src/libdng.c	2025-11-11 01:01:35.000000000 +0200
++++ b/src/libdng.c	2026-10-04 16:20:08.507543704 +0300
+@@ -535,6 +535,11 @@
+ 	TIFFSetField(tif, DNGTAG_WHITELEVEL, 1, &dng->whitelevel);
+ 
+ 	unsigned int stride = dng->stride;
++	if (dng->needs_repack) {
++		/* m52xq: libdng_repack() returns a COMPACT buffer (no line padding); using the sensor stride here shifted
++		 * every row by the padding (12 bytes with the 16 byte aligned qcom-camss stride) and smeared the image */
++		stride = ((uint64_t) width * dng->bit_depth + 7) / 8;
++	}
+ 	for (int row = 0; row < height; row++) {
+ 		TIFFWriteScanline(tif, (void *) raw_frame + (row * stride), row, 0);
+ 	}

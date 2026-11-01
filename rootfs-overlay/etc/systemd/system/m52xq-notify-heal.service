@@ -1,0 +1,11 @@
+[Unit]
+Description=M52XQ: restart the SMS / telephony daemon after it lost a notification (tap in the shade opens nothing)
+After=systemd-journald.service
+
+[Service]
+ExecStart=/usr/local/bin/m52xq-notify-heal
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

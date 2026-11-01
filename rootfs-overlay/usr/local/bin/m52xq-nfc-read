@@ -1,0 +1,123 @@
+#!/usr/bin/python3
+# m52xq: poll nfc0 for a tag/card over the kernel's NFC generic netlink and print what the kernel knows about it
+# (protocol, UID = NFCID1, SENS_RES/SEL_RES, SENSB/SENSF). Read-only: no data is written to the card.
+# Usage: m52xq-nfc-read.py [seconds, default 30] [device index, default 0]
+import os, socket, struct, sys, time
+
+TIMEOUT = float(sys.argv[1]) if len(sys.argv) > 1 else 30.0
+DEV = int(sys.argv[2]) if len(sys.argv) > 2 else 0
+
+NLMSG_ERROR, NLMSG_DONE = 2, 3
+NLM_F_REQUEST, NLM_F_ACK, NLM_F_DUMP = 1, 4, 0x300
+GENL_ID_CTRL, CTRL_CMD_GETFAMILY = 0x10, 3
+CTRL_ATTR_FAMILY_ID, CTRL_ATTR_FAMILY_NAME, CTRL_ATTR_MCAST_GROUPS = 1, 2, 7
+CTRL_ATTR_MCAST_GRP_NAME, CTRL_ATTR_MCAST_GRP_ID = 1, 2
+# include/uapi/linux/nfc.h
+NFC_CMD_START_POLL, NFC_CMD_STOP_POLL, NFC_CMD_GET_TARGET = 6, 7, 8
+NFC_EVENT_TARGETS_FOUND, NFC_EVENT_TARGET_LOST = 9, 12
+A_DEV, A_PROTO, A_TIDX, A_SENS, A_SEL, A_ID1, A_SENSB, A_SENSF, A_IM = 1, 3, 4, 5, 6, 7, 8, 9, 13
+PROTO = {1: "Jewel", 2: "MIFARE", 3: "FeliCa", 4: "ISO14443-A (ISO-DEP)", 5: "NFC-DEP", 6: "ISO14443-B", 7: "ISO15693"}
+IM_ALL = sum(1 << p for p in (1, 2, 3, 4, 6, 7))
+
+s = socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, 16)  # NETLINK_GENERIC
+s.bind((0, 0))
+seq = [0]
+
+
+def attr(t, payload):
+    a = struct.pack("HH", 4 + len(payload), t) + payload
+    return a + b"\0" * ((4 - len(a) % 4) % 4)
+
+
+def send(fam, cmd, attrs=b"", flags=NLM_F_REQUEST | NLM_F_ACK):
+    seq[0] += 1
+    body = struct.pack("BBH", cmd, 1, 0) + attrs
+    s.send(struct.pack("IHHII", 16 + len(body), fam, flags, seq[0], 0) + body)
+
+
+def attrs_of(b):
+    out, o = {}, 0
+    while o + 4 <= len(b):
+        ln, t = struct.unpack_from("HH", b, o)
+        if ln < 4:
+            break
+        out[t & 0x3fff] = b[o + 4:o + ln]
+        o += (ln + 3) & ~3
+    return out
+
+
+def messages(data):
+    o = 0
+    while o + 16 <= len(data):
+        ln, typ, fl, sq, pid = struct.unpack_from("IHHII", data, o)
+        yield typ, data[o + 16:o + ln]
+        o += (ln + 3) & ~3
+
+
+# resolve the "nfc" family and its "events" multicast group
+send(GENL_ID_CTRL, CTRL_CMD_GETFAMILY, attr(CTRL_ATTR_FAMILY_NAME, b"nfc\0"), NLM_F_REQUEST)
+fam = grp = None
+for typ, p in messages(s.recv(65536)):
+    if typ == GENL_ID_CTRL:
+        a = attrs_of(p[4:])
+        fam = struct.unpack("H", a[CTRL_ATTR_FAMILY_ID][:2])[0]
+        for g in attrs_of(a.get(CTRL_ATTR_MCAST_GROUPS, b"")).values():
+            ga = attrs_of(g)
+            if ga.get(CTRL_ATTR_MCAST_GRP_NAME, b"").rstrip(b"\0") == b"events":
+                grp = struct.unpack("I", ga[CTRL_ATTR_MCAST_GRP_ID])[0]
+if fam is None or grp is None:
+    sys.exit("no nfc generic netlink family (is CONFIG_NFC on?)")
+s.setsockopt(270, 1, grp)  # SOL_NETLINK, NETLINK_ADD_MEMBERSHIP
+
+devattr = attr(A_DEV, struct.pack("I", DEV))
+send(fam, NFC_CMD_START_POLL, devattr + attr(A_IM, struct.pack("I", IM_ALL)))
+print("опрос nfc%d запущен, приложите карту/метку (до %d с)" % (DEV, TIMEOUT), flush=True)
+s.settimeout(1.0)
+end = time.time() + TIMEOUT
+found = False
+while time.time() < end and not found:
+    try:
+        data = s.recv(65536)
+    except socket.timeout:
+        continue
+    for typ, p in messages(data):
+        if typ == NLMSG_ERROR:
+            err = struct.unpack_from("i", p)[0]
+            if err:
+                print("ошибка ядра:", os.strerror(-err), flush=True)
+        elif typ == fam and p[0] == NFC_EVENT_TARGETS_FOUND:
+            found = True
+if not found:
+    send(fam, NFC_CMD_STOP_POLL, devattr)
+    sys.exit("карта не найдена")
+
+send(fam, NFC_CMD_GET_TARGET, devattr, NLM_F_REQUEST | NLM_F_DUMP)
+s.settimeout(2.0)
+n = 0
+done = False
+while not done:
+    try:
+        data = s.recv(65536)
+    except socket.timeout:
+        break
+    for typ, p in messages(data):
+        if typ == NLMSG_DONE:
+            done = True
+        elif typ == fam and p[0] == NFC_CMD_GET_TARGET:
+            a = attrs_of(p[4:])
+            n += 1
+            protos = struct.unpack("I", a.get(A_PROTO, b"\0\0\0\0"))[0]
+            print("метка #%d:" % struct.unpack("I", a.get(A_TIDX, b"\0\0\0\0"))[0])
+            print("  протоколы: " + ", ".join(v for k, v in PROTO.items() if protos & (1 << k)))
+            if A_ID1 in a:
+                print("  UID (NFCID1): " + a[A_ID1].hex(":") + "  (%d байт)" % len(a[A_ID1]))
+            if A_SENS in a:
+                print("  SENS_RES (ATQA): %04x" % struct.unpack("H", a[A_SENS][:2])[0])
+            if A_SEL in a:
+                print("  SEL_RES (SAK): %02x" % a[A_SEL][0])
+            if A_SENSB in a:
+                print("  SENSB_RES: " + a[A_SENSB].hex())
+            if A_SENSF in a:
+                print("  SENSF_RES: " + a[A_SENSF].hex())
+print("найдено меток: %d" % n)
+send(fam, NFC_CMD_STOP_POLL, devattr)

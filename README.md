@@ -1,198 +1,147 @@
 # samsung-m52xq-mainline
 
-Work-in-progress mainline Linux kernel port for the **Samsung Galaxy M52 5G**
-(codename `m52xq`, model `SM-M526B`/`SM-M526BR`), targeting a real
-**postmarketOS** installation running a genuine upstream Linux kernel —
-not a downstream Android kernel, not Halium/libhybris.
+postmarketOS + KDE Plasma Mobile on a **mainline Linux kernel** for the
+**Samsung Galaxy M52 5G** (codename `m52xq`, SM-M526B / SM-M526BR,
+Qualcomm Snapdragon 778G / SM7325, platform "yupik").
 
-**Status: early research / build-environment stage. Nothing has been
-tested on real hardware yet.** This repository documents what has been
-found and built so far, honestly, including known gaps and TODOs. It is
-not a working port.
+Not Halium, not libhybris, not the Android kernel: the phone runs a mainline
+Linux 7.1.2 kernel with device drivers and fixes, and a normal Linux
+userspace. Tested on one SM-M526B. Personal, unofficial project.
 
-## Why this exists
+**Status (release v44 / "unofficial v1", 2026-11-01): a daily-usable
+Linux phone** - calls, SMS, mobile data on two SIMs, Wi-Fi, Bluetooth,
+GPU-accelerated UI, sound, GPS, sensors, cameras, deep sleep that wakes for
+calls, SMS and Telegram messages.
 
-Most Linux-on-Android efforts for this class of device (and the parallel
-effort for this exact phone, see [Related work](#related-work) below) use
-Halium/Droidian-style approaches: run a real Linux distro alongside the
-original Android vendor stack, bridging to it via `libhybris` for GPU,
-sensors, radio, etc. That gets you a usable phone quickly, but you inherit
-every quirk and bug of the vendor's Android build forever.
-
-This repository is the opposite approach: get the Samsung M52 5G booting
-on a **real, unmodified mainline Linux kernel**, talking to hardware
-through upstream, in-tree drivers only. No vendor blobs beyond the
-handful of `remoteproc` firmware binaries (modem, WiFi co-processor, DSP)
-that even fully mainline devices still need. If it works, you get a
-genuinely maintainable, long-term-supportable Linux phone — but getting
-there requires each piece of hardware to already have (or gain) upstream
-kernel support.
-
-## Hardware
+## Repositories
 
 | | |
 |---|---|
-| Device | Samsung Galaxy M52 5G |
-| Codename | `m52xq` (`samsung-m52xq` in postmarketOS naming) |
-| Models | SM-M526B, SM-M526BR |
-| SoC | Qualcomm Snapdragon 778G 5G (**SM7325**) |
-| Qualcomm internal platform codename | **"yupik"** — confirmed directly from this device's own vendor kernel boot log (`subsys-pil-tz soc:qcom,ipa_fws: yupik_ipa_fws: ...`), not inferred |
-| CPU | Kryo 670 (octa-core) |
-| GPU | Adreno 642L (Adreno 660-class) |
-| Display | 1080×2400, Novatek NT36672E panel driver IC |
-| RAM / Storage | 8 GB / 128 GB |
-| Charger IC | Silicon Mitus SM5714 (fuel gauge + charger) |
-| Direct-charge IC | PCA9468 |
-| Auxiliary PMIC | Qualcomm PM8008 |
-| Fingerprint sensor | ET523 |
-| Audio codec | Qualcomm WCD938x (Bolero subsystem, TX/RX/VA macros) |
-| Touchscreen | Synaptics or STM, varies by board revision |
-| WiFi | Qualcomm QCA (chip generation not yet confirmed to be mainline-compatible) |
+| This repository | installer, rootfs overlay (scripts, services, configs), patched package recipes, device tree, documentation |
+| Kernel | [sc7280-mainline-linux-m52xq](https://github.com/korryasdlerto-lgtm/sc7280-mainline-linux-m52xq), branch `master` = the kernel in v44 (7.1.2 #437), config `arch/arm64/configs/m52xq_defconfig` |
 
-All of the above (except the SoC/platform codename, which is public
-Qualcomm/Linaro terminology) was extracted from the real downstream device
-tree source shipped in
-[`LineageOS/android_kernel_samsung_sm7325`](https://github.com/LineageOS/android_kernel_samsung_sm7325)
-(branch `lineage-23.2`,
-`arch/arm64/boot/dts/samsung/m52/m52xq/m52xq_eur_open_w00_r05.dts`), cross-
-referenced against
-[`LineageOS/android_device_samsung_m52xq`](https://github.com/LineageOS/android_device_samsung_m52xq)
-and
-[`LineageOS/android_device_samsung_sm7325-common`](https://github.com/LineageOS/android_device_samsung_sm7325-common)
-for board config (`BOARD_NAME := SRPUF17B001`) and the kernel module list.
+## What works
 
-## Why SM7325 has any hope of a mainline port at all
+| Feature | Status | Notes |
+|---|---|---|
+| Boot, UFS storage | works | regulator load, conservative UFS gear, error-handler deadlock fix |
+| Display | works | own driver for the Samsung S6E3HAB (AMB667AN01) AMOLED panel |
+| GPU (Adreno 642L) | works | freedreno, GPU-composited Plasma; GMU start/resume fixes (clock IDs, interconnect, GX_CBCR, OPP) |
+| Touchscreen | works | Synaptics TCM on-cell driver |
+| Wi-Fi, Bluetooth | works | WCN6750 / ath11k, Wake-on-WLAN with an APF packet filter |
+| Calls, SMS, mobile data | works | both SIMs (DSDS), ModemManager patches, in-call audio over Q6 voice |
+| Audio | works | loudspeaker (TFA9878), earpiece, microphones, noise suppression calibration |
+| GPS | works | own raw-QRTR QMI LOC client (`tools/m52xq-gnss.py`), not through a standard location service yet |
+| Sensors | works | light, proximity (screen off in calls), accelerometer (auto-rotate) through the SSC DSP (fastrpc, hexagonrpcd, patched libssc) |
+| Battery, charging | works | own SM5714 fuel gauge, charger and Type-C drivers |
+| Cameras | partial | see below |
+| Suspend | works | wakes for calls, SMS and Telegram over Wi-Fi; drain see below |
+| NFC | not verified | driver brought up, not confirmed end to end |
+| Fingerprint | no | |
+| Video out over USB-C | not tested | |
 
-Qualcomm's SM7325/SC7280/QCM6490 are the same silicon platform family
-("yupik"). Crucially, the **Fairphone 5** (QCM6490) already has real,
-merged, working mainline kernel support —
-[`arch/arm64/boot/dts/qcom/qcm6490-fairphone-fp5.dts`](https://github.com/torvalds/linux/blob/master/arch/arm64/boot/dts/qcom/qcm6490-fairphone-fp5.dts)
-lives directly in `torvalds/linux`, not a fork. Its own history shows it
-was bootstrapped from the pre-existing SC7280 support (a ChromeOS
-platform), by splitting out the ChromeOS-specific TrustZone assumptions
-into `sc7280-chrome-common.dtsi` so it could boot on a normal
-(non-ChromeOS) board.
+### Cameras
 
-There is also live evidence of upstream interest specifically in SM7325:
-the very same `qcm6490-fairphone-fp5.dts` file contains, as of this
-writing, a TODO referencing an in-flight mailing list patch that adds
-`"qcom,sm7325-lpass-tx-macro"` as an explicit compatible string
-(see [lore.kernel.org/linux-arm-msm/20260526-sc7280-tx-macro-v1-0-1aad6900fec0@fairphone.com](https://lore.kernel.org/linux-arm-msm/20260526-sc7280-tx-macro-v1-0-1aad6900fec0@fairphone.com/t/)) —
-i.e. SM7325-specific compatibility is actively being added upstream, not
-purely assumed identical to QCM6490.
+- Kernel: sensor drivers IMX616 (front), S5KGW3 (main 64 MP), GC5035,
+  FP5529 flash LED, a camera scanner (`m52xq-camscan`), CAMSS fixes, ICP (A5)
+  bring-up, Venus secure mode for hardware video encoding.
+- Userspace: Plasma Camera with 16 patches (`packages/plasma-camera`:
+  orientation, autofocus and tap-to-focus, pinch zoom, full-resolution and RAW
+  photo, JPEG quality, video with the hardware encoder), Megapixels,
+  libcamera (soft ISP fixes), libmegapixels, libdng.
+- Not every lens and mode works yet; details in `docs/RESEARCH-LOG-RU.md`.
+- Hardware video encoding / decoding (Venus, vpu-2.0): the Venus driver of the
+  kernel repository (`drivers/media/platform/qcom/venus`, with `secure.c` for
+  the secure non-pixel buffer the m52xq firmware needs), built as modules
+  (`CONFIG_VIDEO_QCOM_VENUS=m`) and installed to `/usr/lib/modules/7.1.2/extra/venus`.
+  The Venus firmware is not in this repository.
+- Second path, experimental: Qualcomm GPL camera driver + CamX userspace
+  (`camx/`). Step 1 is done (the driver builds against our kernel and binds on
+  the phone); the CamX userspace part is not started.
 
-This repository uses [`sc7280-mainline/linux`](https://github.com/sc7280-mainline/linux)
-(a maintained mainline-kernel fork tracking SC7280/SM7325/QCM6490
-devices, which already carries the Fairphone 5 support) as the base for
-all kernel work, rather than starting from vanilla `torvalds/linux`.
+### Sleep and battery
 
-**No existing mainline work specifically targeting `m52xq`/SM7325 was
-found anywhere** (checked: postmarketOS wiki, postmarketOS pmaports
-GitLab, general web search, GitHub search for related author profiles).
-One community member (`19atlas`) has a postmarketOS wiki device page for
-this exact phone, but it explicitly targets a **downstream** kernel
-(LineageOS `lineage-22` branch) and is marked "not tested" / "does not
-boot" for every single feature — it is not related to this mainline
-effort, and does not currently work either way.
+- Base drain in deep sleep (s2idle) is about 37 mA, about 1 %/h, when nothing
+  wakes the phone.
+- With Telegram Desktop connected it is about 4 %/h: the Telegram server drops
+  an idle connection about every minute and the phone wakes up (Wi-Fi WoW) to
+  reconnect. Messages and calls still arrive at once.
+- In sleep, SMS and messenger notifications give only the sound; the display
+  stays off. Calls turn the display on.
+- Helpers: `m52xq-suspend-guard` (retries a failed suspend and suspends after
+  2 minutes of real idleness), `m52xq-wifi-dark` + system-sleep hooks (dark
+  resume after a Wi-Fi / modem wake-up), `m52xq-notify-heal` (restarts the SMS /
+  telephony daemon after a lost notification).
 
-## What's in this repository
+## Install
+
+Requirements: unlocked bootloader, TWRP for m52xq, a microSD card with the
+zips, backups of EFS, persist, modem, boot, vendor_boot and vbmeta.
+
+- Flashable zip (1.9 GB): <https://drive.google.com/file/d/1my1k5Hmky13wSR7z21cfibyqICJNlW5F/view?usp=sharing>
+- Video guide: <https://www.youtube.com/watch?v=Kg9ajKq3kkw>
+
+Flash **UN1CA_3.1.0** first to get the maximum system partition size (the
+installer grows `system` to 8 000 000 000 bytes and the rootfs fills it).
+After LineageOS 23 the partition is 1 GB smaller, but the install still works.
+
+TWRP steps:
 
 ```
-device-tree/
-  sm7325-samsung-m52xq.dts   — draft mainline device tree, heavily annotated
-                                with TODOs and known-wrong sections. See
-                                "Current state" below before touching this.
-pmaports-device/
-  device-samsung-m52xq/      — postmarketOS device package (deviceinfo +
-                                APKBUILD), created via `pmbootstrap aportgen`
-  linux-samsung-m52xq/       — postmarketOS kernel package APKBUILD,
-                                pointing at sc7280-mainline/linux + this
-                                repo's device tree + a Fairphone-5-derived
-                                defconfig as a starting kernel config
-docs/
-  RESEARCH-LOG-RU.md         — the full, chronological research log (in
-                                Russian) this port was developed from —
-                                every command run, every dead end, every
-                                source checked, with timestamps. Kept
-                                as-is for traceability rather than
-                                translated/cleaned up.
+Wipe - Format Data - yes - enter - Back - Back - Advanced Wipe - Data - Repair or Change File System - Change File System - EXT4 - Swipe to Change - Back - Back - Back - Back - Back - Install - Select Storage - Micro SD card - UN1CA_3.1.0-a5bf09f2_20260604_m52xq-sign.zip - Swipe to confirm Flash - Back - Back - Wipe - Format Data - enter - Back - Back - Advanced Wipe - Data - Repair or Change File System - Change File System - EXT4 - Swipe to Change - Back - Back - Back - Back - Back - Install - postmarketos-m52xq-mainline-plasma-unofficialv1.zip - Swipe to confirm Flash - Reboot System
 ```
 
-## Current state of `device-tree/sm7325-samsung-m52xq.dts`
+The installer writes boot and vendor_boot, writes the rootfs to `system`, puts
+the overlay of `rootfs-overlay/` on top and takes the Bluetooth address, the
+modem firmware and the sensor registry from the phone's own partitions.
 
-Starting point: a copy of `qcm6490-fairphone-fp5.dts`, then trimmed and
-partially adapted. **It compiles cleanly** with `dtc` (verified with
-`make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- qcom/sm7325-samsung-m52xq.dtb`
-against the `sc7280-mainline/linux` tree) — but "compiles" only means the
-syntax and node references are internally consistent, **not** that it
-describes this phone's real hardware correctly. Concretely, per component:
+Default password (screen unlock and root): `112233`. Change the unlock
+password:
 
-| Component | Status |
+```
+printf "user:1111\n" | sudo chpasswd
+```
+
+### Back to Android
+
+Video guide: <https://www.youtube.com/watch?v=0lgLbtdl4rA>
+
+```
+Wipe - Format Data - yes - enter - Back - Back - Back - Advanced Wipe - Data - Repair or Change File System - Change File System - EXT4 - Swipe to Change - Back - Back - Back - Back - Back - Install - lineage-23.2-2026-nightly-m52xq-signed.zip - Back - Back - Wipe - Format Data - enter - Reboot System
+```
+
+Stock firmware can always be restored with Odin.
+
+## Repository layout
+
+| Path | Content |
 |---|---|
-| GPU (Adreno a660) | Same silicon as FP5; zap-shader firmware path updated to a device-specific path, but the actual `.mbn` firmware blob for this device still needs sourcing |
-| Display panel (Novatek NT36672E) | Mainline driver **exists** (`drivers/gpu/drm/panel/panel-novatek-nt36672e.c`) — DTS panel node is currently a placeholder still referencing FP5's Raydium panel compatible string, needs replacing with real GPIOs/supplies from the downstream DTS |
-| Audio codec (WCD938x) | Mainline driver **exists** (`sound/soc/codecs/wcd938x.c`, `wcd938x-sdw.c`) — entire audio-codec DT node currently **commented out** in the draft (its supporting pinctrl/regulator/SWR sections were trimmed and not yet reintroduced) |
-| Touchscreen (Synaptics/STM) | RMI4 mainline driver exists (`drivers/input/rmi4/`, `syna,rmi4-i2c`/`syna,rmi4-spi`) but protocol compatibility with this specific board's chip/firmware is **unconfirmed** — Samsung sometimes runs a vendor protocol on top of Synaptics silicon. STM alternative (`stmfts.c`) similarly unconfirmed. **Not included in the draft at all yet.** |
-| Charger (SM5714 + PCA9468 direct-charge) | **No mainline driver exists** (checked `drivers/power/`, `drivers/iio/` in this kernel tree) — this is a real blocker for battery charge management specifically. Charging *hardware detection* alone might still work via generic power-supply framework fallbacks, but active charge control will not, without writing a driver from scratch. |
-| PMIC regulators (voltage tables) | Copied verbatim from Fairphone 5's `pm7325`/`pm8350c` regulator voltage ranges. **Almost certainly wrong for this board** — different phone, different regulator wiring. This is flagged as one of the highest-risk unverified areas (wrong voltage on the wrong rail is how you damage hardware), and is exactly why this has not been tested on real hardware. |
-| WiFi | Deliberately **not enabled** (`status` left commented out) pending confirmation of which physical WiFi chip this board revision uses and whether it's the same mainline-supported class as Fairphone 5's, or the closed-source `qca_cld3_wlan.ko`-requiring chip already confirmed present in the parallel Halium/Droidian port of this exact device (see below) |
-| Fingerprint (ET523) | No mainline driver; deliberately out of scope for a first boot attempt |
-| Camera (`cci0`/`cci1`) | Entirely removed from the draft — FP5's camera sensors (Sony IMX858, Samsung S5KJN1) are certainly not what's on this phone; needs its own investigation later |
-| Vibrator | FP5's `awinic,aw86927` node removed; real chip on this phone not yet identified |
-| UFS storage | `status = "okay"` only, GPIO/supply values not yet cross-checked against downstream DTS |
+| `installer/` | `META-INF/.../update-binary` of the flashable zip (TWRP shell installer) |
+| `rootfs-overlay/` | files the installer puts on the rootfs: `m52xq-*` scripts and services, system-sleep hooks, udev rules, modem/sensor/audio configs, Plasma Mobile QML. Binaries, proprietary firmware and sensor configs are not here: see `rootfs-overlay/EXCLUDED-FILES.txt` |
+| `packages/` | pmaports recipes (APKBUILD + patches) of the packages we patched: spacebar, plasma-dialer, plasma-mobile, plasma-camera, megapixels, libcamera, libmegapixels, libdng, libssc, modemmanager, plasma-keyboard, kalk, qt6-qtvirtualkeyboard |
+| `pmaports-device/` | `device-samsung-m52xq` and `linux-samsung-m52xq` |
+| `device-tree/vendor_boot-m52xq-v148.dts` | the device tree in vendor_boot v238 (based on the stock board DTB, with the mainline fixes) |
+| `device-tree/sm7325-samsung-m52xq.dts` | early upstream-style draft, not used by the release |
+| `camx/` | experimental CamX camera path: our patch to the Qualcomm GPL camera driver, the `m52xq-gdsc-reg` module, status |
+| `tools/` | `m52xq-gnss.py` (GPS), `audit_gcc_clock_ids.py` (finds downstream/mainline clock ID mix-ups in the DT) |
+| `docs/RESEARCH-LOG-RU.md` | the full research and build log (Russian), every finding with commands and md5 |
+| `docs/CHANGELOG-v44-RU.txt` | what changed in v44 (Russian) |
 
-**Bottom line: do not attempt to boot this DTS on real hardware as-is.**
-The regulator voltage tables in particular are unverified guesses copied
-from a different board.
+## Building
 
-## Build environment notes
+- Kernel: `make ARCH=arm64 LLVM=1 m52xq_defconfig Image` with clang/LLD 22
+  (the pmbootstrap Alpine chroot); the boot image is the previous boot.img with
+  the new `Image` and the appended DTB tail.
+- Packages: copy a directory from `packages/` to `pmaports/temp/` and run
+  `pmbootstrap build --arch aarch64 --force <name>`.
 
-- Kernel builds natively on `aarch64` hardware just fine if you have one
-  handy — this repository's own kernel source (`sc7280-mainline/linux`)
-  cross-compiled fine on an x86_64 host too, using a standard
-  `aarch64-linux-gnu-gcc` toolchain (Debian/Ubuntu package
-  `gcc-aarch64-linux-gnu`).
-- `sc7280-mainline/linux` ships a ready-made `arch/arm64/configs/fp5_defconfig`
-  — that's the config this repo's kernel package currently uses as a
-  starting point (it's the closest known-working config for this
-  platform family; `make dtbs` for a full `dtbs` target will also build
-  hundreds of unrelated Windows-on-ARM laptop device trees that happen to
-  live in the same `arch/arm64/boot/dts/qcom/` directory — build the
-  specific target instead, e.g. `make qcom/sm7325-samsung-m52xq.dtb`).
-- `postmarketOS`'s `pmaports` repository moved from `gitlab.com` to a
-  self-hosted `gitlab.postmarketos.org` in 2024 — make sure `pmbootstrap`
-  and any cached clones point at the new host.
-- `pmbootstrap` (the postmarketOS build tool) requires Python 3.9+; on an
-  older host (this one only had 3.8), running it inside a
-  `python:3.11-slim` Docker container with `--privileged` (needed for the
-  chroot/mount operations `pmbootstrap` performs) worked cleanly. Mount
-  `~/.config` as a volume too, not just the `work` directory — the config
-  file (`~/.config/pmbootstrap_v3.cfg`) is written there and is lost
-  between container runs otherwise.
-- `pmbootstrap aportgen` package-name argument for a new device must use a
-  hyphen (`device-samsung-m52xq`), not a slash (`device/samsung-m52xq`) —
-  a slash creates a broken nested directory.
+## Credits
 
-## Related work
-
-This is one of two parallel, independent approaches to running Linux on
-this specific phone, developed by the same person around the same time:
-
-- **Halium 13 + Plasma Mobile** (downstream Android kernel + libhybris
-  bridge) — already boots to a working desktop with real GPU
-  acceleration, working SSH/USB networking, and a fully-booting Android
-  container (used only for its HAL/vendor blob bridge, not as a user-
-  facing OS). Several genuinely working fixes and root-caused bugs from
-  that project are documented in its own separate repository. The two
-  approaches share zero code but occasionally share hardware-identification
-  findings (e.g. the a660 GPU zap-shader quirk, the SM5714/PCA9468 charger
-  identification, the `qca_cld3_wlan.ko` closed-source WiFi driver
-  requirement) discovered independently in each.
+postmarketOS and pmbootstrap, KDE Plasma Mobile, the mainline Linux developers
+for Qualcomm SC7280 / QCM6490 (Fairphone 5 and others), LineageOS (device and
+kernel sources used as reference), the TWRP maintainers for m52xq.
 
 ## License
 
-Device tree and pmaports package files: same license as their respective
-upstream templates (`BSD-3-Clause` for the device tree, following
-`qcm6490-fairphone-fp5.dts`'s own header; postmarketOS pmaports packages
-are typically `MIT`, matching the `aportgen`-generated `APKBUILD` headers).
-Research log: no specific license asserted, provided as-is for reference.
+Kernel code: GPL-2.0 (see the kernel repository). Patches follow the license of
+the patched project. Scripts and documentation in this repository: GPL-2.0.

@@ -1,0 +1,9 @@
+module org.kde.plasma.private.mobileshell.windowplugin
+linktarget windowplugin
+optional plugin windowplugin
+classname org_kde_plasma_private_mobileshell_windowpluginPlugin
+typeinfo windowplugin.qmltypes
+prefer :/org/kde/plasma/private/mobileshell/windowplugin/
+WindowMaximizedTracker 254.0 WindowMaximizedTracker.qml
+depends QtQuick
+

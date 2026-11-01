@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+# M52XQ: replacement for callaudiod (same D-Bus API, org.mobian_project.CallAudio) for the modem voice path.
+# The voice audio runs ADSP -> codec without PulseAudio, so the shell's call buttons (mute, speaker) have to be
+# applied by m52xq-voicecall (root); this service keeps the state and writes it to a small file it polls.
+import json
+import os
+
+from gi.repository import Gio, GLib
+
+BUS_NAME = 'org.mobian_project.CallAudio'
+PATH = '/org/mobian_project/CallAudio'
+STATE_FILE = '/run/user/%d/m52xq-callaudio.json' % os.getuid()
+XML = '''<node><interface name="org.mobian_project.CallAudio">
+ <method name="SelectMode"><arg type="u" direction="in"/><arg type="b" direction="out"/></method>
+ <method name="EnableSpeaker"><arg type="b" direction="in"/><arg type="b" direction="out"/></method>
+ <method name="MuteMic"><arg type="b" direction="in"/><arg type="b" direction="out"/></method>
+ <property name="AudioMode" type="u" access="read"/>
+ <property name="SpeakerState" type="u" access="read"/>
+ <property name="MicState" type="u" access="read"/>
+</interface></node>'''
+
+# CALL_AUDIO_MODE_DEFAULT = 0, CALL_AUDIO_MODE_CALL = 1; SPEAKER_OFF = 0 / ON = 1; MIC_OFF (muted) = 0 / MIC_ON = 1
+state = {'mode': 0, 'speaker': 0, 'mic': 1}
+conn = None
+
+
+def save():
+    tmp = STATE_FILE + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump({'mic_muted': state['mic'] == 0, 'speaker': state['speaker'] == 1, 'mode': state['mode']}, f)
+    os.replace(tmp, STATE_FILE)
+
+
+def notify(prop, value):
+    conn.emit_signal(None, PATH, 'org.freedesktop.DBus.Properties', 'PropertiesChanged',
+                     GLib.Variant('(sa{sv}as)', (BUS_NAME, {prop: GLib.Variant('u', value)}, [])))
+
+
+def set_state(key, prop, value):
+    if state[key] != value:
+        state[key] = value
+        save()
+        notify(prop, value)
+
+
+def on_method(conn_, sender, path, iface, method, params, invocation):
+    arg = params.unpack()[0]
+    if method == 'SelectMode':
+        # a call starts (1) or ends (0): handset earpiece, microphone on. v40: also at the end of the call, so the next
+        # call never starts on the loud speaker of the previous one (m52xq-voicecall read it while dialing), and saved
+        # every time (before: only when the mode itself changed)
+        state['speaker'] = 0
+        state['mic'] = 1
+        state['mode'] = int(arg)
+        save()
+        notify('SpeakerState', 0)
+        notify('MicState', 1)
+        notify('AudioMode', int(arg))
+    elif method == 'EnableSpeaker':
+        set_state('speaker', 'SpeakerState', 1 if arg else 0)
+    elif method == 'MuteMic':
+        set_state('mic', 'MicState', 0 if arg else 1)
+    invocation.return_value(GLib.Variant('(b)', (True,)))
+
+
+def on_get(conn_, sender, path, iface, prop):
+    key = {'AudioMode': 'mode', 'SpeakerState': 'speaker', 'MicState': 'mic'}.get(prop)
+    return GLib.Variant('u', state[key]) if key else None
+
+
+def on_bus(c, name):
+    global conn
+    conn = c
+    node = Gio.DBusNodeInfo.new_for_xml(XML)
+    c.register_object(PATH, node.interfaces[0], on_method, on_get, None)
+    save()
+
+
+def main():
+    loop = GLib.MainLoop()
+    Gio.bus_own_name(Gio.BusType.SESSION, BUS_NAME, Gio.BusNameOwnerFlags.NONE, on_bus, None,
+                     lambda *a: loop.quit())
+    try:
+        loop.run()
+    finally:
+        try:
+            os.unlink(STATE_FILE)
+        except OSError:
+            pass
+
+
+main()

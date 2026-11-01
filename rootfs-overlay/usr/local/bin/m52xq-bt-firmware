@@ -1,0 +1,22 @@
+#!/bin/sh
+# m52xq: reload the Bluetooth firmware once /lib/firmware on the rootfs is available, then set this phone's BD address.
+# hci_uart_qca is built in and runs its setup at ~2 s, before the rootfs (qca/msbtfw11.mbn, msnv11.bin) and before the shared
+# WPSS are up, so the first setup fails and the driver keeps retrying for minutes. An "unbind" at that time sleeps in
+# hci_unregister_dev (D state, ~8 min seen) and blocks every suspend ("tasks refusing to freeze").
+# So: while Bluetooth is switched off (rfkill) do nothing; rebind once when it is switched on.
+d=/sys/bus/serial/drivers/hci_uart_qca
+rebind() {
+	[ -e $d/serial0-0 ] && echo serial0-0 > $d/unbind
+	sleep 1
+	echo serial0-0 > $d/bind
+	/usr/bin/python3 /usr/local/bin/m52xq-bt-addr.py
+}
+blocked() { rfkill list bluetooth 2>/dev/null | grep -q 'Soft blocked: yes'; }
+if blocked; then
+	rfkill event | while read -r line; do
+		blocked || break
+	done
+	# the loop ends on the first event that leaves Bluetooth unblocked
+fi
+rebind
+exit 0

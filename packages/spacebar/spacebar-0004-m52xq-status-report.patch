@@ -1,0 +1,98 @@
+--- a/daemon/channellogger.cpp	2026-10-30 05:56:06.539871675 +0200
++++ b/daemon/channellogger.cpp	2026-10-30 06:04:07.355096219 +0200
+@@ -178,6 +178,18 @@
+         co_return;
+     }
+ 
++    // m52xq: an SMS status report (the operator's delivery report) was shown as an empty received message: it only sets the delivery
++    // state of the sent message and is removed from the modem
++    if (msg->pduType() == MM_SMS_PDU_TYPE_STATUS_REPORT) {
++        static QSet<QString> handledReports;
++        if (!handledReports.contains(msg->uni())) {
++            handledReports.insert(msg->uni());
++            handleStatusReport(msg);
++            ModemController::instance().deleteMessage(msg->uni());
++        }
++        co_return;
++    }
++
+     // m52xq: modemConnected is emitted once per attached modem, checkMessages() then ran several times at once and saved the message
+     // two or three times before the first run had deleted it from the modem
+     static QSet<QString> handledUni;
+@@ -333,6 +345,47 @@
+     Q_EMIT messageUpdated(message.phoneNumberList.toString(), message.id);
+ }
+ 
++static QString m52xqDigits9(const QString &number)
++{
++    QString d;
++    for (const QChar c : number) {
++        if (c.isDigit()) {
++            d += c;
++        }
++    }
++    return d.right(9);
++}
++
++void ChannelLogger::handleStatusReport(ModemManager::Sms::Ptr msg)
++{
++    const QString num = m52xqDigits9(msg->number());
++    const uint ref = msg->messageReference();
++    const int ds = static_cast<int>(msg->deliveryState());
++    QString id = m_sentByRef.value(num + QLatin1Char(':') + QString::number(ref));
++    if (id.isEmpty()) {
++        id = m_lastSentTo.value(num); // no reference known (the report came after a restart): the last message sent to this number
++    }
++    qDebug() << "status report from" << msg->number() << "reference" << ref << "delivery state" << ds << "-> message" << id;
++    if (id.isEmpty()) {
++        return;
++    }
++    // 3GPP TS 23.040: 0x00-0x02 delivered; 0x20-0x3f temporary error (the SMSC retries: nothing to show yet); 0x40-0xff not delivered
++    MessageState state;
++    if (ds >= 0 && ds <= 0x02) {
++        state = MessageState::Delivered;
++    } else if (ds >= 0x40 && ds < 0x100) {
++        state = MessageState::Failed;
++    } else {
++        return;
++    }
++    m_database.updateMessageDeliveryState(id, state);
++    Message message;
++    message.id = id;
++    message.phoneNumberList = PhoneNumberList(msg->number());
++    message.deliveryStatus = state;
++    updateMessage(message);
++}
++
+ QCoro::Task<void> ChannelLogger::saveMessage(const PhoneNumberList &phoneNumberList,
+                                              const QDateTime &datetime,
+                                              const QString &text,
+@@ -537,6 +590,15 @@
+     });
+ 
+     QDBusReply<void> sendResult = co_await mmMessage->send();
++    if (sendResult.isValid()) {
++        // m52xq: the reference of the sent SMS identifies it in the status report
++        const QString key9 = m52xqDigits9(m.number);
++        m_lastSentTo.insert(key9, message.id);
++        m_sentByRef.insert(key9 + QLatin1Char(':') + QString::number(mmMessage->messageReference()), message.id);
++        connect(mmMessage.get(), &ModemManager::Sms::messageReferenceChanged, this, [this, key9, id = message.id](uint r) {
++            m_sentByRef.insert(key9 + QLatin1Char(':') + QString::number(r), id);
++        });
++    }
+ 
+     if (!sendResult.isValid()) {
+         m_database.updateMessageDeliveryState(message.id, MessageState::Failed);
+--- a/daemon/channellogger.h	2026-10-30 05:55:40.247642415 +0200
++++ b/daemon/channellogger.h	2026-10-30 06:04:07.339097257 +0200
+@@ -68,6 +68,10 @@
+     void createDownloadNotification(const MmsMessage &mmsMessage);
+     QCoro::Task<void> addMessage(const Message &message);
+     void updateMessage(const Message &message);
++    // m52xq: SMS status reports (delivery reports) are not messages: matched to the sent message by (number, message reference)
++    void handleStatusReport(ModemManager::Sms::Ptr msg);
++    QHash<QString, QString> m_sentByRef; // "<last 9 digits>:<reference>" -> message id
++    QHash<QString, QString> m_lastSentTo; // "<last 9 digits>" -> id of the last message sent to that number
+     QCoro::Task<void> saveMessage(const PhoneNumberList &phoneNumberList,
+                                   const QDateTime &datetime,
+                                   const QString &text = QString(),

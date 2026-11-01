@@ -1,0 +1,109 @@
+# The group tag is just to easily find this APKBUILD by some scripts for automation
+# group=kde-plasma
+maintainer="team/kde <bribbers@disroot.org>"
+pkgname=plasma-dialer
+pkgver=6.7.5
+pkgrel=100
+pkgdesc="A dialer for Plasma Mobile (m52xq: DTMF key tones via libcanberra)"
+# armhf blocked by qt6-qtdeclarative
+arch="all !armhf"
+url="https://invent.kde.org/plasma-mobile/plasma-dialer"
+license="GPL-2.0-or-later"
+depends="
+	kirigami-addons
+	kirigami
+	oxygen-sounds
+	qt6-qtmultimedia
+	"
+makedepends="
+	extra-cmake-modules
+	callaudiod-dev
+	kcontacts-dev
+	kcoreaddons-dev
+	kdbusaddons-dev
+	ki18n-dev
+	libcanberra-dev
+	kio-dev
+	kirigami-addons-dev
+	knotifications-dev
+	kpeople-dev
+	libphonenumber-dev
+	modemmanager-qt-dev
+	pulseaudio-qt-dev
+	qt6-qtbase-dev
+	qt6-qtdeclarative-dev
+	reuse
+	samurai
+	"
+subpackages="$pkgname-lang"
+
+case "$pkgver" in
+	*.*.9*) _rel=unstable;;
+	*) _rel=stable;;
+esac
+
+_repo_url="https://invent.kde.org/plasma-mobile/plasma-dialer.git"
+source="https://download.kde.org/$_rel/plasma/$pkgver/plasma-dialer-$pkgver.tar.xz
+	plasma-dialer-0003-key-tones-canberra.patch
+	plasma-dialer-0004-default-open-action.patch
+	plasma-dialer-0005-m52xq-dual-sim.patch
+	plasma-dialer-0006-m52xq-speaker-sync.patch
+	plasma-dialer-0007-m52xq-add-contact.patch
+	dtmf-clear.wav
+	dtmf-delete.wav
+	dtmf-0.wav
+	dtmf-1.wav
+	dtmf-2.wav
+	dtmf-3.wav
+	dtmf-4.wav
+	dtmf-5.wav
+	dtmf-6.wav
+	dtmf-7.wav
+	dtmf-8.wav
+	dtmf-9.wav
+	dtmf-hash.wav
+	dtmf-star.wav
+	"
+options="!check" # No tests
+
+build() {
+	cmake -B build -G Ninja \
+		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
+		-DCMAKE_INSTALL_PREFIX=/usr \
+		-DCMAKE_INSTALL_LIBDIR=lib
+	cmake --build build
+}
+
+check() {
+	ctest --test-dir build
+}
+
+package() {
+	DESTDIR="$pkgdir" cmake --install build
+	for f in "$srcdir"/dtmf-*.wav; do
+		install -Dm644 "$f" "$pkgdir"/usr/share/sounds/m52xq/"${f##*/}"
+	done
+}
+
+sha512sums="
+6af6feb5556f1caf8a7c71b9cbd9f8e4b8fd591ea1a7c0ac27ef111d7a1f9b525fb9076accd2a4e7f14894005ac9d2ec0a5959c4ebffc91aef08939f8ddc7d53  plasma-dialer-6.7.5.tar.xz
+14bfd4b9c838b0e28cc745883d2ef3a4f3693cba5fd8fc544faf23004b952306b615dad797737927989b7da17a1a93257b3f96bd6e177e77fc03cc15897772e6  plasma-dialer-0003-key-tones-canberra.patch
+8ebf76895f8c9e6084c6b37355d642d927451005ac5a6cabd046c46d6115d439822571b9c604ed5cba4f78003975bfcf0b81039294c8e424275540605fba16c8  plasma-dialer-0004-default-open-action.patch
+56107afc443f45483ccac7d7cab60ce00b01b4ef3037d886f2cdbf4e585551144011adf8513a5d9e46abbad0284ac9a4b47533d2233db38e5857427959924674  plasma-dialer-0005-m52xq-dual-sim.patch
+46684268d35e93e6b206dafec804ccf379fdc5f20dd598f2063725c39d875f3a6ec01bd48fd6e8d6c67caa632615e69cf2389ff59f4d7271fbedcc9f0be0e12c  plasma-dialer-0006-m52xq-speaker-sync.patch
+e5f6f5a72823918aa0945f3befdccdd712291a2a2d15fc778b137d2dc3fe377ee13a150710f78901cf546abbaf2b3189762b00b77b7e953df3eff40dfecc75b9  plasma-dialer-0007-m52xq-add-contact.patch
+99377ef251b7fe682eff467b992e8e3a4ff6a50822c6da59a66af919d80432d32bf2ba103f38288378d20bfb74ef9fe225acaf944a35412f5dbfc545c4bfd25c  dtmf-clear.wav
+e67bcfc1d48562436cd282de4f7996383bc8729a97fa43e7016fdda5dfe66a660d0f74e0f66a46e22b4f79838973040d6edab24de966885247eff388dd9931ae  dtmf-delete.wav
+206caf17389f4f8734fb55f72f3863c70ba885c55fc665f0150c0fc203ae7e2e05024f91d6c0a2d030a60a352a248afd4b5c9fe68ff3c6aacfb657164d8100d4  dtmf-0.wav
+5f88848d6a728271ad4f89bcc8fd2d7162c6661e5aff699a74ca9a7358a6505c434fab2d2e3446c0764e3aa94858cbfc7c9357fc5b480ff0344713b9f0aeb225  dtmf-1.wav
+49bc12566052fbc3d7ea892231ae86ab7162dc41307307a6ecb86d3034876e12be45f69da6bba6bf9d094cf2f7d334ca73caaedccc4e36d027cc98b662017d67  dtmf-2.wav
+761aaf3e8148ac9d5acaed352e8ea34d850b9e39a55ba1944f2657b2c62306c7f4791040aa76c913943c3f166f8fff4c106b4dfc7586a3e9ca6b5321afc7937e  dtmf-3.wav
+a2527d35355e70af5a7e7f194171c284d43e5425292b9c736bbe421ab1d9a61e833d5de121a28c221bc7e07b75b257c50a04f324644969e52a47a7c2269a6999  dtmf-4.wav
+033ce396afc3b4679244a49c55e3b830e8d76f78702162591e4122993056b8bfd29a31670be33c0229dc9870a2a16db641a8817b95cd48bb1a9b59ae2a5138ce  dtmf-5.wav
+af8fc7f832cb425ef72de364e5231d22aff83b76d4c6ba419db7f43445c7e5788b07501821eba5a0afc2f1bf76e5f6245c1399ee972d8fe9654a050d47b5cbee  dtmf-6.wav
+03339d353f5c6e50d24341d5395caec30868393ec4c34cbf2aa5711907240efe50729cbe09dd31686cdb81fbcc73b0aca4151bd87811637ddd627859d3fcebb4  dtmf-7.wav
+3f24c52319c3e6cb3e513129f9eda5ad82cc6438d0bd330f5d0bfa8d952562b33acb94c3617dd69a2d528a2855606a034627843094afad7eab6e0ae630e7f48b  dtmf-8.wav
+7d5353cd417ca86015b5c957428e664686fbe9e43557d3206ce91407c282b4f05953e56c3e8d12e5b26e891ffd83187655643dfe508dfe7e169e39667d1cdbed  dtmf-9.wav
+eb3b08eb7c651de04e5c5a631d02a5508f9dd13f93499d5a2991911736c08b843e11623be327e6c781af54ea9d29ce3fa4e43292df4198dbd2edc417e29f37b3  dtmf-hash.wav
+676e8df15da3a0f1e23222875a384bb8d0f4a0d72e1e739292c3ca6997f5f60cac12af6ae24d5b64ae2720855b0d61490f9af6dc1f038af80e3c069cce6a7545  dtmf-star.wav
+"

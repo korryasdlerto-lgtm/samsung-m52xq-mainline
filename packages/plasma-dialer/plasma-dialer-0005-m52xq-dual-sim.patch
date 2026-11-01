@@ -1,0 +1,379 @@
+diff -ruN a/modem-daemon/src/call-object.cpp b/modem-daemon/src/call-object.cpp
+--- a/modem-daemon/src/call-object.cpp	2026-09-08 13:55:56.000000000 +0300
++++ b/modem-daemon/src/call-object.cpp	2026-10-23 00:25:35.417364650 +0300
+@@ -85,6 +85,16 @@
+     m_callData.id = id;
+ }
+ 
++QString CallObject::deviceUni()
++{
++    return m_deviceUni;
++}
++
++void CallObject::setDeviceUni(const QString &deviceUni)
++{
++    m_deviceUni = deviceUni;
++}
++
+ void CallObject::setProtocol(const QString &protocol)
+ {
+     m_callData.protocol = protocol;
+diff -ruN a/modem-daemon/src/call-object.h b/modem-daemon/src/call-object.h
+--- a/modem-daemon/src/call-object.h	2026-09-08 13:55:56.000000000 +0300
++++ b/modem-daemon/src/call-object.h	2026-10-23 00:25:35.417364650 +0300
+@@ -15,6 +15,7 @@
+     explicit CallObject(QObject *parent = nullptr);
+ 
+     QString id();
++    QString deviceUni(); // m52xq dual SIM: the modem of the call
+ 
+     QString protocol();
+     QString provider();
+@@ -38,6 +39,7 @@
+                             const DialerTypes::CallState &callState,
+                             const DialerTypes::CallStateReason &callStateReason);
+     void setId(const QString &id);
++    void setDeviceUni(const QString &deviceUni);
+     void setProtocol(const QString &protocol);
+     void setProvider(const QString &provider);
+     void setAccount(const QString &account);
+@@ -53,6 +55,7 @@
+ 
+ private:
+     DialerTypes::CallData m_callData;
++    QString m_deviceUni;
+     QTimer m_callAttemptTimer;
+     QTimer m_callTimer;
+ };
+diff -ruN a/modem-daemon/src/mm-modem-controller.cpp b/modem-daemon/src/mm-modem-controller.cpp
+--- a/modem-daemon/src/mm-modem-controller.cpp	2026-09-08 13:55:56.000000000 +0300
++++ b/modem-daemon/src/mm-modem-controller.cpp	2026-10-23 00:25:44.721751670 +0300
+@@ -4,6 +4,47 @@
+ 
+ #include "mm-modem-controller.h"
+ 
++#include <algorithm>
++
++/*
++ * m52xq dual SIM (both SIMs active, one ModemManager modem object per SIM): SIM1 first, then SIM2 (the modem
++ * device "qcom-soc-sim2"), and the modem of a call found from the call itself. The dialer passes no modem with
++ * several modems ("TODO: select device uni"), so without this calls could not be made, answered or hung up.
++ */
++static bool m52xqIsSim2(const QSharedPointer<ModemManager::ModemDevice> &device)
++{
++    const auto modem = device->modemInterface();
++    return modem && modem->device().endsWith(QLatin1String("-sim2"));
++}
++
++static ModemManager::ModemDevice::List m52xqModemDevices()
++{
++    auto devices = ModemManager::modemDevices();
++    std::stable_sort(devices.begin(), devices.end(), [](const auto &a, const auto &b) {
++        return !m52xqIsSim2(a) && m52xqIsSim2(b);
++    });
++    return devices;
++}
++
++static QSharedPointer<ModemManager::ModemDevice> m52xqModemFor(const QString &deviceUni, const QString &callUni)
++{
++    const auto modem = ModemManager::findModemDevice(deviceUni);
++    if (!callUni.isEmpty()) {
++        auto devices = m52xqModemDevices();
++        if (!modem.isNull())
++            devices.prepend(modem);
++        for (const auto &device : std::as_const(devices)) {
++            const auto voice = device->interface(ModemManager::ModemDevice::VoiceInterface).objectCast<ModemManager::ModemVoice>();
++            if (voice && !voice->findCall(callUni).isNull())
++                return device;
++        }
++    }
++    if (!modem.isNull() || !deviceUni.isEmpty())
++        return modem;
++    const auto devices = m52xqModemDevices();
++    return devices.isEmpty() ? modem : devices.first(); // no modem given: SIM1
++}
++
+ ModemManagerController::ModemManagerController(QObject *parent)
+     : ModemController(parent)
+ {
+@@ -13,7 +54,7 @@
+         init();
+     });
+     connect(ModemManager::notifier(), &ModemManager::Notifier::modemRemoved, this, [this](const QString &udi) {
+-        Q_UNUSED(udi);
++        m_connectedDevices.remove(udi);
+         init();
+     });
+ }
+@@ -26,7 +67,7 @@
+ QString ModemManagerController::equipmentIdentifier(const QString &deviceUni)
+ {
+     QString equipmentIdentifier;
+-    const auto modem = ModemManager::findModemDevice(deviceUni);
++    const auto modem = m52xqModemFor(deviceUni, QString());
+     if (modem.isNull()) {
+         qDebug() << Q_FUNC_INFO << "deviceUni not found:" << deviceUni;
+         return equipmentIdentifier;
+@@ -41,7 +82,7 @@
+ 
+ void ModemManagerController::ussdInitiate(const QString &deviceUni, const QString &command)
+ {
+-    const auto modem = ModemManager::findModemDevice(deviceUni);
++    const auto modem = m52xqModemFor(deviceUni, QString());
+     if (modem.isNull()) {
+         qDebug() << Q_FUNC_INFO << "deviceUni not found:" << deviceUni;
+         Q_EMIT ussdErrorReceived(deviceUni, tr("deviceUni not found"));
+@@ -69,7 +110,7 @@
+ 
+ void ModemManagerController::ussdRespond(const QString &deviceUni, const QString &reply)
+ {
+-    const auto modem = ModemManager::findModemDevice(deviceUni);
++    const auto modem = m52xqModemFor(deviceUni, QString());
+     if (modem.isNull()) {
+         qDebug() << Q_FUNC_INFO << "deviceUni not found:" << deviceUni;
+         Q_EMIT ussdErrorReceived(deviceUni, tr("deviceUni not found"));
+@@ -87,7 +128,7 @@
+ 
+ void ModemManagerController::ussdCancel(const QString &deviceUni)
+ {
+-    const auto modem = ModemManager::findModemDevice(deviceUni);
++    const auto modem = m52xqModemFor(deviceUni, QString());
+     if (modem.isNull()) {
+         qDebug() << Q_FUNC_INFO << "deviceUni not found:" << deviceUni;
+         Q_EMIT ussdErrorReceived(deviceUni, tr("deviceUni not found"));
+@@ -100,7 +141,7 @@
+ QString ModemManagerController::callNumber(const QString &deviceUni, const QString &callUni)
+ {
+     QString callNumber;
+-    const auto modem = ModemManager::findModemDevice(deviceUni);
++    const auto modem = m52xqModemFor(deviceUni, callUni);
+     if (modem.isNull()) {
+         qDebug() << Q_FUNC_INFO << "deviceUni not found:" << deviceUni;
+         return callNumber;
+@@ -121,7 +162,7 @@
+ void ModemManagerController::createCall(const QString &deviceUni, const QString &callUni)
+ {
+     qDebug() << Q_FUNC_INFO << "creating call";
+-    const auto modem = ModemManager::findModemDevice(deviceUni);
++    const auto modem = m52xqModemFor(deviceUni, QString());
+     if (modem.isNull()) {
+         qDebug() << Q_FUNC_INFO << "deviceUni not found:" << deviceUni;
+         return;
+@@ -141,7 +182,7 @@
+ 
+ void ModemManagerController::acceptCall(const QString &deviceUni, const QString &callUni)
+ {
+-    const auto modem = ModemManager::findModemDevice(deviceUni);
++    const auto modem = m52xqModemFor(deviceUni, callUni);
+     if (modem.isNull()) {
+         qDebug() << Q_FUNC_INFO << "deviceUni not found:" << deviceUni;
+         return;
+@@ -161,7 +202,7 @@
+ 
+ void ModemManagerController::hangUp(const QString &deviceUni, const QString &callUni)
+ {
+-    const auto modem = ModemManager::findModemDevice(deviceUni);
++    const auto modem = m52xqModemFor(deviceUni, callUni);
+     if (modem.isNull()) {
+         qDebug() << Q_FUNC_INFO << "deviceUni not found:" << deviceUni;
+         return;
+@@ -181,7 +222,7 @@
+ 
+ void ModemManagerController::sendDtmf(const QString &deviceUni, const QString &callUni, const QString &tones)
+ {
+-    const auto modem = ModemManager::findModemDevice(deviceUni);
++    const auto modem = m52xqModemFor(deviceUni, callUni);
+     if (modem.isNull()) {
+         qDebug() << Q_FUNC_INFO << "deviceUni not found:" << deviceUni;
+         return;
+@@ -258,13 +299,18 @@
+ void ModemManagerController::init()
+ {
+     setDeviceUniList(QStringList());
+-    const auto modemDevices = ModemManager::modemDevices();
++    const auto modemDevices = m52xqModemDevices();
+     if (modemDevices.isEmpty()) {
+         qWarning() << "Could not find modem devices";
+         return;
+     }
+     for (const auto &device : modemDevices) {
+         appendDeviceUni(device->uni());
++        // init() runs again for every added / removed modem: connect each modem once only
++        // (every call was handled once per earlier init(), with two modems eight times)
++        if (m_connectedDevices.contains(device->uni()))
++            continue;
++        m_connectedDevices.insert(device->uni());
+         // 3GPP
+         const auto modem3gppInterface = this->modem3gppInterface(device);
+         if (modem3gppInterface.isNull()) {
+@@ -371,6 +417,7 @@
+ {
+     auto callObject = new CallObject(parent);
+     callObject->setId(call->uni());
++    callObject->setDeviceUni(device->uni());
+     callObject->setProtocol(QStringLiteral("tel"));
+     callObject->setProvider(device->sim()->operatorIdentifier());
+     callObject->setAccount(device->sim()->simIdentifier());
+@@ -407,7 +454,7 @@
+ void ModemManagerController::fetchModemCalls()
+ {
+     m_calls.clear();
+-    const auto modemDevices = ModemManager::modemDevices();
++    const auto modemDevices = m52xqModemDevices();
+     if (modemDevices.isEmpty()) {
+         qWarning() << "Could not find modem devices";
+         return;
+@@ -427,11 +474,11 @@
+ 
+ CallObject *ModemManagerController::getVoiceCallObject(const QString &deviceUni, const QString &callUni)
+ {
+-    Q_UNUSED(deviceUni);
+     DialerTypes::CallData callData;
+     auto calls = m_calls;
+     for (auto callObject : calls) {
+-        if (callObject->id() == callUni) {
++        // the call path alone is not unique: ModemManager numbers the calls from 0 again after a restart
++        if (callObject->id() == callUni && (deviceUni.isEmpty() || callObject->deviceUni() == deviceUni)) {
+             return callObject;
+         }
+     }
+diff -ruN a/modem-daemon/src/mm-modem-controller.h b/modem-daemon/src/mm-modem-controller.h
+--- a/modem-daemon/src/mm-modem-controller.h	2026-09-08 13:55:56.000000000 +0300
++++ b/modem-daemon/src/mm-modem-controller.h	2026-10-23 00:25:44.893758805 +0300
+@@ -13,6 +13,7 @@
+ #include <ModemManagerQt/ModemMessaging>
+ #include <ModemManagerQt/ModemVoice>
+ #include <ModemManagerQt/Sms>
++#include <QSet>
+ 
+ #include "call-object.h"
+ 
+@@ -52,6 +53,7 @@
+     void init();
+ 
+     QVector<CallObject *> m_calls;
++    QSet<QString> m_connectedDevices; // m52xq dual SIM: modems whose signals are connected (once per modem)
+     void removeCall(const QString &callId);
+ 
+     QSharedPointer<ModemManager::Modem3gpp> modem3gppInterface(const QSharedPointer<ModemManager::ModemDevice> modemDevice);
+diff -ruN a/plasma-dialer/src/qml/dialpad/Dialpad.qml b/plasma-dialer/src/qml/dialpad/Dialpad.qml
+--- a/plasma-dialer/src/qml/dialpad/Dialpad.qml	2026-10-23 00:24:01.653327633 +0300
++++ b/plasma-dialer/src/qml/dialpad/Dialpad.qml	2026-10-23 00:26:18.427134897 +0300
+@@ -58,8 +58,11 @@
+         return true;
+     }
+ 
+-    function onCallButtonPressed(number) {
+-        const deviceUni = applicationWindow().selectModem();
++    // m52xq dual SIM: both SIMs active -> one call button per SIM ("1", "2")
++    readonly property bool dualSim: DeviceUtils.deviceUniList.length > 1
++
++    function onCallButtonPressed(number, sim) {
++        const deviceUni = (sim !== undefined && sim < DeviceUtils.deviceUniList.length) ? DeviceUtils.deviceUniList[sim] : applicationWindow().selectModem();
+         if (isSpecialCode(number)) {
+             applicationWindow().ussdUserInitiated();
+             UssdUtils.initiate(deviceUni, number);
+@@ -208,21 +211,23 @@
+     }
+ 
+     Item {
+-        visible: pad.showBottomRow
++        visible: pad.showBottomRow && !pad.dualSim
+         Layout.fillWidth: true
+         Layout.fillHeight: true
+     }
+ 
+-    // call button
++    // call button(s): one, or one per SIM with the SIM number ("1" / "2") when both SIMs are active
+     Controls.AbstractButton {
+         id: callButton
+ 
++        readonly property int sim: pad.dualSim ? 0 : -1
++
+         visible: pad.showBottomRow
+         Layout.fillWidth: true
+         Layout.fillHeight: true
+         enabled: pad.showBottomRow && statusLabel.text.length > 0
+         opacity: enabled ? 1 : 0.8
+-        onClicked: onCallButtonPressed(pad.number)
++        onClicked: onCallButtonPressed(pad.number, sim >= 0 ? sim : undefined)
+ 
+         background: Rectangle {
+             anchors.centerIn: parent
+@@ -240,6 +245,62 @@
+                 isMask: true
+             }
+ 
++            Controls.Label {
++                visible: callButton.sim >= 0
++                text: callButton.sim + 1
++                color: "white"
++                font.bold: true
++                font.pixelSize: parent.height * 0.24
++                anchors.right: parent.right
++                anchors.bottom: parent.bottom
++                anchors.rightMargin: parent.height * 0.12
++                anchors.bottomMargin: parent.height * 0.06
++            }
++
++        }
++
++    }
++
++    Controls.AbstractButton {
++        id: callButton2
++
++        readonly property int sim: 1
++
++        visible: pad.showBottomRow && pad.dualSim
++        Layout.fillWidth: true
++        Layout.fillHeight: true
++        enabled: pad.showBottomRow && statusLabel.text.length > 0
++        opacity: enabled ? 1 : 0.8
++        onClicked: onCallButtonPressed(pad.number, sim >= 0 ? sim : undefined)
++
++        background: Rectangle {
++            anchors.centerIn: parent
++            height: parent.height
++            width: height
++            radius: height / 2
++            color: Kirigami.Theme.highlightColor
++            opacity: callButton2.pressed ? 0.7 : 1
++
++            Kirigami.Icon {
++                source: "call-start"
++                anchors.fill: parent
++                anchors.margins: applicationWindow().smallMode ? Kirigami.Units.smallSpacing : Kirigami.Units.largeSpacing
++                color: "white"
++                isMask: true
++            }
++
++            Controls.Label {
++                visible: callButton2.sim >= 0
++                text: callButton2.sim + 1
++                color: "white"
++                font.bold: true
++                font.pixelSize: parent.height * 0.24
++                anchors.right: parent.right
++                anchors.bottom: parent.bottom
++                anchors.rightMargin: parent.height * 0.12
++                anchors.bottomMargin: parent.height * 0.06
++            }
++
+         }
+ 
+     }
+diff -ruN a/plasma-dialer/src/qml/Main.qml b/plasma-dialer/src/qml/Main.qml
+--- a/plasma-dialer/src/qml/Main.qml	2026-09-08 13:55:56.000000000 +0300
++++ b/plasma-dialer/src/qml/Main.qml	2026-10-23 00:26:02.974504329 +0300
+@@ -99,7 +99,9 @@
+         if (deviceUniList.length === 1)
+             return deviceUniList[0];
+ 
+-        console.log("TODO: select device uni");
++        // m52xq dual SIM: SIM1 by default (the modem daemon lists SIM1 first); the dial pad has a call
++        // button per SIM, and the modem daemon finds the modem of an existing call from the call itself
++        return deviceUniList[0];
+     }
+ 
+     function call(number) {

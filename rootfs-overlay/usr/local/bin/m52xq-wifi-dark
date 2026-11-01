@@ -1,0 +1,77 @@
+#!/bin/sh
+# M52XQ: dark resume after a Wi-Fi wake-up (started by system-sleep/m52xq-wifi-dark.sh). For 30 s the display that
+# Plasma turns on after the resume (and again with the lock screen) is switched off every 0.5 s; this stops at once when
+# a notification arrives (m52xq-notify-screen-wake leaves /run/user/<uid>/m52xq-notify-woke) or a key is pressed
+# (power / volume: their input devices are read directly). Then the phone suspends again if nothing happened; when it
+# stays awake the modem gets 2G/3G/4G back (m52xq-modem-2g keeps GSM over Wi-Fi wake-ups).
+U=user
+UID_=$(id -u $U) || exit 0
+RUN=/run/user/$UID_
+F=$RUN/m52xq-notify-woke
+K=/run/m52xq-wifi-dark-key
+L=/var/log/m52xq-sleep.log
+DR=/sys/module/panel_samsung_s6e3hab_amb667an01/parameters/dark_resume	# boot v230, see system-sleep/m52xq-wifi-dark.sh
+asuser() { su $U -s /bin/sh -c "export XDG_RUNTIME_DIR=$RUN WAYLAND_DISPLAY=wayland-0 DBUS_SESSION_BUS_ADDRESS=unix:path=$RUN/bus; $*" 2>/dev/null; }
+# the OLED panel keeps bl_power at 0 when KWin switches the output off: ask KWin ("dpms mode for screen DSI-1: on")
+# в44: read the connector DPMS state from sysfs (cheap) instead of running su + kscreen-doctor every 0.5 s (~40 times per wake-up);
+# kscreen-doctor is still used to switch the output off when it is on
+display_on() { grep -qx On /sys/class/drm/card*-DSI-1/dpms 2>/dev/null; }
+# в44: an incoming / active GSM call (ModemManager keeps ended calls as "terminated")
+calls_active() {
+	for m in $(mmcli -L 2>/dev/null | grep -o 'Modem/[0-9]*' | cut -d/ -f2); do
+		timeout 5 mmcli -m "$m" --voice-list-calls 2>/dev/null | grep 'Call/' | grep -qv terminated && return 0
+	done
+	return 1
+}
+
+rm -f $F $K
+for d in /sys/class/input/event*; do
+	case "$(cat $d/device/name 2>/dev/null)" in
+	pmic_pwrkey | pmic_resin | gpio-keys)
+		( timeout 16 dd if=/dev/input/${d##*/} bs=24 count=1 of=/dev/null 2>/dev/null && touch $K ) &
+		;;
+	esac
+done
+
+WIN=${WIN:-20}	# 23.10: 20 s (less and Telegram messages over Wi-Fi do not arrive; 30 s cost ~half of the sleep energy)
+why=""
+end=$(( $(date +%s) + WIN ))
+dark0=$(cat $DR 2>/dev/null || echo 0)
+n_loop=0
+while [ $(date +%s) -lt $end ]; do
+	# в44: only m52xq-call-screen-wake (Telegram call) leaves this flag now, a message keeps the display off
+	[ -e $F ] && why="telegram call" && break
+	# в44: a GSM call after a modem wake-up (checked every 2 s, mmcli is slow)
+	[ "$WAKE" = modem ] && [ $((n_loop % 4)) = 0 ] && calls_active && why=call && break
+	n_loop=$((n_loop + 1))
+	[ -e $K ] && why=key && break
+	# boot v232: the panel driver itself ends the dark resume on a power / volume key (the flag drops to 0)
+	[ "$dark0" != 0 ] && [ "$(cat $DR 2>/dev/null)" = 0 ] && why=key && break
+	display_on && asuser "kscreen-doctor --dpms off" >/dev/null
+	sleep 0.5
+done
+# в44: a call that starts ringing at the very end of the window must not be suspended away
+[ -z "$why" ] && calls_active && why=call
+if [ -z "$why" ]; then
+	# v45 (31.10): the kernel now cancels a suspend when the Wi-Fi firmware does not acknowledge the WoW (before it slept with a dead
+	# Wi-Fi): try again a few times so that the phone does not stay awake after a refused suspend
+	n=0
+	until systemctl suspend; do
+		n=$((n + 1))
+		echo "wifi-dark $(date +%T): suspend refused (try $n)" >> $L
+		[ "$n" -ge 6 ] && break
+		sleep 5
+	done
+else
+	echo "wifi-dark $(date +%T): stays awake ($why)" >> $L
+	echo 0 > $DR 2>/dev/null
+	asuser "kscreen-doctor --dpms on" >/dev/null
+	# v42: PowerDevil's idle timeouts had already fired before the sleep and are re-armed only by user activity, so after
+	# this resume it never dimmed, switched the display off or suspended again (24.10: display on 18:38-19:26, ~6 %).
+	# Report activity: the usual 30 s dim / 60 s display off / 120 s suspend then start over.
+	asuser "busctl --user call org.freedesktop.ScreenSaver /ScreenSaver org.freedesktop.ScreenSaver SimulateUserActivity" >/dev/null
+	# the modes saved before the sleep, for every active SIM (v40 dual SIM)
+	[ -f /run/m52xq-modem-2g-active ] && /usr/lib/systemd/system-sleep/m52xq-modem-2g.sh restore
+	# v42: the GNSS engine paused for the sleep (system-sleep/m52xq-gps-sleep.sh)
+	[ -f /run/m52xq-gps-paused ] && echo "gps: resumed, the phone stays awake ($(/usr/local/bin/m52xq-gps resume))" >> $L
+fi

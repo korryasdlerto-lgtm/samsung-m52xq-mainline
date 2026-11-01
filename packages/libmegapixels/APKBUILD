@@ -1,0 +1,33 @@
+maintainer="Stefan Hansson <newbyte@postmarketos.org>"
+pkgname=libmegapixels
+pkgver=0.2.3
+pkgrel=2
+pkgdesc="Device abstraction for the Megapixels application"
+url="https://libme.gapixels.me"
+arch="all"
+license="GPL-3.0-or-later"
+makedepends="libconfig-dev linux-headers meson"
+subpackages="$pkgname-dev"
+source="https://gitlab.com/megapixels-org/libmegapixels/-/archive/$pkgver/libmegapixels-$pkgver.tar.gz
+	libmegapixels-0001-camss-16-byte-stride.patch
+	libmegapixels-0002-led-brightness-flash.patch"
+
+build() {
+	abuild-meson \
+		output .
+	meson compile -C output
+}
+
+check() {
+	meson test --print-errorlogs -C output
+}
+
+package() {
+	DESTDIR="$pkgdir" meson install --no-rebuild -C output
+}
+
+sha512sums="
+7ba62991b8ad3f06ef0797d873874e5367eb2ac2793b72df7a668d9aa4cbff9719a9b83c73b6dc41bebc658a137a3a31aecea62e6dee775c7eda1a7354c57430  libmegapixels-0.2.3.tar.gz
+73bad2dd8ff0afef32b30f910aaab162f0f4448bb8945916618b3a93bcfe4f0ac5dc5346956e268abd52fa57c69b07869b17519a1b24f3a918071f50bb636103  libmegapixels-0001-camss-16-byte-stride.patch
+8e7f42edf791c65a85d4858e583534ed9d5184b514532463d63f6da82ebeef5e628a2d2c8dc0a4303b14a55a6c98c3c9d7d155a6601985b6ae58753f4f4df194  libmegapixels-0002-led-brightness-flash.patch
+"

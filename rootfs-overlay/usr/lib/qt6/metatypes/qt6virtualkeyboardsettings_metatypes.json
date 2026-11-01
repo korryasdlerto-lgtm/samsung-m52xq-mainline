@@ -1,0 +1,678 @@
+[
+    {
+        "classes": [
+            {
+                "classInfos": [
+                    {
+                        "name": "QML.Element",
+                        "value": "VirtualKeyboardSettings"
+                    },
+                    {
+                        "name": "QML.Singleton",
+                        "value": "true"
+                    },
+                    {
+                        "name": "QML.AddedInVersion",
+                        "value": "256"
+                    },
+                    {
+                        "name": "QML.ExtraVersion",
+                        "value": "512"
+                    }
+                ],
+                "className": "QQuickVirtualKeyboardSettings",
+                "lineNumber": 29,
+                "methods": [
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "volume",
+                                "type": "qreal"
+                            }
+                        ],
+                        "index": 20,
+                        "isConst": true,
+                        "lineNumber": 131,
+                        "name": "convertVolume",
+                        "returnType": "qreal",
+                        "revision": 1545
+                    }
+                ],
+                "object": true,
+                "properties": [
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 0,
+                        "lineNumber": 33,
+                        "name": "style",
+                        "notify": "styleChanged",
+                        "override": false,
+                        "read": "style",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QUrl",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 1,
+                        "lineNumber": 34,
+                        "name": "layoutPath",
+                        "notify": "layoutPathChanged",
+                        "override": false,
+                        "read": "layoutPath",
+                        "required": false,
+                        "reset": "resetLayoutPath",
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QUrl",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setLayoutPath"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 2,
+                        "lineNumber": 35,
+                        "name": "styleName",
+                        "notify": "styleNameChanged",
+                        "override": false,
+                        "read": "styleName",
+                        "required": false,
+                        "reset": "resetStyle",
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setStyleName"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 3,
+                        "lineNumber": 36,
+                        "name": "locale",
+                        "notify": "localeChanged",
+                        "override": false,
+                        "read": "locale",
+                        "required": false,
+                        "reset": "resetLocale",
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setLocale"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 4,
+                        "lineNumber": 37,
+                        "name": "availableLocales",
+                        "notify": "availableLocalesChanged",
+                        "override": false,
+                        "read": "availableLocales",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QStringList",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 5,
+                        "lineNumber": 38,
+                        "name": "activeLocales",
+                        "notify": "activeLocalesChanged",
+                        "override": false,
+                        "read": "activeLocales",
+                        "required": false,
+                        "reset": "resetActiveLocales",
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QStringList",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setActiveLocales"
+                    },
+                    {
+                        "constant": true,
+                        "designable": true,
+                        "final": false,
+                        "index": 6,
+                        "lineNumber": 39,
+                        "name": "wordCandidateList",
+                        "override": false,
+                        "read": "wordCandidateList",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QtVirtualKeyboard::QQuickWordCandidateListSettings*",
+                        "user": false,
+                        "virtual": false
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 7,
+                        "lineNumber": 40,
+                        "name": "fullScreenMode",
+                        "notify": "fullScreenModeChanged",
+                        "override": false,
+                        "read": "fullScreenMode",
+                        "required": false,
+                        "reset": "resetFullScreenMode",
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "bool",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setFullScreenMode"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 8,
+                        "lineNumber": 41,
+                        "name": "userDataPath",
+                        "notify": "userDataPathChanged",
+                        "override": false,
+                        "read": "userDataPath",
+                        "required": false,
+                        "reset": "resetUserDataPath",
+                        "revision": 1537,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setUserDataPath"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 9,
+                        "lineNumber": 42,
+                        "name": "hwrTimeoutForAlphabetic",
+                        "notify": "hwrTimeoutForAlphabeticChanged",
+                        "override": false,
+                        "read": "hwrTimeoutForAlphabetic",
+                        "required": false,
+                        "reset": "resetHwrTimeoutForAlphabetic",
+                        "revision": 1537,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "int",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setHwrTimeoutForAlphabetic"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 10,
+                        "lineNumber": 43,
+                        "name": "hwrTimeoutForCjk",
+                        "notify": "hwrTimeoutForCjkChanged",
+                        "override": false,
+                        "read": "hwrTimeoutForCjk",
+                        "required": false,
+                        "reset": "resetHwrTimeoutForCjk",
+                        "revision": 1537,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "int",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setHwrTimeoutForCjk"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 11,
+                        "lineNumber": 44,
+                        "name": "inputMethodHints",
+                        "notify": "inputMethodHintsChanged",
+                        "override": false,
+                        "read": "inputMethodHints",
+                        "required": false,
+                        "reset": "resetInputMethodHints",
+                        "revision": 1537,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "Qt::InputMethodHints",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setInputMethodHints"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 12,
+                        "lineNumber": 45,
+                        "name": "handwritingModeDisabled",
+                        "notify": "handwritingModeDisabledChanged",
+                        "override": false,
+                        "read": "isHandwritingModeDisabled",
+                        "required": false,
+                        "reset": "resetHandwritingModeDisabled",
+                        "revision": 1537,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "bool",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setHandwritingModeDisabled"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 13,
+                        "lineNumber": 46,
+                        "name": "defaultInputMethodDisabled",
+                        "notify": "defaultInputMethodDisabledChanged",
+                        "override": false,
+                        "read": "isDefaultInputMethodDisabled",
+                        "required": false,
+                        "reset": "resetDefaultInputMethodDisabled",
+                        "revision": 1537,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "bool",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setDefaultInputMethodDisabled"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 14,
+                        "lineNumber": 47,
+                        "name": "defaultDictionaryDisabled",
+                        "notify": "defaultDictionaryDisabledChanged",
+                        "override": false,
+                        "read": "isDefaultDictionaryDisabled",
+                        "required": false,
+                        "reset": "resetDefaultDictionaryDisabled",
+                        "revision": 1537,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "bool",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setDefaultDictionaryDisabled"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 15,
+                        "lineNumber": 48,
+                        "name": "visibleFunctionKeys",
+                        "notify": "visibleFunctionKeysChanged",
+                        "override": false,
+                        "read": "visibleFunctionKeys",
+                        "required": false,
+                        "reset": "resetVisibleFunctionKeys",
+                        "revision": 1542,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QtVirtualKeyboard::KeyboardFunctionKeys",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setVisibleFunctionKeys"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 16,
+                        "lineNumber": 49,
+                        "name": "closeOnReturn",
+                        "notify": "closeOnReturnChanged",
+                        "override": false,
+                        "read": "closeOnReturn",
+                        "required": false,
+                        "reset": "resetCloseOnReturn",
+                        "revision": 1544,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "bool",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setCloseOnReturn"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 17,
+                        "lineNumber": 50,
+                        "name": "keySoundVolume",
+                        "notify": "keySoundVolumeChanged",
+                        "override": false,
+                        "read": "keySoundVolume",
+                        "required": false,
+                        "reset": "resetKeySoundVolume",
+                        "revision": 1545,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "qreal",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setKeySoundVolume"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 18,
+                        "lineNumber": 51,
+                        "name": "arrowKeyNavigationEnabled",
+                        "notify": "arrowKeyNavigationEnabledChanged",
+                        "override": false,
+                        "read": "arrowKeyNavigationEnabled",
+                        "required": false,
+                        "reset": "resetArrowKeyNavigationEnabled",
+                        "revision": 1547,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "bool",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setArrowKeyNavigationEnabled"
+                    }
+                ],
+                "qualifiedClassName": "QtVirtualKeyboard::QQuickVirtualKeyboardSettings",
+                "signals": [
+                    {
+                        "access": "public",
+                        "index": 0,
+                        "lineNumber": 134,
+                        "name": "styleChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 1,
+                        "lineNumber": 135,
+                        "name": "styleNameChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 2,
+                        "lineNumber": 136,
+                        "name": "localeChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 3,
+                        "lineNumber": 137,
+                        "name": "availableLocalesChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 4,
+                        "lineNumber": 138,
+                        "name": "activeLocalesChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 5,
+                        "lineNumber": 139,
+                        "name": "layoutPathChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 6,
+                        "lineNumber": 140,
+                        "name": "fullScreenModeChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 7,
+                        "lineNumber": 141,
+                        "name": "userDataPathChanged",
+                        "returnType": "void",
+                        "revision": 1537
+                    },
+                    {
+                        "access": "public",
+                        "index": 8,
+                        "lineNumber": 142,
+                        "name": "userDataReset",
+                        "returnType": "void",
+                        "revision": 1537
+                    },
+                    {
+                        "access": "public",
+                        "index": 9,
+                        "lineNumber": 143,
+                        "name": "hwrTimeoutForAlphabeticChanged",
+                        "returnType": "void",
+                        "revision": 1537
+                    },
+                    {
+                        "access": "public",
+                        "index": 10,
+                        "lineNumber": 144,
+                        "name": "hwrTimeoutForCjkChanged",
+                        "returnType": "void",
+                        "revision": 1537
+                    },
+                    {
+                        "access": "public",
+                        "index": 11,
+                        "lineNumber": 145,
+                        "name": "inputMethodHintsChanged",
+                        "returnType": "void",
+                        "revision": 1537
+                    },
+                    {
+                        "access": "public",
+                        "index": 12,
+                        "lineNumber": 146,
+                        "name": "handwritingModeDisabledChanged",
+                        "returnType": "void",
+                        "revision": 1537
+                    },
+                    {
+                        "access": "public",
+                        "index": 13,
+                        "lineNumber": 147,
+                        "name": "defaultInputMethodDisabledChanged",
+                        "returnType": "void",
+                        "revision": 1537
+                    },
+                    {
+                        "access": "public",
+                        "index": 14,
+                        "lineNumber": 148,
+                        "name": "defaultDictionaryDisabledChanged",
+                        "returnType": "void",
+                        "revision": 1537
+                    },
+                    {
+                        "access": "public",
+                        "index": 15,
+                        "lineNumber": 149,
+                        "name": "visibleFunctionKeysChanged",
+                        "returnType": "void",
+                        "revision": 1542
+                    },
+                    {
+                        "access": "public",
+                        "index": 16,
+                        "lineNumber": 150,
+                        "name": "closeOnReturnChanged",
+                        "returnType": "void",
+                        "revision": 1544
+                    },
+                    {
+                        "access": "public",
+                        "index": 17,
+                        "lineNumber": 151,
+                        "name": "keySoundVolumeChanged",
+                        "returnType": "void",
+                        "revision": 1545
+                    },
+                    {
+                        "access": "public",
+                        "index": 18,
+                        "lineNumber": 152,
+                        "name": "arrowKeyNavigationEnabledChanged",
+                        "returnType": "void",
+                        "revision": 1547
+                    }
+                ],
+                "slots": [
+                    {
+                        "access": "private",
+                        "index": 19,
+                        "lineNumber": 155,
+                        "name": "resetStyle",
+                        "returnType": "void"
+                    }
+                ],
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "name": "QObject"
+                    }
+                ]
+            },
+            {
+                "classInfos": [
+                    {
+                        "name": "QML.Element",
+                        "value": "anonymous"
+                    }
+                ],
+                "className": "QQuickWordCandidateListSettings",
+                "lineNumber": 158,
+                "object": true,
+                "properties": [
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 0,
+                        "lineNumber": 161,
+                        "name": "autoHideDelay",
+                        "notify": "autoHideDelayChanged",
+                        "override": false,
+                        "read": "autoHideDelay",
+                        "required": false,
+                        "reset": "resetAutoHideDelay",
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "int",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setAutoHideDelay"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 1,
+                        "lineNumber": 162,
+                        "name": "alwaysVisible",
+                        "notify": "alwaysVisibleChanged",
+                        "override": false,
+                        "read": "alwaysVisible",
+                        "required": false,
+                        "reset": "resetAlwaysVisible",
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "bool",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setAlwaysVisible"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 2,
+                        "lineNumber": 163,
+                        "name": "autoCommitWord",
+                        "notify": "autoCommitWordChanged",
+                        "override": false,
+                        "read": "autoCommitWord",
+                        "required": false,
+                        "reset": "resetAutoCommitWord",
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "bool",
+                        "user": false,
+                        "virtual": false,
+                        "write": "setAutoCommitWord"
+                    }
+                ],
+                "qualifiedClassName": "QtVirtualKeyboard::QQuickWordCandidateListSettings",
+                "signals": [
+                    {
+                        "access": "public",
+                        "index": 0,
+                        "lineNumber": 183,
+                        "name": "autoHideDelayChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 1,
+                        "lineNumber": 184,
+                        "name": "alwaysVisibleChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "index": 2,
+                        "lineNumber": 185,
+                        "name": "autoCommitWordChanged",
+                        "returnType": "void"
+                    }
+                ],
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "name": "QObject"
+                    }
+                ]
+            }
+        ],
+        "inputFile": "qquickvirtualkeyboardsettings_p.h",
+        "outputRevision": 69
+    }
+]

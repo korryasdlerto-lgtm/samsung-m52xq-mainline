@@ -1,0 +1,123 @@
+--- a/src/contents/ui/camera/CameraPage.qml	2025-12-05 16:55:48.000000000 +0200
++++ b/src/contents/ui/camera/CameraPage.qml	2026-10-04 16:40:04.904823798 +0300
+@@ -111,6 +111,15 @@
+         camera: root.camera
+         bottomMargin: controlContainer.height
+ 
++        // m52xq: pinch to zoom (digital zoom of the viewfinder, photos and video)
++        PinchHandler {
++            id: pinchZoom
++            target: null
++            property real startZoom: 1
++            onActiveChanged: if (active) startZoom = root.captureSession.zoom
++            onActiveScaleChanged: if (active) root.captureSession.zoom = startZoom * activeScale
++        }
++
+         // Header controls
+         CameraExtraControls {
+             id: cameraExtraControls
+--- a/src/plasmacameramanager.cpp	2026-10-04 15:20:18.285775959 +0300
++++ b/src/plasmacameramanager.cpp	2026-10-04 15:22:12.226225336 +0300
+@@ -517,7 +517,7 @@
+         m_autofocus.setCameraId(m_plasmaCamera->cameraDevice());
+     }
+     m_autofocus.processFrame(image);
+-    QVideoFrame frame = QVideoFrame(image);
++    QVideoFrame frame = QVideoFrame(applyZoom(image));
+ 
+     // Do software rotation
+     // From testing, most drivers don't seem to implement hardware orientation correctly (CameraConfiguration::orientation),
+@@ -564,7 +564,7 @@
+         m_imageCaptureFileName, QLatin1String("jpg"), m_filenamePattern, m_outputPath);
+     QFile file(fileName);
+ 
+-    QImage image = frames.head();
++    QImage image = applyZoom(frames.head());
+ 
+     // Flip image if requested
+     if (m_plasmaCamera->mirrorOutput()) {
+@@ -650,8 +650,12 @@
+     m_videoFrame.setEndTime((m_frameRecordingCount + 1) * frameLengthMicroseconds - 1);
+ 
+     QVideoFrame sendFrame = m_videoFrame;
+-    if (!m_currentFrame.isNull() && (m_recordRotation != 0 || m_recordMirror)) {
++    if (!m_currentFrame.isNull() && (m_recordRotation != 0 || m_recordMirror || m_zoom > 1.001)) {
+         QImage image = m_currentFrame;
++        if (m_zoom > 1.001) {
++            // keep the frame size constant for the encoder: crop the centre and scale back up
++            image = applyZoom(image).scaled(m_currentFrame.size(), Qt::IgnoreAspectRatio, Qt::FastTransformation);
++        }
+         if (m_recordMirror) {
+             image = image.mirrored(); // vertical flip, same as the still photo
+         }
+@@ -727,6 +731,34 @@
+     return newImageCaptureId;
+ }
+ 
++qreal PlasmaCameraManager::zoom() const
++{
++    return m_zoom;
++}
++
++void PlasmaCameraManager::setZoom(qreal zoom)
++{
++    zoom = qBound<qreal>(1.0, zoom, 8.0);
++    if (qFuzzyCompare(zoom, m_zoom)) {
++        return;
++    }
++    m_zoom = zoom;
++    Q_EMIT zoomChanged();
++}
++
++// m52xq: digital zoom (pinch in the viewfinder): the centre 1/zoom of the frame, used for the viewfinder, photos and video.
++QImage PlasmaCameraManager::applyZoom(const QImage &image) const
++{
++    if (image.isNull() || m_zoom <= 1.001) {
++        return image;
++    }
++    const int w = qMax(16, static_cast<int>(image.width() / m_zoom) & ~1);
++    const int h = qMax(16, static_cast<int>(image.height() / m_zoom) & ~1);
++    const int x = ((image.width() - w) / 2) & ~1;
++    const int y = ((image.height() - h) / 2) & ~1;
++    return image.copy(x, y, w, h);
++}
++
+ float PlasmaCameraManager::outputOrientationDegrees() const
+ {
+     return m_plasmaCamera->softwareRotationDegrees() + m_orientationSensorDegrees;
+--- a/src/plasmacameramanager.h	2026-10-04 15:20:18.285775959 +0300
++++ b/src/plasmacameramanager.h	2026-10-04 15:20:32.697833263 +0300
+@@ -45,6 +45,7 @@
+     Q_PROPERTY(Resolution videoResolution READ videoResolution WRITE setVideoResolution NOTIFY videoResolutionChanged)
+     Q_PROPERTY(VideoCodec videoCodec READ videoCodec WRITE setVideoCodec NOTIFY videoCodecChanged)
+ 
++    Q_PROPERTY(qreal zoom READ zoom WRITE setZoom NOTIFY zoomChanged)
+     Q_PROPERTY(bool isRecordingVideo READ isRecordingVideo NOTIFY isRecordingVideoChanged)
+     Q_PROPERTY(bool isSavingVideo READ isSavingVideo NOTIFY isSavingVideoChanged)
+ 
+@@ -173,6 +174,7 @@
+ 
+     void audioRecordingEnabledChanged();
+     void isRecordingVideoChanged();
++    void zoomChanged();
+     void isSavingVideoChanged();
+ 
+     void framesDropped();
+@@ -242,6 +244,8 @@
+      * This adds the camera orientation and the device orientation degrees together.
+      */
+     float outputOrientationDegrees() const;
++    qreal zoom() const;
++    void setZoom(qreal zoom);
+ 
+     // error handling
+     Error m_error;
+@@ -261,6 +265,8 @@
+     PlasmaCamera *m_plasmaCamera = nullptr;
+ 
+     QImage m_currentFrame;
++    qreal m_zoom = 1.0;
++    QImage applyZoom(const QImage &image) const;
+     LensAutofocus m_autofocus;
+     QVideoFrame m_videoFrame;
+     int m_recordRotation = 0;

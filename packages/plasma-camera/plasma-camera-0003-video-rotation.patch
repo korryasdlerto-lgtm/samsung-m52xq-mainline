@@ -1,0 +1,52 @@
+--- a/src/plasmacameramanager.cpp	2026-10-04 15:05:34.445725261 +0300
++++ b/src/plasmacameramanager.cpp	2026-10-04 15:05:34.457725329 +0300
+@@ -170,6 +170,12 @@
+ 
+     m_droppedFrames = false; // reset
+ 
++    // m52xq: the encoder ignores QVideoFrame rotation/mirror and the container gets no rotation tag, so the frames are
++    // rotated like the still photo (flip for a mirrored camera, then rotate by camera + device orientation). Fixed for
++    // the whole video: the frame size must not change while recording.
++    m_recordRotation = (static_cast<int>(outputOrientationDegrees()) % 360 + 360) % 360;
++    m_recordMirror = m_plasmaCamera->mirrorOutput();
++
+     // Set the correct rotation metadata prior to recording
+     QMediaMetaData metaData;
+     metaData.insert(QMediaMetaData::Orientation, outputOrientationDegrees());
+@@ -632,8 +638,24 @@
+     m_videoFrame.setStartTime(m_frameRecordingCount * frameLengthMicroseconds);
+     m_videoFrame.setEndTime((m_frameRecordingCount + 1) * frameLengthMicroseconds - 1);
+ 
++    QVideoFrame sendFrame = m_videoFrame;
++    if (!m_currentFrame.isNull() && (m_recordRotation != 0 || m_recordMirror)) {
++        QImage image = m_currentFrame;
++        if (m_recordMirror) {
++            image = image.mirrored(); // vertical flip, same as the still photo
++        }
++        if (m_recordRotation != 0) {
++            QTransform transform;
++            transform.rotate(m_recordRotation);
++            image = image.transformed(transform);
++        }
++        sendFrame = QVideoFrame(image);
++        sendFrame.setStartTime(m_videoFrame.startTime());
++        sendFrame.setEndTime(m_videoFrame.endTime());
++    }
++
+     // Attempt to send frame
+-    bool success = m_videoInput.sendVideoFrame(m_videoFrame);
++    bool success = m_videoInput.sendVideoFrame(sendFrame);
+     if (success) {
+         m_frameRecorded = true;
+     } else {
+--- a/src/plasmacameramanager.h	2026-10-04 15:05:34.445725261 +0300
++++ b/src/plasmacameramanager.h	2026-10-04 15:05:34.457725329 +0300
+@@ -261,6 +261,8 @@
+ 
+     QImage m_currentFrame;
+     QVideoFrame m_videoFrame;
++    int m_recordRotation = 0;
++    bool m_recordMirror = false;
+     QVideoSink *m_videoSink = nullptr;
+     int m_frameRecordingCount = 0;
+     bool m_frameRecorded = false;

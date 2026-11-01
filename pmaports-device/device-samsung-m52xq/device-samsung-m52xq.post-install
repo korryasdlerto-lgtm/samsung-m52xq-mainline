@@ -1,0 +1,6 @@
+#!/bin/sh
+# postmarketos-mkinitfs's 00-initramfs-base.files hardcodes /usr/bin/losetup,
+# but this util-linux build ships it under /usr/sbin (no merged-usr symlink
+# here). Created via a script instead of a packaged file so apk's cmd:
+# provides scanning doesn't conflict with the separate "losetup" package.
+ln -sf /usr/sbin/losetup /usr/bin/losetup

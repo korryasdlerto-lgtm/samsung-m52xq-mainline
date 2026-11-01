@@ -1,0 +1,1561 @@
+--- a/src/CMakeLists.txt	2026-10-04 15:20:18.293775990 +0300
++++ b/src/CMakeLists.txt	2026-10-04 17:24:30.268657423 +0300
+@@ -9,6 +9,7 @@
+     plasmacamera.cpp
+     plasmacameramanager.cpp
+     lensautofocus.cpp
++    sensorae.cpp
+     plasmacamera/converter.cpp
+     plasmacamera/image.cpp
+     plasmacamera/path.cpp
+--- a/src/contents/ui/camera/CameraPage.qml	2026-10-04 16:40:04.904823798 +0300
++++ b/src/contents/ui/camera/CameraPage.qml	2026-10-04 18:23:32.483321427 +0300
+@@ -104,6 +104,9 @@
+         }
+     ]
+ 
++    // landscape (wide) window: the controls move to the corners (LandscapeControls)
++    readonly property bool wide: root.width > root.height * 1.2
++
+     Viewfinder {
+         id: viewfinder
+         anchors.fill: parent
+@@ -123,6 +126,7 @@
+         // Header controls
+         CameraExtraControls {
+             id: cameraExtraControls
++            visible: !root.wide
+             anchors.top: parent.top
+             anchors.left: parent.left
+             anchors.right: parent.right
+@@ -138,6 +142,7 @@
+         // Footer controls
+         CameraControls {
+             id: controlContainer
++            visible: !root.wide
+             anchors.bottom: parent.bottom
+             anchors.left: parent.left
+             anchors.right: parent.right
+@@ -160,6 +165,57 @@
+             }
+         }
+ 
++        // ISO / EXP / FOCUS / FLASH below the header (portrait)
++        CameraSettingsStrip {
++            visible: !root.wide
++            anchors.top: cameraExtraControls.bottom
++            anchors.left: parent.left
++            anchors.margins: Kirigami.Units.largeSpacing
++            camera: root.camera
++            captureSession: root.captureSession
++        }
++
++        // zoom indicator (0.5x ... 8x); the rear camera switches to the ultrawide sensor below 1x
++        Rectangle {
++            visible: Math.abs(root.captureSession.zoom - 1) > 0.02
++            anchors.horizontalCenter: parent.horizontalCenter
++            anchors.top: parent.top
++            anchors.topMargin: Kirigami.Units.gridUnit * 4
++            radius: height / 2
++            color: Qt.rgba(0, 0, 0, 0.55)
++            implicitWidth: zoomText.implicitWidth + Kirigami.Units.gridUnit
++            implicitHeight: zoomText.implicitHeight + Kirigami.Units.smallSpacing * 2
++            QQC2.Label {
++                id: zoomText
++                anchors.centerIn: parent
++                color: "white"
++                font.bold: true
++                text: root.captureSession.zoom.toFixed(1) + "×"
++            }
++        }
++
++        // Landscape layout
++        LandscapeControls {
++            visible: root.wide
++            anchors.fill: parent
++
++            camera: root.camera
++            captureSession: root.captureSession
++            captureController: root.captureController
++
++            captureMode: root.captureMode
++            captureEnabled: captureAction.enabled
++            switchCameraEnabled: switchCameraAction.enabled
++            timerButtonEnabled: !root.camera.busy
++            audioRecordingShown: root.captureMode === CameraPage.CaptureMode.Video && !root.captureSession.isRecordingVideo && !root.captureSession.isSavingVideo
++
++            onCaptureButtonClicked: captureAction.triggered()
++            onSwitchCameraRequested: switchCameraAction.triggered()
++            onTimerDurationRequested: (duration) => root.captureController.captureTimerDuration = duration
++            onSwitchCaptureModeRequested: (captureMode) => root.captureMode = captureMode
++            onAudioToggleRequested: root.captureSession.audioRecordingEnabled = !root.captureSession.audioRecordingEnabled
++        }
++
+         // Indicator for timer
+         ViewfinderTimerOverlay {
+             id: timerOverlay
+@@ -173,7 +229,7 @@
+         ViewfinderVideoDurationOverlay {
+             anchors.horizontalCenter: parent.horizontalCenter
+             anchors.bottom: parent.bottom
+-            anchors.bottomMargin: controlContainer.height + Kirigami.Units.largeSpacing
++            anchors.bottomMargin: (root.wide ? 0 : controlContainer.height) + Kirigami.Units.largeSpacing
+ 
+             visible: root.captureSession.isRecordingVideo
+             duration: root.captureSession.recorder.duration
+--- a/src/contents/ui/camera/CameraSettingsStrip.qml	1970-01-01 02:00:00.000000000 +0200
++++ b/src/contents/ui/camera/CameraSettingsStrip.qml	2026-10-04 19:44:18.873674008 +0300
+@@ -0,0 +1,170 @@
++// SPDX-License-Identifier: BSD-3-Clause
++// m52xq: ISO / EXP / FOCUS / FLASH buttons in the style of Megapixels.
++
++import QtQuick
++import QtQuick.Controls as QQC2
++import QtQuick.Layouts
++
++import org.kde.kirigami as Kirigami
++import org.kde.plasmacamera
++
++Item {
++    id: root
++
++    required property PlasmaCamera camera
++    required property PlasmaCameraManager captureSession
++
++    // which slider panel is open: "", "iso", "exp", "focus"
++    property string openPanel: ""
++    // buttons per row: 4 in portrait, 2 (two rows) in landscape
++    property int columns: 4
++
++    implicitWidth: buttons.implicitWidth
++    implicitHeight: buttons.implicitHeight + (panel.visible ? panel.implicitHeight + Kirigami.Units.smallSpacing : 0)
++
++    Kirigami.Theme.inherit: false
++    Kirigami.Theme.colorSet: Kirigami.Theme.Complementary
++
++    Timer {
++        id: closeTimer
++        interval: 900
++        onTriggered: root.openPanel = ""
++    }
++
++    function togglePanel(name) {
++        openPanel = (openPanel === name) ? "" : name;
++    }
++
++    // shutter speed shown as 1/x s
++    function exposureText(us) {
++        if (us <= 0) {
++            return "—";
++        }
++        return us >= 500000 ? (us / 1000000).toFixed(1) + " s" : "1/" + Math.round(1000000 / us);
++    }
++
++    GridLayout {
++        id: buttons
++        columns: root.columns
++        rowSpacing: Kirigami.Units.smallSpacing
++        columnSpacing: Kirigami.Units.smallSpacing
++
++        component SettingButton: QQC2.ToolButton {
++            property bool active: false
++            Layout.preferredHeight: Kirigami.Units.gridUnit * 3.4
++            Layout.preferredWidth: Kirigami.Units.gridUnit * 4.6
++            font.bold: true
++            palette.buttonText: "white"
++            background: Rectangle {
++                radius: Kirigami.Units.smallSpacing
++                color: parent.down ? Qt.rgba(1, 1, 1, 0.35) : (parent.active ? Qt.rgba(0.2, 0.55, 1, 0.65) : Qt.rgba(0, 0, 0, 0.45))
++                border.color: Qt.rgba(1, 1, 1, 0.5)
++            }
++            contentItem: Text {
++                text: parent.text
++                color: "white"
++                font: parent.font
++                horizontalAlignment: Text.AlignHCenter
++                verticalAlignment: Text.AlignVCenter
++                wrapMode: Text.WordWrap
++            }
++        }
++
++        SettingButton {
++            text: root.captureSession.isoManual ? "ISO\n" + root.captureSession.iso : "ISO\nauto " + root.captureSession.iso
++            visible: root.captureSession.aeAvailable
++            active: root.captureSession.isoManual || root.openPanel === "iso"
++            onClicked: root.togglePanel("iso")
++        }
++
++        SettingButton {
++            text: root.captureSession.exposureManual ? "EXP\n" + root.exposureText(root.captureSession.exposureTime) : "EXP\nauto " + root.exposureText(root.captureSession.exposureTime)
++            visible: root.captureSession.aeAvailable
++            active: root.captureSession.exposureManual || root.openPanel === "exp"
++            onClicked: root.togglePanel("exp")
++        }
++
++        SettingButton {
++            text: root.captureSession.focusManual ? "FOCUS\n" + root.captureSession.focusPosition + "%" : "FOCUS\nauto"
++            visible: root.captureSession.focusAvailable
++            active: root.captureSession.focusManual || root.openPanel === "focus"
++            onClicked: root.togglePanel("focus")
++        }
++
++        SettingButton {
++            text: ["FLASH\noff", "FLASH\nauto", "FLASH\non"][root.captureSession.flashMode]
++            visible: root.captureSession.flashAvailable
++            active: root.captureSession.flashMode !== 0
++            onClicked: {
++                root.openPanel = "";
++                root.captureSession.flashMode = (root.captureSession.flashMode + 1) % 3;
++            }
++        }
++    }
++
++    // slider panel under the buttons
++    Rectangle {
++        id: panel
++        visible: root.openPanel !== ""
++        anchors.top: buttons.bottom
++        anchors.topMargin: Kirigami.Units.smallSpacing
++        anchors.left: parent.left
++        width: Math.max(buttons.implicitWidth, Kirigami.Units.gridUnit * 16)
++        implicitHeight: panelLayout.implicitHeight + Kirigami.Units.largeSpacing * 2
++        height: implicitHeight
++        radius: Kirigami.Units.smallSpacing
++        color: Qt.rgba(0, 0, 0, 0.6)
++        border.color: Qt.rgba(1, 1, 1, 0.4)
++
++        RowLayout {
++            id: panelLayout
++            anchors.fill: parent
++            anchors.margins: Kirigami.Units.largeSpacing
++            spacing: Kirigami.Units.largeSpacing
++
++            QQC2.Switch {
++                id: autoSwitch
++                text: i18n("Auto")
++                palette.windowText: "white"
++                checked: root.openPanel === "iso" ? !root.captureSession.isoManual
++                         : root.openPanel === "exp" ? !root.captureSession.exposureManual
++                         : !root.captureSession.focusManual
++                onToggled: {
++                    closeTimer.restart();
++                    if (root.openPanel === "iso") {
++                        if (checked) root.captureSession.setIsoAuto(); else root.captureSession.iso = Math.round(slider.value);
++                    } else if (root.openPanel === "exp") {
++                        if (checked) root.captureSession.setExposureAuto(); else root.captureSession.exposureTime = Math.round(slider.value);
++                    } else if (root.openPanel === "focus") {
++                        if (checked) root.captureSession.setFocusAuto(); else root.captureSession.focusPosition = slider.value;
++                    }
++                }
++            }
++
++            QQC2.Slider {
++                id: slider
++                Layout.fillWidth: true
++                from: root.openPanel === "iso" ? root.captureSession.minIso : root.openPanel === "exp" ? root.captureSession.minExposureTime : 0
++                to: root.openPanel === "iso" ? Math.min(root.captureSession.maxIso, 3200) : root.openPanel === "exp" ? Math.min(root.captureSession.maxExposureTime, 66000) : 100
++                stepSize: root.openPanel === "focus" ? 1 : (root.openPanel === "iso" ? 25 : 250)
++                value: root.openPanel === "iso" ? root.captureSession.iso : root.openPanel === "exp" ? root.captureSession.exposureTime : root.captureSession.focusPosition
++                enabled: !autoSwitch.checked || true
++                onPressedChanged: if (pressed) closeTimer.stop(); else closeTimer.restart()
++                onMoved: {
++                    if (root.openPanel === "iso") root.captureSession.iso = Math.round(value);
++                    else if (root.openPanel === "exp") root.captureSession.exposureTime = Math.round(value);
++                    else if (root.openPanel === "focus") root.captureSession.focusPosition = Math.round(value);
++                }
++            }
++
++            QQC2.Label {
++                Layout.preferredWidth: Kirigami.Units.gridUnit * 4
++                color: "white"
++                horizontalAlignment: Text.AlignRight
++                text: root.openPanel === "iso" ? Math.round(slider.value)
++                      : root.openPanel === "exp" ? root.exposureText(Math.round(slider.value))
++                      : Math.round(slider.value) + "%"
++            }
++        }
++    }
++}
+--- a/src/contents/ui/camera/LandscapeControls.qml	1970-01-01 02:00:00.000000000 +0200
++++ b/src/contents/ui/camera/LandscapeControls.qml	2026-10-04 19:44:18.873674008 +0300
+@@ -0,0 +1,168 @@
++// SPDX-License-Identifier: BSD-3-Clause
++// m52xq: landscape layout - the controls sit in the corners of the screen instead of the middle of the viewfinder.
++//   top left: ISO / EXP / FOCUS / FLASH      top right: microphone (video), switch camera, settings
++//   bottom left: last photo/video, timer      right centre: shutter      bottom right: photo / video
++
++import QtQuick
++import QtQuick.Controls as QQC2
++import QtQuick.Layouts
++
++import org.kde.kirigami as Kirigami
++import org.kde.plasmacamera
++import org.kde.kirigamiaddons.components as Components
++
++Item {
++    id: root
++
++    required property PlasmaCamera camera
++    required property PlasmaCameraManager captureSession
++    required property CaptureController captureController
++
++    required property int captureMode
++    required property bool captureEnabled
++    required property bool switchCameraEnabled
++    required property bool timerButtonEnabled
++    required property bool audioRecordingShown
++
++    signal captureButtonClicked()
++    signal switchCameraRequested()
++    signal timerDurationRequested(duration: int)
++    signal switchCaptureModeRequested(captureMode: int)
++    signal audioToggleRequested()
++
++    readonly property real margin: Kirigami.Units.largeSpacing * 1.5
++
++    Kirigami.Theme.inherit: false
++    Kirigami.Theme.colorSet: Kirigami.Theme.Complementary
++
++    // top left: Megapixels style settings
++    CameraSettingsStrip {
++        anchors.top: parent.top
++        anchors.left: parent.left
++        anchors.margins: root.margin
++        columns: 2
++        camera: root.camera
++        captureSession: root.captureSession
++    }
++
++    // top right: microphone (video), switch camera, KDE settings
++    RowLayout {
++        anchors.top: parent.top
++        anchors.right: parent.right
++        anchors.margins: root.margin
++        spacing: Kirigami.Units.smallSpacing
++
++        QQC2.ToolButton {
++            visible: root.audioRecordingShown
++            icon.name: root.captureSession.audioRecordingEnabled ? "microphone-sensitivity-high-symbolic" : "microphone-sensitivity-muted-symbolic"
++            icon.color: "white"
++            onClicked: root.audioToggleRequested()
++        }
++        QQC2.ToolButton {
++            icon.name: "circular-arrow-shape"
++            icon.color: "white"
++            enabled: root.switchCameraEnabled
++            onClicked: root.switchCameraRequested()
++        }
++        QQC2.ToolButton {
++            icon.name: "settings-configure"
++            icon.color: "white"
++            onClicked: applicationWindow().openSettings()
++        }
++    }
++
++    // bottom left: last photo/video + timer
++    TimerSelectStrip {
++        id: timerStrip
++        shown: false
++        anchors.left: parent.left
++        anchors.bottom: bottomLeft.top
++        anchors.leftMargin: root.margin
++        anchors.bottomMargin: Kirigami.Units.smallSpacing
++        width: Kirigami.Units.gridUnit * 18
++        onTimerDurationRequested: (duration) => root.timerDurationRequested(duration)
++    }
++
++    RowLayout {
++        id: bottomLeft
++        anchors.bottom: parent.bottom
++        anchors.left: parent.left
++        anchors.margins: root.margin
++        spacing: Kirigami.Units.largeSpacing
++
++        Item {
++            implicitWidth: 48
++            implicitHeight: 48
++
++            PreviewArea {
++                id: previewArea
++                anchors.fill: parent
++
++                videoRecorder: root.captureSession.recorder
++                isSavingVideo: root.captureSession.isSavingVideo
++
++                Component.onCompleted: root.captureSession.imageSaved.connect(updatePreview)
++                function updatePreview(_, fileName: string) {
++                    previewArea.imageUrl = "file://" + fileName;
++                }
++
++                Connections {
++                    target: root.captureController
++                    function onPhotoCaptured() { previewArea.setPhotoPreview(); }
++                    function onVideoCaptured() { previewArea.setVideoPreview(); }
++                }
++            }
++
++            Kirigami.Icon {
++                visible: !previewArea.visible
++                anchors.centerIn: parent
++                source: "photo"
++                color: "white"
++                height: Kirigami.Units.gridUnit * 1.3
++            }
++        }
++
++        QQC2.ToolButton {
++            enabled: root.timerButtonEnabled
++            icon.name: "clock"
++            icon.color: "white"
++            onClicked: timerStrip.shown = !timerStrip.shown
++        }
++    }
++
++    // right, vertically centred: shutter
++    CaptureButton {
++        anchors.right: parent.right
++        anchors.rightMargin: root.margin
++        anchors.verticalCenter: parent.verticalCenter
++        captureMode: root.captureMode
++        isRecording: root.captureController.isRecording
++        enabled: root.captureEnabled
++        onClicked: root.captureButtonClicked()
++    }
++
++    // bottom right: photo / video
++    Components.RadioSelector {
++        anchors.bottom: parent.bottom
++        anchors.right: parent.right
++        anchors.margins: root.margin
++        width: Kirigami.Units.gridUnit * 10
++        consistentWidth: true
++
++        Kirigami.Theme.inherit: false
++        Kirigami.Theme.colorSet: Kirigami.Theme.Complementary
++
++        actions: [
++            Kirigami.Action {
++                text: i18n("Photo")
++                icon.name: "camera-photo-symbolic"
++                onTriggered: root.switchCaptureModeRequested(CameraPage.CaptureMode.Photo)
++            },
++            Kirigami.Action {
++                text: i18n("Video")
++                icon.name: "emblem-videos-symbolic"
++                onTriggered: root.switchCaptureModeRequested(CameraPage.CaptureMode.Video)
++            }
++        ]
++    }
++}
+--- a/src/lensautofocus.cpp	2026-10-04 15:20:18.293775990 +0300
++++ b/src/lensautofocus.cpp	2026-10-04 16:45:13.995956664 +0300
+@@ -83,18 +83,54 @@
+         return;
+     }
+     m_cameraId = cameraId;
++    m_available = false;
+     // The lens belongs to the rear main camera (sensor camera@2d); override with M52XQ_AF_CAMERA if needed.
+     const QString match = qEnvironmentVariableIsSet("M52XQ_AF_CAMERA") ? qEnvironmentVariable("M52XQ_AF_CAMERA") : QStringLiteral("camera@2d");
+     if (!cameraId.contains(match) || !openLens()) {
+         m_state = State::Disabled;
+         return;
+     }
++    m_available = true;
++    if (m_manual) {
++        m_state = State::Disabled;
++        setPosition(m_current >= 0 ? m_current : kInfinity);
++        return;
++    }
++    startScan();
++}
++
++int LensAutofocus::minPosition()
++{
++    return kInfinity;
++}
++
++int LensAutofocus::maxPosition()
++{
++    return kMacro;
++}
++
++void LensAutofocus::setManual(int position)
++{
++    if (!m_available) {
++        return;
++    }
++    m_manual = true;
++    m_state = State::Disabled;
++    setPosition(std::clamp(position, kInfinity, kMacro));
++}
++
++void LensAutofocus::setAuto()
++{
++    if (!m_available) {
++        return;
++    }
++    m_manual = false;
+     startScan();
+ }
+ 
+ void LensAutofocus::trigger()
+ {
+-    if (m_state != State::Disabled) {
++    if (m_available && !m_manual) {
+         startScan();
+     }
+ }
+--- a/src/lensautofocus.h	2026-10-04 15:20:18.297776006 +0300
++++ b/src/lensautofocus.h	2026-10-04 16:45:13.995956664 +0300
+@@ -20,6 +20,15 @@
+     // Restart the focus search.
+     void trigger();
+ 
++    // m52xq: manual focus (the lens belongs to the rear main camera only)
++    bool available() const { return m_available; }
++    bool manual() const { return m_manual; }
++    int position() const { return m_current; }
++    static int minPosition();
++    static int maxPosition();
++    void setManual(int position);
++    void setAuto();
++
+ private:
+     enum class State {
+         Disabled,
+@@ -36,6 +45,8 @@
+     void nextStep();
+ 
+     State m_state = State::Disabled;
++    bool m_available = false;
++    bool m_manual = false;
+     QString m_cameraId;
+     int m_fd = -1;
+ 
+--- a/src/plasmacamera.cpp	2026-10-04 15:20:18.293775990 +0300
++++ b/src/plasmacamera.cpp	2026-10-04 18:32:38.911959653 +0300
+@@ -128,8 +128,17 @@
+         return false;
+     }
+ 
+-    // cyclic increment
++    // cyclic increment over the real cameras and the 5th, logical one (it sits on the main camera)
++    if (m_logical) {
++        setCameraDevice(QString::fromStdString(cameras.front()->id()));
++        return true;
++    }
++    const bool onMain = m_cameraId.contains(QLatin1String("camera@2d"));
+     ++match;
++    if (onMain) {
++        setCameraDevice(QStringLiteral("m52xq-logical")); // after the main camera comes the logical one
++        return true;
++    }
+     if (match == cameras.end()) {
+         match = cameras.begin();
+     }
+@@ -145,6 +154,7 @@
+     for (const auto &camera : m_cameraManager->cameras()) {
+         devices.push_back( QString::fromStdString(camera->id()) );
+     }
++    devices.push_back(QStringLiteral("m52xq-logical"));
+ 
+     return devices;
+ }
+@@ -156,6 +166,7 @@
+     for (const auto &camera : m_cameraManager->cameras()) {
+         devices.push_back(QString::fromStdString(std::string(*camera->properties().get(libcamera::properties::Model))));
+     }
++    devices.push_back(QStringLiteral("Logical 0.5x-8x"));
+ 
+     return devices;
+ }
+@@ -202,6 +213,46 @@
+     return m_settings.getExposureTime();
+ }
+ 
++bool PlasmaCamera::isoAvailable() const
++{
++    return m_settings.canSetGain();
++}
++
++bool PlasmaCamera::isoManual() const
++{
++    return m_settings.isSetGain();
++}
++
++int PlasmaCamera::minIso() const
++{
++    return static_cast<int>(m_settings.minGain() * 100);
++}
++
++int PlasmaCamera::maxIso() const
++{
++    return static_cast<int>(m_settings.maxGain() * 100);
++}
++
++bool PlasmaCamera::exposureTimeAvailable() const
++{
++    return m_settings.canSetExposureTime();
++}
++
++bool PlasmaCamera::exposureTimeManual() const
++{
++    return m_settings.isSetExposureTime();
++}
++
++int PlasmaCamera::minExposureTime() const
++{
++    return m_settings.minExposureTime();
++}
++
++int PlasmaCamera::maxExposureTime() const
++{
++    return m_settings.maxExposureTime();
++}
++
+ bool PlasmaCamera::exposureValueAvailable() const
+ {
+     return m_settings.canSetExposureValue();
+@@ -289,7 +340,26 @@
+     // it will be handled once setState sets the state to the Ready/Running.
+ }
+ 
+-void PlasmaCamera::setCameraDevice(const QString &cameraDeviceId)
++void PlasmaCamera::setCameraDevice(const QString &requestedId)
++{
++    QString cameraDeviceId = requestedId;
++    const bool logical = (requestedId == QLatin1String("m52xq-logical"));
++    if (logical) {
++        // the logical camera starts on the main sensor
++        for (const auto &camera : m_cameraManager->cameras()) {
++            if (QString::fromStdString(camera->id()).contains(QLatin1String("camera@2d"))) {
++                cameraDeviceId = QString::fromStdString(camera->id());
++            }
++        }
++    }
++    if (m_logical != logical) {
++        m_logical = logical;
++        Q_EMIT logicalModeChanged();
++    }
++    switchRealCamera(cameraDeviceId);
++}
++
++void PlasmaCamera::switchRealCamera(const QString &cameraDeviceId)
+ {
+     if (cameraDeviceId == m_cameraId) {
+         return;
+--- a/src/plasmacamera.h	2026-10-04 15:20:18.293775990 +0300
++++ b/src/plasmacamera.h	2026-10-04 18:32:38.911959653 +0300
+@@ -53,14 +53,23 @@
+     Q_PROPERTY(bool available READ isAvailable NOTIFY availableChanged)
+     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
+     Q_PROPERTY(QString cameraDevice READ cameraDevice WRITE setCameraDevice NOTIFY cameraDeviceChanged)
++    Q_PROPERTY(bool logicalMode READ logicalMode NOTIFY logicalModeChanged)
+     Q_PROPERTY(QCameraFormat cameraFormat READ cameraFormat WRITE setCameraFormat NOTIFY cameraFormatChanged)
+ 
+     // Focus
+     // Q_PROPERTY(QSize afWindow READ afWindow WRITE setAfWindow RESET resetAfWindow NOTIFY afWindowChanged)
+ 
+     // Brightness
+-    // Q_PROPERTY(int iso READ iso WRITE setIso RESET resetIso NOTIFY settingsChanged)
+-    // Q_PROPERTY(int exposureTime READ exposureTime WRITE setExposureTime RESET resetExposureTime NOTIFY settingsChanged)
++    Q_PROPERTY(int iso READ iso WRITE setIso RESET resetIso NOTIFY settingsChanged)
++    Q_PROPERTY(bool isoAvailable READ isoAvailable NOTIFY settingsChanged)
++    Q_PROPERTY(bool isoManual READ isoManual NOTIFY settingsChanged)
++    Q_PROPERTY(int minIso READ minIso NOTIFY settingsChanged)
++    Q_PROPERTY(int maxIso READ maxIso NOTIFY settingsChanged)
++    Q_PROPERTY(int exposureTime READ exposureTime WRITE setExposureTime RESET resetExposureTime NOTIFY settingsChanged)
++    Q_PROPERTY(bool exposureTimeAvailable READ exposureTimeAvailable NOTIFY settingsChanged)
++    Q_PROPERTY(bool exposureTimeManual READ exposureTimeManual NOTIFY settingsChanged)
++    Q_PROPERTY(int minExposureTime READ minExposureTime NOTIFY settingsChanged)
++    Q_PROPERTY(int maxExposureTime READ maxExposureTime NOTIFY settingsChanged)
+     Q_PROPERTY(bool exposureValueAvailable READ exposureValueAvailable NOTIFY settingsChanged)
+     Q_PROPERTY(float exposureValue READ exposureValue WRITE setExposureValue RESET resetExposureValue NOTIFY settingsChanged)
+ 
+@@ -131,6 +140,10 @@
+      * Returns the id of the current camera device.
+      */
+     QString cameraDevice() const;
++    // m52xq: the 5th, "logical" entry of the camera list (main + ultrawide sensor behind one zoom)
++    bool logicalMode() const { return m_logical; }
++    // switch the real camera without leaving the logical mode
++    void switchRealCamera(const QString &cameraDeviceId);
+ 
+     /*!
+      * Returns the camera format of the current camera device.
+@@ -148,6 +161,14 @@
+     // Brightness
+     int iso() const;
+     int exposureTime() const;
++    bool isoAvailable() const;
++    bool isoManual() const;
++    int minIso() const;
++    int maxIso() const;
++    bool exposureTimeAvailable() const;
++    bool exposureTimeManual() const;
++    int minExposureTime() const;
++    int maxExposureTime() const;
+     bool exposureValueAvailable() const;
+     float exposureValue() const;
+ 
+@@ -172,6 +193,7 @@
+ 
+     void availableChanged(bool available);
+     void cameraDeviceChanged(const QString &cameraDevice);
++    void logicalModeChanged();
+     void cameraFormatChanged();
+     void busyChanged();
+ 
+@@ -297,6 +319,7 @@
+     QThread *m_cameraThread;
+ 
+     QString m_cameraId;
++    bool m_logical = false;
+     std::shared_ptr<libcamera::Camera> m_camera;
+ 
+     QCameraFormat m_cameraFormat = QCameraFormat();
+--- a/src/plasmacameramanager.cpp	2026-10-04 15:22:12.226225336 +0300
++++ b/src/plasmacameramanager.cpp	2026-10-04 19:48:22.699720459 +0300
+@@ -8,6 +8,10 @@
+ #include "plasmacamera/path.h"
+ #include "plasmacameramanager.h"
+ 
++#include <QFile>
++#include <QFileInfo>
++#include <QTimer>
++
+ #include <exiv2/exiv2.hpp>
+ #include <memory>
+ 
+@@ -31,6 +35,7 @@
+     connect(&m_orientationSensor, &QOrientationSensor::readingChanged, this, &PlasmaCameraManager::updateFromOrientationSensor);
+ 
+     m_orientationSensor.start();
++    m_lightSensor.start();
+ 
+     // Listen to audio inputs changing, and change audio device if needed
+     QMediaDevices *mediaDevices = new QMediaDevices(this);
+@@ -182,6 +187,10 @@
+     metaData.insert(QMediaMetaData::Date, QDateTime::currentDateTime());
+     m_recorder->setMetaData(metaData);
+ 
++    if (flashWanted() && flashAvailable()) {
++        setFlashLed(qMax(1, flashMaxLevel() / 2)); // torch while recording
++    }
++
+     m_recorder->record();
+ }
+ 
+@@ -191,6 +200,7 @@
+         return;
+     }
+     m_recorder->stop();
++    setFlashLed(0);
+     setIsSavingVideo(true);
+ 
+     m_videoFrameTimer.stop();
+@@ -274,6 +284,11 @@
+             connect(plasmaCamera, &PlasmaCamera::settingsChanged, this, &PlasmaCameraManager::setSettings);
+             connect(plasmaCamera, &PlasmaCamera::viewFinderFrame, this, &PlasmaCameraManager::processViewfinderFrame);
+             connect(plasmaCamera, &PlasmaCamera::stillCaptureFrames, this, &PlasmaCameraManager::processCaptureImage);
++            // entering / leaving the logical camera: back to 1x
++            connect(plasmaCamera, &PlasmaCamera::logicalModeChanged, this, [this]() {
++                m_zoom = 1.0;
++                Q_EMIT zoomChanged();
++            });
+         }
+ 
+         Q_EMIT plasmaCameraChanged();
+@@ -514,9 +529,34 @@
+ 
+     m_currentFrame = image;
+     if (m_plasmaCamera) {
+-        m_autofocus.setCameraId(m_plasmaCamera->cameraDevice());
++        const QString camId = m_plasmaCamera->cameraDevice();
++        m_autofocus.setCameraId(camId);
++        m_ae.setCameraId(camId);
++        if (camId != m_lastCameraId) {
++            m_lastCameraId = camId;
++            Q_EMIT flashChanged(); // flash availability depends on the camera (rear LED, not the mirrored front camera)
++            Q_EMIT focusChanged();
++            Q_EMIT aeChanged();
++            if (camId == m_switchTarget) {
++                m_switchTarget.clear(); // the switch we asked for (logical camera): keep the zoom
++            } else if (!qFuzzyCompare(m_zoom, 1.0)) {
++                m_zoom = 1.0; // the user picked another camera: back to 1x
++                Q_EMIT zoomChanged();
++            }
++        }
+     }
+     m_autofocus.processFrame(image);
++    m_ae.processFrame(image);
++    // update the displayed ISO / exposure time a few times a second
++    if (m_ae.available() != m_lastAeAvailable || (m_ae.available() && ++m_aeNotifyCounter % 6 == 0)) {
++        m_lastAeAvailable = m_ae.available();
++        Q_EMIT aeChanged();
++    }
++    if (m_autofocus.available() != m_lastFocusAvailable) {
++        m_lastFocusAvailable = m_autofocus.available();
++        Q_EMIT focusChanged();
++        Q_EMIT flashChanged();
++    }
+     QVideoFrame frame = QVideoFrame(applyZoom(image));
+ 
+     // Do software rotation
+@@ -591,6 +631,7 @@
+     // Write EXIF data
+     writeExifData(fileName);
+ 
++    setFlashLed(0);
+     Q_EMIT imageSaved(m_imageCaptureNum, fileName);
+ }
+ 
+@@ -650,9 +691,9 @@
+     m_videoFrame.setEndTime((m_frameRecordingCount + 1) * frameLengthMicroseconds - 1);
+ 
+     QVideoFrame sendFrame = m_videoFrame;
+-    if (!m_currentFrame.isNull() && (m_recordRotation != 0 || m_recordMirror || m_zoom > 1.001)) {
++    if (!m_currentFrame.isNull() && (m_recordRotation != 0 || m_recordMirror || effectiveZoom() > 1.001)) {
+         QImage image = m_currentFrame;
+-        if (m_zoom > 1.001) {
++        if (effectiveZoom() > 1.001) {
+             // keep the frame size constant for the encoder: crop the centre and scale back up
+             image = applyZoom(image).scaled(m_currentFrame.size(), Qt::IgnoreAspectRatio, Qt::FastTransformation);
+         }
+@@ -726,34 +767,223 @@
+     }
+ 
+     m_imageCaptureNum = newImageCaptureId;
+-    m_plasmaCamera->captureImage();
++    if (flashWanted() && flashAvailable()) {
++        // LED on a moment before the frame is taken; off when the photo is saved (or after a safety timeout)
++        setFlashLed(flashMaxLevel());
++        QTimer::singleShot(350, this, [this]() { m_plasmaCamera->captureImage(); });
++        QTimer::singleShot(5000, this, [this]() { setFlashLed(0); });
++    } else {
++        m_plasmaCamera->captureImage();
++    }
+ 
+     return newImageCaptureId;
+ }
+ 
++static const char kFlashLed[] = "/sys/class/leds/white:flash";
++
++void PlasmaCameraManager::setIso(int iso)
++{
++    m_ae.setIso(iso);
++    Q_EMIT aeChanged();
++}
++
++void PlasmaCameraManager::setIsoAuto()
++{
++    m_ae.setIsoAuto();
++    Q_EMIT aeChanged();
++}
++
++void PlasmaCameraManager::setExposureTime(int us)
++{
++    m_ae.setExposureTime(us);
++    Q_EMIT aeChanged();
++}
++
++void PlasmaCameraManager::setExposureAuto()
++{
++    m_ae.setExposureAuto();
++    Q_EMIT aeChanged();
++}
++
++bool PlasmaCameraManager::focusAvailable() const
++{
++    return m_autofocus.available();
++}
++
++bool PlasmaCameraManager::focusManual() const
++{
++    return m_autofocus.manual();
++}
++
++int PlasmaCameraManager::focusPosition() const
++{
++    const int min = LensAutofocus::minPosition();
++    const int max = LensAutofocus::maxPosition();
++    const int pos = m_autofocus.position();
++    return pos < 0 ? 0 : qBound(0, (pos - min) * 100 / (max - min), 100);
++}
++
++void PlasmaCameraManager::setFocusPosition(int percent)
++{
++    const int min = LensAutofocus::minPosition();
++    const int max = LensAutofocus::maxPosition();
++    m_autofocus.setManual(min + qBound(0, percent, 100) * (max - min) / 100);
++    Q_EMIT focusChanged();
++}
++
++void PlasmaCameraManager::setFocusAuto()
++{
++    m_autofocus.setAuto();
++    Q_EMIT focusChanged();
++}
++
++bool PlasmaCameraManager::flashAvailable() const
++{
++    // the LED is on the back: not for the (mirrored) front camera
++    return m_plasmaCamera && !m_plasmaCamera->mirrorOutput() && QFileInfo(QString::fromLatin1(kFlashLed) + QStringLiteral("/brightness")).isWritable();
++}
++
++int PlasmaCameraManager::flashMode() const
++{
++    return m_flashMode;
++}
++
++void PlasmaCameraManager::setFlashMode(int mode)
++{
++    mode = qBound(0, mode, 2);
++    if (m_flashMode == mode) {
++        return;
++    }
++    m_flashMode = mode;
++    if (mode == 1 && !m_lightSensor.isActive()) {
++        m_lightSensor.start();
++    }
++    Q_EMIT flashChanged();
++}
++
++int PlasmaCameraManager::ambientLux() const
++{
++    const QLightReading *r = const_cast<QLightSensor &>(m_lightSensor).reading();
++    return r ? int(r->lux()) : -1;
++}
++
++// m52xq: flash on, or in auto mode only when the ambient light sensor reports a dark room
++bool PlasmaCameraManager::flashWanted() const
++{
++    if (m_flashMode == 2) {
++        return true;
++    }
++    if (m_flashMode == 1) {
++        const int lux = ambientLux();
++        qInfo() << "Flash auto: ambient light" << lux << "lux";
++        return lux >= 0 && lux < 40;
++    }
++    return false;
++}
++
++int PlasmaCameraManager::flashMaxLevel() const
++{
++    QFile f(QString::fromLatin1(kFlashLed) + QStringLiteral("/max_brightness"));
++    if (f.open(QIODevice::ReadOnly)) {
++        const int v = f.readAll().trimmed().toInt();
++        if (v > 0) {
++            return v;
++        }
++    }
++    return 1;
++}
++
++void PlasmaCameraManager::setFlashLed(int level)
++{
++    QFile f(QString::fromLatin1(kFlashLed) + QStringLiteral("/brightness"));
++    if (f.open(QIODevice::WriteOnly)) {
++        f.write(QByteArray::number(level));
++    }
++}
++
+ qreal PlasmaCameraManager::zoom() const
+ {
+     return m_zoom;
+ }
+ 
++bool PlasmaCameraManager::isMainCamera(const QString &id)
++{
++    return id.contains(QLatin1String("camera@2d"));
++}
++
++bool PlasmaCameraManager::isUltrawideCamera(const QString &id)
++{
++    return id.contains(QLatin1String("camera@10"));
++}
++
++QString PlasmaCameraManager::cameraIdFor(const char *marker) const
++{
++    if (m_plasmaCamera) {
++        for (const QString &id : m_plasmaCamera->cameraDeviceIds()) {
++            if (id.contains(QLatin1String(marker))) {
++                return id;
++            }
++        }
++    }
++    return QString();
++}
++
++qreal PlasmaCameraManager::minZoom() const
++{
++    const QString cam = m_plasmaCamera ? m_plasmaCamera->cameraDevice() : QString();
++    const bool recording = m_recorder && m_recorder->recorderState() == QMediaRecorder::RecordingState;
++    // the logical camera switches the sensor, which is not possible while a video is being recorded
++    if (!m_plasmaCamera || !m_plasmaCamera->logicalMode()) {
++        return 1.0;
++    }
++    if (isUltrawideCamera(cam)) {
++        return 0.5;
++    }
++    return (isMainCamera(cam) && !recording) ? 0.5 : 1.0;
++}
++
++// zoom of the digital crop: the ultrawide camera is already 0.5x, so logical zoom z needs a crop of z / 0.5
++qreal PlasmaCameraManager::effectiveZoom() const
++{
++    const QString cam = m_plasmaCamera ? m_plasmaCamera->cameraDevice() : QString();
++    const bool logical = m_plasmaCamera && m_plasmaCamera->logicalMode();
++    return (logical && isUltrawideCamera(cam)) ? qMax<qreal>(1.0, m_zoom / 0.5) : qMax<qreal>(1.0, m_zoom);
++}
++
+ void PlasmaCameraManager::setZoom(qreal zoom)
+ {
+-    zoom = qBound<qreal>(1.0, zoom, 8.0);
++    zoom = qBound<qreal>(minZoom(), zoom, 8.0);
+     if (qFuzzyCompare(zoom, m_zoom)) {
+         return;
+     }
+     m_zoom = zoom;
+     Q_EMIT zoomChanged();
++
++    // logical camera: below 1x the ultrawide sensor, from 1x the main one
++    if (m_plasmaCamera) {
++        const QString cam = m_plasmaCamera->cameraDevice();
++        const bool logical = m_plasmaCamera->logicalMode() && (isMainCamera(cam) || isUltrawideCamera(cam));
++        if (logical) {
++            // hysteresis around 1x so that a pinch across the border does not flip the sensors back and forth
++            const bool toUltra = isMainCamera(cam) ? zoom < 0.95 : !(zoom >= 1.05);
++            const QString want = cameraIdFor(toUltra ? "camera@10" : "camera@2d");
++            if (!want.isEmpty() && want != cam && want != m_switchTarget) {
++                m_switchTarget = want;
++                m_plasmaCamera->switchRealCamera(want);
++            }
++        }
++    }
+ }
+ 
+ // m52xq: digital zoom (pinch in the viewfinder): the centre 1/zoom of the frame, used for the viewfinder, photos and video.
+ QImage PlasmaCameraManager::applyZoom(const QImage &image) const
+ {
+-    if (image.isNull() || m_zoom <= 1.001) {
++    const qreal zoom = effectiveZoom();
++    if (image.isNull() || zoom <= 1.001) {
+         return image;
+     }
+-    const int w = qMax(16, static_cast<int>(image.width() / m_zoom) & ~1);
+-    const int h = qMax(16, static_cast<int>(image.height() / m_zoom) & ~1);
++    const int w = qMax(16, static_cast<int>(image.width() / zoom) & ~1);
++    const int h = qMax(16, static_cast<int>(image.height() / zoom) & ~1);
+     const int x = ((image.width() - w) / 2) & ~1;
+     const int y = ((image.height() - h) / 2) & ~1;
+     return image.copy(x, y, w, h);
+--- a/src/plasmacameramanager.h	2026-10-04 15:20:32.697833263 +0300
++++ b/src/plasmacameramanager.h	2026-10-04 18:23:13.946477829 +0300
+@@ -12,7 +12,10 @@
+ #include <libcamera/libcamera.h>
+ #include <libcamera/camera_manager.h>
+ 
++#include <QLightSensor>
++
+ #include "lensautofocus.h"
++#include "sensorae.h"
+ #include "plasmacamera.h"
+ 
+ /*!
+@@ -46,6 +49,22 @@
+     Q_PROPERTY(VideoCodec videoCodec READ videoCodec WRITE setVideoCodec NOTIFY videoCodecChanged)
+ 
+     Q_PROPERTY(qreal zoom READ zoom WRITE setZoom NOTIFY zoomChanged)
++    Q_PROPERTY(qreal minZoom READ minZoom NOTIFY zoomChanged)
++    Q_PROPERTY(bool aeAvailable READ aeAvailable NOTIFY aeChanged)
++    Q_PROPERTY(int iso READ iso WRITE setIso NOTIFY aeChanged)
++    Q_PROPERTY(bool isoManual READ isoManual NOTIFY aeChanged)
++    Q_PROPERTY(int minIso READ minIso NOTIFY aeChanged)
++    Q_PROPERTY(int maxIso READ maxIso NOTIFY aeChanged)
++    Q_PROPERTY(int exposureTime READ exposureTime WRITE setExposureTime NOTIFY aeChanged)
++    Q_PROPERTY(bool exposureManual READ exposureManual NOTIFY aeChanged)
++    Q_PROPERTY(int minExposureTime READ minExposureTime NOTIFY aeChanged)
++    Q_PROPERTY(int maxExposureTime READ maxExposureTime NOTIFY aeChanged)
++    Q_PROPERTY(bool focusAvailable READ focusAvailable NOTIFY focusChanged)
++    Q_PROPERTY(bool focusManual READ focusManual NOTIFY focusChanged)
++    Q_PROPERTY(int focusPosition READ focusPosition WRITE setFocusPosition NOTIFY focusChanged)
++    Q_PROPERTY(bool flashAvailable READ flashAvailable NOTIFY flashChanged)
++    Q_PROPERTY(int flashMode READ flashMode WRITE setFlashMode NOTIFY flashChanged) // 0 off, 1 auto (dark room), 2 on
++    Q_PROPERTY(int ambientLux READ ambientLux NOTIFY flashChanged)
+     Q_PROPERTY(bool isRecordingVideo READ isRecordingVideo NOTIFY isRecordingVideoChanged)
+     Q_PROPERTY(bool isSavingVideo READ isSavingVideo NOTIFY isSavingVideoChanged)
+ 
+@@ -175,6 +194,9 @@
+     void audioRecordingEnabledChanged();
+     void isRecordingVideoChanged();
+     void zoomChanged();
++    void focusChanged();
++    void aeChanged();
++    void flashChanged();
+     void isSavingVideoChanged();
+ 
+     void framesDropped();
+@@ -246,6 +268,32 @@
+     float outputOrientationDegrees() const;
+     qreal zoom() const;
+     void setZoom(qreal zoom);
++    qreal minZoom() const;
++
++    // m52xq: manual focus (0 = infinity ... 100 = macro) and LED flash
++    bool aeAvailable() const { return m_ae.available(); }
++    int iso() const { return m_ae.iso(); }
++    void setIso(int iso);
++    bool isoManual() const { return m_ae.isoManual(); }
++    int minIso() const { return m_ae.minIso(); }
++    int maxIso() const { return m_ae.maxIso(); }
++    Q_INVOKABLE void setIsoAuto();
++    int exposureTime() const { return m_ae.exposureTime(); }
++    void setExposureTime(int us);
++    bool exposureManual() const { return m_ae.exposureManual(); }
++    int minExposureTime() const { return m_ae.minExposureTime(); }
++    int maxExposureTime() const { return m_ae.maxExposureTime(); }
++    Q_INVOKABLE void setExposureAuto();
++    bool focusAvailable() const;
++    bool focusManual() const;
++    int focusPosition() const;
++    void setFocusPosition(int percent);
++    Q_INVOKABLE void setFocusAuto();
++    bool flashAvailable() const;
++    int flashMode() const;
++    void setFlashMode(int mode);
++    int ambientLux() const;
++    bool flashWanted() const;
+ 
+     // error handling
+     Error m_error;
+@@ -266,7 +314,22 @@
+ 
+     QImage m_currentFrame;
+     qreal m_zoom = 1.0;
++    int m_flashMode = 0;
++    QLightSensor m_lightSensor;
++    bool m_lastFocusAvailable = false;
++    bool m_lastAeAvailable = false;
++    int m_aeNotifyCounter = 0;
++    SensorAe m_ae;
++    void setFlashLed(int level);
++    int flashMaxLevel() const;
+     QImage applyZoom(const QImage &image) const;
++    // m52xq: "logical" rear camera: zoom 0.5 .. 1 = ultrawide (imx258, camera@10), >= 1 = main (s5kgw3, camera@2d) + digital zoom
++    static bool isMainCamera(const QString &id);
++    static bool isUltrawideCamera(const QString &id);
++    qreal effectiveZoom() const;
++    QString cameraIdFor(const char *marker) const;
++    QString m_lastCameraId;
++    QString m_switchTarget;
+     LensAutofocus m_autofocus;
+     QVideoFrame m_videoFrame;
+     int m_recordRotation = 0;
+--- a/src/resources.qrc	2026-10-04 15:20:18.293775990 +0300
++++ b/src/resources.qrc	2026-10-04 16:47:12.987617733 +0300
+@@ -10,6 +10,8 @@
+         <file alias="ZoomControl.qml">contents/ui/ZoomControl.qml</file>
+ 
+         <file alias="camera/CameraControls.qml">contents/ui/camera/CameraControls.qml</file>
++        <file alias="camera/CameraSettingsStrip.qml">contents/ui/camera/CameraSettingsStrip.qml</file>
++        <file alias="camera/LandscapeControls.qml">contents/ui/camera/LandscapeControls.qml</file>
+         <file alias="camera/CameraExtraControls.qml">contents/ui/camera/CameraExtraControls.qml</file>
+         <file alias="camera/CameraPage.qml">contents/ui/camera/CameraPage.qml</file>
+         <file alias="camera/CaptureButton.qml">contents/ui/camera/CaptureButton.qml</file>
+--- a/src/sensorae.cpp	1970-01-01 02:00:00.000000000 +0200
++++ b/src/sensorae.cpp	2026-10-04 17:24:30.252657738 +0300
+@@ -0,0 +1,323 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++
++#include "sensorae.h"
++
++#include <QDebug>
++#include <QDir>
++#include <QFile>
++#include <algorithm>
++#include <cmath>
++#include <fcntl.h>
++#include <linux/v4l2-subdev.h>
++#include <linux/videodev2.h>
++#include <sys/ioctl.h>
++#include <unistd.h>
++
++namespace
++{
++struct SensorInfo {
++    const char *camera; // part of the libcamera camera id
++    const char *name; // sub-device name prefix
++    int unity; // raw analogue gain value of 1x (linear sensors)
++    bool imx258;
++};
++
++const SensorInfo kSensors[] = {
++    {"camera@2d", "s5kgw3", 64, false},
++    {"camera@1a", "imx616", 72, false},
++    {"camera@10", "imx258", 0, true},
++    {"camera@3f", "gc5035", 64, false},
++};
++
++// Frames to wait after a change (sensor latency + pipeline latency).
++constexpr int kWaitFrames = 3;
++// Longest automatic exposure (30 fps preview): beyond that the gain is raised instead.
++constexpr double kMaxAutoExposureUs = 33000.0;
++// Mean luma target of the automatic exposure (0..255), lowered when highlights clip.
++constexpr double kTargetMean = 104.0;
++constexpr double kClipLuma = 246.0;
++constexpr double kClipFractionLimit = 0.02;
++constexpr double kMaxAutoMultiplier = 16.0;
++}
++
++SensorAe::~SensorAe()
++{
++    close();
++}
++
++void SensorAe::close()
++{
++    if (m_fd >= 0) {
++        ::close(m_fd);
++        m_fd = -1;
++    }
++}
++
++bool SensorAe::getCtrl(unsigned id, int *value) const
++{
++    v4l2_control c{id, 0};
++    if (::ioctl(m_fd, VIDIOC_G_CTRL, &c) < 0) {
++        return false;
++    }
++    *value = c.value;
++    return true;
++}
++
++bool SensorAe::setCtrl(unsigned id, int value)
++{
++    v4l2_control c{id, value};
++    return ::ioctl(m_fd, VIDIOC_S_CTRL, &c) == 0;
++}
++
++bool SensorAe::open(const QString &sensorName)
++{
++    const QDir dir(QStringLiteral("/sys/class/video4linux"));
++    for (const QString &entry : dir.entryList({QStringLiteral("v4l-subdev*")}, QDir::Dirs | QDir::NoDotAndDotDot)) {
++        QFile nameFile(dir.filePath(entry + QStringLiteral("/name")));
++        if (!nameFile.open(QIODevice::ReadOnly) || !nameFile.readAll().startsWith(sensorName.toLatin1())) {
++            continue;
++        }
++        m_fd = ::open(QFile::encodeName(QStringLiteral("/dev/") + entry).constData(), O_RDWR | O_CLOEXEC);
++        if (m_fd < 0) {
++            qWarning() << "SensorAe: cannot open /dev/" << entry;
++            return false;
++        }
++        v4l2_queryctrl q{};
++        q.id = V4L2_CID_EXPOSURE;
++        if (::ioctl(m_fd, VIDIOC_QUERYCTRL, &q) < 0) {
++            close();
++            return false;
++        }
++        m_expMin = q.minimum;
++        m_expMax = q.maximum;
++        q = {};
++        q.id = V4L2_CID_ANALOGUE_GAIN;
++        if (::ioctl(m_fd, VIDIOC_QUERYCTRL, &q) < 0) {
++            close();
++            return false;
++        }
++        m_gainMin = q.minimum;
++        m_gainMax = q.maximum;
++
++        // line time = (active width + horizontal blanking) / pixel rate
++        int hblank = 0;
++        getCtrl(V4L2_CID_HBLANK, &hblank);
++        v4l2_ext_control ec{};
++        ec.id = V4L2_CID_PIXEL_RATE;
++        v4l2_ext_controls ecs{};
++        ecs.ctrl_class = V4L2_CTRL_ID2WHICH(V4L2_CID_PIXEL_RATE);
++        ecs.count = 1;
++        ecs.controls = &ec;
++        long long pixelRate = 0;
++        if (::ioctl(m_fd, VIDIOC_G_EXT_CTRLS, &ecs) == 0) {
++            pixelRate = ec.value64;
++        }
++        v4l2_subdev_format fmt{};
++        fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
++        fmt.pad = 0;
++        int width = 0;
++        if (::ioctl(m_fd, VIDIOC_SUBDEV_G_FMT, &fmt) == 0) {
++            width = fmt.format.width;
++        }
++        m_lineUs = (pixelRate > 0 && width > 0) ? (double(width) + hblank) / double(pixelRate) * 1e6 : 10.0;
++        qInfo() << "SensorAe: using" << entry << "exposure" << m_expMin << "-" << m_expMax << "gain" << m_gainMin << "-" << m_gainMax << "line"
++                << m_lineUs << "us";
++        getCtrl(V4L2_CID_EXPOSURE, &m_expRaw);
++        getCtrl(V4L2_CID_ANALOGUE_GAIN, &m_gainRaw);
++        return true;
++    }
++    return false;
++}
++
++void SensorAe::setCameraId(const QString &cameraId)
++{
++    if (cameraId == m_cameraId) {
++        return;
++    }
++    m_cameraId = cameraId;
++    close();
++    for (const SensorInfo &s : kSensors) {
++        if (cameraId.contains(QLatin1String(s.camera))) {
++            m_model = s.imx258 ? GainModel::Imx258 : GainModel::Linear;
++            m_unity = s.unity;
++            if (open(QLatin1String(s.name))) {
++                m_wait = kWaitFrames;
++                m_frame = 0;
++            }
++            return;
++        }
++    }
++}
++
++double SensorAe::rawToGain(int raw) const
++{
++    if (m_model == GainModel::Imx258) {
++        return 512.0 / (512.0 - std::min(raw, 500));
++    }
++    return double(raw) / m_unity;
++}
++
++int SensorAe::gainToRaw(double multiplier) const
++{
++    int raw;
++    if (m_model == GainModel::Imx258) {
++        raw = int(std::lround(512.0 - 512.0 / std::max(multiplier, 1.0)));
++    } else {
++        raw = int(std::lround(multiplier * m_unity));
++    }
++    return std::clamp(raw, m_gainMin, m_gainMax);
++}
++
++double SensorAe::lineUs() const
++{
++    return m_lineUs;
++}
++
++int SensorAe::iso() const
++{
++    return int(std::lround(rawToGain(m_gainRaw) * 100.0));
++}
++
++int SensorAe::minIso() const
++{
++    return int(std::lround(rawToGain(m_gainMin) * 100.0));
++}
++
++int SensorAe::maxIso() const
++{
++    return int(std::lround(rawToGain(m_gainMax) * 100.0));
++}
++
++int SensorAe::exposureTime() const
++{
++    return int(std::lround(m_expRaw * lineUs()));
++}
++
++int SensorAe::minExposureTime() const
++{
++    return int(std::lround(m_expMin * lineUs()));
++}
++
++int SensorAe::maxExposureTime() const
++{
++    return int(std::lround(m_expMax * lineUs()));
++}
++
++void SensorAe::apply(double exposureUs, double multiplier)
++{
++    const int expRaw = std::clamp(int(std::lround(exposureUs / lineUs())), m_expMin, m_expMax);
++    const int gainRaw = gainToRaw(multiplier);
++    if (expRaw != m_expRaw && setCtrl(V4L2_CID_EXPOSURE, expRaw)) {
++        m_expRaw = expRaw;
++    }
++    if (gainRaw != m_gainRaw && setCtrl(V4L2_CID_ANALOGUE_GAIN, gainRaw)) {
++        m_gainRaw = gainRaw;
++    }
++    m_wait = kWaitFrames;
++}
++
++void SensorAe::setIso(int iso)
++{
++    if (m_fd < 0) {
++        return;
++    }
++    m_isoManual = true;
++    const int raw = gainToRaw(iso / 100.0);
++    if (setCtrl(V4L2_CID_ANALOGUE_GAIN, raw)) {
++        m_gainRaw = raw;
++    }
++    m_wait = kWaitFrames;
++}
++
++void SensorAe::setIsoAuto()
++{
++    m_isoManual = false;
++}
++
++void SensorAe::setExposureTime(int us)
++{
++    if (m_fd < 0) {
++        return;
++    }
++    m_expManual = true;
++    const int raw = std::clamp(int(std::lround(us / lineUs())), m_expMin, m_expMax);
++    if (setCtrl(V4L2_CID_EXPOSURE, raw)) {
++        m_expRaw = raw;
++    }
++    m_wait = kWaitFrames;
++}
++
++void SensorAe::setExposureAuto()
++{
++    m_expManual = false;
++}
++
++void SensorAe::processFrame(const QImage &image)
++{
++    if (m_fd < 0 || image.isNull() || (m_isoManual && m_expManual)) {
++        return;
++    }
++    if (m_wait > 0) {
++        --m_wait;
++        return;
++    }
++    if (++m_frame % 2) {
++        return;
++    }
++
++    // luma histogram of a sparse grid (bytes 0..2 are R,G,B or B,G,R: the weights are symmetric)
++    const int w = image.width(), h = image.height();
++    if (image.depth() != 32 || w < 32 || h < 32) {
++        return;
++    }
++    const int stepX = std::max(8, w / 160), stepY = std::max(8, h / 120);
++    quint64 sum = 0, count = 0, clipped = 0;
++    for (int y = stepY / 2; y < h; y += stepY) {
++        const uchar *row = image.constScanLine(y);
++        for (int x = stepX / 2; x < w; x += stepX) {
++            const uchar *p = row + x * 4;
++            const unsigned luma = (p[0] + 2u * p[1] + p[2]) >> 2;
++            sum += luma;
++            clipped += luma >= kClipLuma;
++            ++count;
++        }
++    }
++    if (!count) {
++        return;
++    }
++    const double mean = std::max(1.0, double(sum) / count);
++    const double clipFraction = double(clipped) / count;
++
++    // lower the target when highlights clip (no blown-out skies), never raise it above the base target
++    double target = kTargetMean;
++    if (clipFraction > kClipFractionLimit) {
++        target *= std::max(0.55, 1.0 - (clipFraction - kClipFractionLimit) * 5.0);
++    }
++    double ratio = target / mean;
++    // damping, and a dead band to avoid hunting
++    ratio = std::pow(ratio, 0.55);
++    if (std::abs(ratio - 1.0) < 0.06 && clipFraction <= kClipFractionLimit) {
++        return;
++    }
++    ratio = std::clamp(ratio, 0.5, 2.0);
++
++    const double curExp = m_expRaw * lineUs();
++    const double curGain = rawToGain(m_gainRaw);
++    const double total = curExp * curGain * ratio;
++    const double minGain = rawToGain(m_gainMin);
++    const double maxGain = std::min(rawToGain(m_gainMax), kMaxAutoMultiplier);
++    const double minExp = m_expMin * lineUs();
++    const double maxExp = std::min(m_expMax * lineUs(), kMaxAutoExposureUs);
++
++    double exposure = curExp, gain = curGain;
++    if (m_expManual) {
++        gain = std::clamp(total / curExp, minGain, maxGain);
++    } else if (m_isoManual) {
++        exposure = std::clamp(total / curGain, minExp, maxExp);
++    } else {
++        // exposure first (low noise), gain only when the exposure is at its limit; on the way down gain first
++        exposure = std::clamp(total / minGain, minExp, maxExp);
++        gain = std::clamp(total / exposure, minGain, maxGain);
++    }
++    apply(exposure, gain);
++}
+--- a/src/sensorae.h	1970-01-01 02:00:00.000000000 +0200
++++ b/src/sensorae.h	2026-10-04 17:24:30.252657738 +0300
+@@ -0,0 +1,66 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++// m52xq: automatic and manual exposure for the camera sensors of the Galaxy M52 5G.
++// libcamera's software ISP only offers Contrast/Gamma on this device, so (with its own Agc switched off in the tuning
++// file) the exposure time and the analogue gain are driven here directly through the V4L2 sensor sub-device.
++
++#pragma once
++
++#include <QImage>
++#include <QString>
++
++class SensorAe
++{
++public:
++    SensorAe() = default;
++    ~SensorAe();
++
++    // Called with the id of the active libcamera camera.
++    void setCameraId(const QString &cameraId);
++    // Called with every viewfinder frame.
++    void processFrame(const QImage &image);
++
++    bool available() const { return m_fd >= 0; }
++
++    // ISO 100 = 1x analogue gain
++    int iso() const;
++    int minIso() const;
++    int maxIso() const;
++    bool isoManual() const { return m_isoManual; }
++    void setIso(int iso);
++    void setIsoAuto();
++
++    // microseconds
++    int exposureTime() const;
++    int minExposureTime() const;
++    int maxExposureTime() const;
++    bool exposureManual() const { return m_expManual; }
++    void setExposureTime(int us);
++    void setExposureAuto();
++
++private:
++    enum class GainModel {
++        Linear, // multiplier = raw / unity
++        Imx258, // multiplier = 512 / (512 - raw)
++    };
++
++    void close();
++    bool open(const QString &sensorName);
++    bool getCtrl(unsigned id, int *value) const;
++    bool setCtrl(unsigned id, int value);
++    int gainToRaw(double multiplier) const;
++    double rawToGain(int raw) const;
++    double lineUs() const;
++    void apply(double exposureUs, double multiplier);
++
++    int m_fd = -1;
++    QString m_cameraId;
++    GainModel m_model = GainModel::Linear;
++    int m_unity = 64;
++    int m_expMin = 1, m_expMax = 1, m_gainMin = 0, m_gainMax = 0;
++    double m_lineUs = 10.0;
++    int m_expRaw = 0, m_gainRaw = 0;
++    bool m_isoManual = false;
++    bool m_expManual = false;
++    int m_wait = 0;
++    int m_frame = 0;
++};

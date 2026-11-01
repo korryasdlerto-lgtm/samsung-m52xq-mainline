@@ -1,0 +1,79 @@
+#!/bin/sh
+# m52xq-suspend-guard: if a suspend request fails (ath11k "failed to wait tx complete -110",
+# "Failed to put system to sleep"), nothing asks for sleep again and the phone stays awake for hours.
+# Wait 20 s; if nobody touched the screen or the power key meanwhile, ask for suspend again.
+# At most 5 failed retries in a row; a successful sleep resets the counter.
+# в44 (01.11): idle watcher. After a wake-up by an SMS (modem, not Wi-Fi, so m52xq-wifi-dark does not run) PowerDevil's
+# idle timeouts had already fired before the sleep and never fire again: the phone stayed awake with the display off
+# 12:12-12:46 (~4 %). The same path after a missed call. Every 15 s: display off, no touch / power key, no charger, no sound playing, no call, no camera and
+# no m52xq-wifi-dark window for IDLE s in a row -> suspend.
+LOG=/var/log/m52xq-sleep.log
+DRY=${M52XQ_GUARD_DRY:-0}
+IDLE=${M52XQ_GUARD_IDLE:-120}
+
+input_count() {
+	awk '/synaptics_tcm_report|pmic_pwrkey/ { for (i = 2; i <= 9; i++) s += $i } END { print s + 0 }' /proc/interrupts
+}
+
+# the reason why the phone must stay awake now, empty when it may sleep
+busy() {
+	grep -qx On /sys/class/drm/card*-DSI-1/dpms 2>/dev/null && { echo display; return; }
+	[ "$(cat /sys/class/power_supply/sm5714-charger/online 2>/dev/null)" = 1 ] && { echo charger; return; }
+	grep -qs "state: RUNNING" /proc/asound/card*/pcm*/sub*/status && { echo sound; return; }
+	pgrep -f /usr/local/bin/m52xq-wifi-dark >/dev/null && { echo wifi-dark; return; }
+	[ "$(/usr/local/bin/m52xq-camera-active 2>/dev/null)" = on ] && { echo camera; return; }
+	for m in $(mmcli -L 2>/dev/null | grep -o 'Modem/[0-9]*' | cut -d/ -f2); do
+		# ModemManager keeps ended (missed) calls in the list as "(terminated)"
+		timeout 5 mmcli -m "$m" --voice-list-calls 2>/dev/null | grep 'Call/' | grep -qv terminated && { echo call; return; }
+	done
+}
+
+idle_watch() {
+	since=$(date +%s)
+	prev=$since
+	last=$(input_count)
+	while sleep 15; do
+		now=$(date +%s)
+		cur=$(input_count)
+		# a jump of the clock means the phone slept in between: start over
+		slept=$((now - prev > 60))
+		prev=$now
+		if [ "$slept" = 1 ] || [ "$cur" != "$last" ] || [ -n "$(busy)" ]; then
+			since=$now
+			last=$cur
+			continue
+		fi
+		[ $((now - since)) -lt "$IDLE" ] && continue
+		echo "suspend-guard $(date +%T): idle ${IDLE}s with the display off, suspending" >>"$LOG"
+		[ "$DRY" = 1 ] || systemctl suspend
+		since=$(date +%s)
+		prev=$since
+		last=$(input_count)
+	done
+}
+
+idle_watch &
+
+tries=0
+journalctl -f -n0 -o cat -t systemd-sleep | while read -r line; do
+	case "$line" in
+	*"System returned from sleep operation"*)
+		tries=0
+		;;
+	*"Failed to put system to sleep"*)
+		tries=$((tries + 1))
+		if [ "$tries" -gt 5 ]; then
+			echo "suspend-guard $(date +%T): giving up after 5 retries" >>"$LOG"
+			continue
+		fi
+		before=$(input_count)
+		sleep 20
+		if [ "$(input_count)" != "$before" ]; then
+			echo "suspend-guard $(date +%T): suspend failed, user is active - no retry" >>"$LOG"
+			continue
+		fi
+		echo "suspend-guard $(date +%T): suspend failed, retry $tries" >>"$LOG"
+		[ "$DRY" = 1 ] || systemctl suspend
+		;;
+	esac
+done

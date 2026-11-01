@@ -1,0 +1,12 @@
+[Unit]
+Description=M52XQ: end windowless apps before the sleep (m52xq-app-reaper)
+Before=sleep.target
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/m52xq-app-reaper
+TimeoutStartSec=8
+
+[Install]
+WantedBy=sleep.target

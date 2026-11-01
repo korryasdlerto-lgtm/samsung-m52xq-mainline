@@ -2,7 +2,7 @@
 maintainer=""
 pkgname=device-samsung-m52xq
 pkgver=1
-pkgrel=0
+pkgrel=6
 pkgdesc="Samsung Galaxy M52 5G"
 url="https://postmarketos.org"
 arch="aarch64"
@@ -12,6 +12,8 @@ depends="
 	postmarketos-base
 	"
 makedepends="devicepkg-dev"
+replaces="devicepkg-utils"
+install="$pkgname.post-install $pkgname.post-upgrade"
 source="
 	deviceinfo
 	modules-initfs
@@ -24,9 +26,28 @@ build() {
 
 package() {
 	devicepkg_package $startdir $pkgname
+
+	# postmarketos-initramfs' 00-initramfs-base.files lists the entry
+	# literally as "/etc/deviceinfo!optional" -- this mkinitfs (Go)
+	# build does not parse "!optional" as an optional-include marker at
+	# all, it stats that exact string as a filename and hard-fails when
+	# it's missing. Provide both the sane path and the literal
+	# "!optional"-suffixed one so the stat succeeds either way.
+	mkdir -p "$pkgdir"/etc
+	ln -sf /usr/share/deviceinfo/deviceinfo "$pkgdir"/etc/deviceinfo
+	ln -sf /usr/share/deviceinfo/deviceinfo "$pkgdir"/etc/deviceinfo\!optional
+	touch "$pkgdir"/etc/unudhcpd.conf\!optional
+
+	# postmarketos-mkinitfs (Go rewrite) resolves shared-library
+	# dependencies (e.g. for /usr/bin/udevadm in the initramfs-extra
+	# file list) only against standard lib dirs, not systemd's private
+	# /usr/lib/systemd/ directory. Provide a compat symlink so the
+	# dependency walker finds it.
+	mkdir -p "$pkgdir"/usr/lib
+	ln -sf /usr/lib/systemd/libsystemd-shared-262.so "$pkgdir"/usr/lib/libsystemd-shared-262.so
 }
 
 sha512sums="
-ef36e01f202f452e6faac5ee4a8d553bbb20d1556d079dd75e1f7e7924dfba14847e2b746c5d1a4905eeb8e4a3dfce6710c8bc6be2aac6110f0c5d5c13ea390d  deviceinfo
+430795bca4e48ff94dd062692939658c37efa15d24060514f3aef58ab0ed54f8f708c7cb6d0a2360a28956384e27cc575ac49a45f4a38a639a8ddbeeb531ddc8  deviceinfo
 e70bae17df23dcaaaea0e2d3616556f04baa23f8ee1357785c0f539bf97282d8ddff53953e155b72689bb73beb38c2da3d08de2a61e866684edfa10a6593885d  modules-initfs
 "

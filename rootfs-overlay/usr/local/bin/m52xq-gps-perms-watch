@@ -1,0 +1,15 @@
+#!/bin/sh
+# M52XQ (root): apply ~user/.config/m52xq-geoclue-apps to GeoClue whenever it changes.
+# A systemd .path unit cannot be used: it implies RequiresMountsFor=/home/user/..., and
+# home-user.mount fails once early in boot (live 2026-10-04), after which the path unit
+# stays dead. Polling every 2 s costs nothing.
+SRC=/home/user/.config/m52xq-geoclue-apps
+last=
+while :; do
+	cur=$(stat -c '%Y,%s' "$SRC" 2>/dev/null)
+	if [ -n "$cur" ] && [ "$cur" != "$last" ]; then
+		/usr/local/bin/m52xq-gps-apply-perms
+		last=$cur
+	fi
+	sleep 2
+done

@@ -1,0 +1,11 @@
+[Unit]
+Description=M52XQ: ath11k WoW flags (0x20) for a Wi-Fi that stays up in sleep
+Before=NetworkManager.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/m52xq-wow-params
+
+[Install]
+WantedBy=multi-user.target

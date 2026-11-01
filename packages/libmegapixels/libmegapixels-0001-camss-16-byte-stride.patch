@@ -1,0 +1,17 @@
+--- a/src/mode.c	2025-11-11 00:57:25.000000000 +0200
++++ b/src/mode.c	2026-10-04 15:41:41.009763816 +0300
+@@ -330,11 +330,12 @@
+ 		return 0;
+ 	}
+ 	uint64_t bytes_per_width = libmegapixels_mode_width_to_bytes(index, width);
+-	uint64_t remainder = bytes_per_width % 8;
++	/* m52xq: mainline qcom-camss aligns the line stride to 16 bytes (4624 px RAW10 packed = 5780 -> 5792) */
++	uint64_t remainder = bytes_per_width % 16;
+ 	if (remainder == 0)
+ 		return remainder;
+ 
+-	return 8 - remainder;
++	return 16 - remainder;
+ }
+ 
+ uint32_t

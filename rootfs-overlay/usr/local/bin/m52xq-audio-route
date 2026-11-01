@@ -1,0 +1,69 @@
+#!/bin/sh
+# M52XQ: where the sound of ordinary apps (Telegram calls, media) goes: the loud speaker, the earpiece (the speaker you hold
+# to your ear) or a plugged USB headset.   m52xq-audio-route speaker|earpiece|usb|toggle|status
+# The earpiece is selected with the codec mixers of the UCM "Earpiece" device only (PulseAudio keeps its Speaker sink):
+# switching the card PROFILE while streams exist crashed pulseaudio (sink-input.c volume_factor_items assertion, 2026-10-04).
+export PULSE_SERVER=unix:/run/user/10000/pulse/native PULSE_COOKIE=/home/user/.config/pulse/cookie
+C="amixer -q -c0 cset"
+usb_sink() { pactl list short sinks | awk '$2 ~ /^alsa_output\.usb-/ && $2 !~ /monitor/ {print $2; exit}'; }
+builtin_sink() { pactl list short sinks | awk '/platform-soc_sound/ && !/monitor/ {print $2; exit}'; }
+cur() {
+	case "$(pactl get-default-sink 2>/dev/null)" in *usb-*) echo usb; return ;; esac
+	if amixer -c0 cget name="RX_CODEC_DMA_RX_0 Audio Mixer MultiMedia1" 2>/dev/null | tail -1 | grep -q "values=on"; then echo earpiece; else echo speaker; fi
+}
+earpiece_on() { # UCM HiFi.conf, device "Earpiece", EnableSequence
+	$C "name=QUIN_MI2S_RX Audio Mixer MultiMedia1" 0
+	$C "name=RX_CODEC_DMA_RX_0 Audio Mixer MultiMedia1" 1
+	$C "name=RX_MACRO RX0 MUX" AIF1_PB
+	$C "name=RX INT0_1 MIX1 INP0" RX0
+	$C "name=RX INT0 DEM MUX" CLSH_DSM_OUT
+	$C "name=RX_COMP1 Switch" 0
+	$C "name=HPHL_COMP Switch" 0
+	$C "name=RX_EAR Mode Switch" 1
+	$C "name=RX HPH Mode" CLS_H_LOHIFI
+	$C "name=RDAC3_MUX" RX1
+	$C "name=EAR_RDAC Switch" 1
+	$C "name=HPHL Switch" 1
+	$C "name=CLSH Switch" 1
+	$C "name=RX_RX0 Digital Volume" 84
+}
+earpiece_off() { # DisableSequence of "Earpiece" (leaves MultiMedia1 on the loud speaker backend)
+	$C "name=RX_CODEC_DMA_RX_0 Audio Mixer MultiMedia1" 0
+	$C "name=QUIN_MI2S_RX Audio Mixer MultiMedia1" 1
+	$C "name=EAR_RDAC Switch" 0
+	$C "name=HPHL Switch" 0
+	$C "name=CLSH Switch" 0
+	$C "name=RX_EAR Mode Switch" 0
+	$C "name=RX INT0_1 MIX1 INP0" ZERO
+	$C "name=RX_MACRO RX0 MUX" ZERO
+}
+set_route() {
+	case "$1" in
+	earpiece)
+		s=$(builtin_sink); [ -n "$s" ] && pactl set-default-sink "$s"
+		earpiece_on
+		;;
+	usb)
+		s=$(usb_sink); [ -n "$s" ] || { echo "no USB headset" >&2; exit 1; }
+		earpiece_off
+		pactl set-default-sink "$s"
+		;;
+	*)
+		s=$(builtin_sink); [ -n "$s" ] && pactl set-default-sink "$s"
+		earpiece_off
+		;;
+	esac
+	echo "$1"
+}
+case "$1" in
+status|"") cur ;;
+toggle)
+	case "$(cur)" in
+	speaker) set_route earpiece ;;
+	earpiece) if [ -n "$(usb_sink)" ]; then set_route usb; else set_route speaker; fi ;;
+	*) set_route speaker ;;
+	esac
+	;;
+speaker|earpiece|usb) set_route "$1" ;;
+*) echo "usage: $0 speaker|earpiece|usb|toggle|status" >&2; exit 2 ;;
+esac

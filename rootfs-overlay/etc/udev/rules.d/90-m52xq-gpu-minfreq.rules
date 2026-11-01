@@ -1,0 +1,2 @@
+# m52xq: Megapixels r75 raises the GPU frequency floor while it develops a photo (back to 315 MHz right after)
+ACTION=="add|change", SUBSYSTEM=="devfreq", KERNEL=="3d00000.qcom,kgsl-3d0", RUN+="/bin/chmod 0666 /sys%p/min_freq"

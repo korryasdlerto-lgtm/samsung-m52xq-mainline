@@ -1,0 +1,129 @@
+#!/usr/bin/python3
+# m52xq: WPSS (Wi-Fi) crash-loop guard.
+# 2026-10-24: the Wi-Fi firmware failed at a suspend entry ("CSS sleep failure due to requester id 0xd holding UMAC lock"),
+# after that every WPSS start died at once ("mhi_issue_request Failed") and remoteproc recovery restarted it ~6 times a second
+# for hours (5700+ crashes), burning CPU and battery; only a reboot brought Wi-Fi back.
+# This watches the kernel log: LIMIT WPSS crashes within WINDOW seconds -> recovery off + stop, then after a pause one clean
+# start (pauses 60 s, 5 min, 15 min); still looping after the last pause -> WPSS stays off until a reboot.
+# A start that keeps WPSS running for STABLE seconds resets the pause counter.
+# Test knobs (environment): M52XQ_KMSG (default /dev/kmsg), M52XQ_RP_DIR (default: the remoteproc named "wpss"),
+# M52XQ_PAUSES (comma-separated seconds).
+import os, re, select, time
+
+WINDOW = 60
+LIMIT = 5
+STABLE = 600
+PAUSES = [int(x) for x in os.environ.get("M52XQ_PAUSES", "60,300,900").split(",")]
+CRASH = re.compile(r"handling crash #\d+ in wpss")
+
+
+def log(msg):
+    print("m52xq-wpss-guard: " + msg, flush=True)
+
+
+def find_rp():
+    d = os.environ.get("M52XQ_RP_DIR")
+    if d:
+        return d
+    base = "/sys/class/remoteproc"
+    for n in sorted(os.listdir(base)):
+        try:
+            with open(os.path.join(base, n, "name")) as f:
+                if f.read().strip() == "wpss":
+                    return os.path.join(base, n)
+        except OSError:
+            pass
+    raise SystemExit("m52xq-wpss-guard: no remoteproc named wpss")
+
+
+RP = find_rp()
+
+
+def get(name):
+    try:
+        with open(os.path.join(RP, name)) as f:
+            return f.read().strip()
+    except OSError:
+        return "?"
+
+
+def put(name, value):
+    try:
+        with open(os.path.join(RP, name), "w") as f:
+            f.write(value)
+    except OSError as e:
+        log("%s <- %s: %s" % (name, value, e))
+
+
+def stop_wpss():
+    put("recovery", "disabled")
+    time.sleep(1)
+    if get("state") != "offline":
+        put("state", "stop")
+
+
+def start_wpss():
+    if get("state") != "offline":
+        put("state", "stop")
+    put("recovery", "enabled")
+    put("state", "start")
+
+
+fd = os.open(os.environ.get("M52XQ_KMSG", "/dev/kmsg"), os.O_RDONLY | os.O_NONBLOCK)
+try:
+    os.lseek(fd, 0, os.SEEK_END)  # only new messages
+except OSError:
+    pass
+log("watching %s (state %s): %d crashes in %d s -> stop, pauses %s s" % (RP, get("state"), LIMIT, WINDOW, PAUSES))
+
+crashes = []
+attempt = 0
+restart_at = None
+started_at = None
+gave_up = False
+while True:
+    now = time.monotonic()
+    timeout = None
+    if restart_at is not None:
+        timeout = max(0.0, restart_at - now)
+    elif started_at is not None:
+        timeout = max(0.0, started_at + STABLE - now)
+    ready, _, _ = select.select([fd], [], [], timeout)
+    now = time.monotonic()
+    if ready:
+        try:
+            data = os.read(fd, 8192)
+        except BlockingIOError:
+            continue
+        except BrokenPipeError:  # kmsg overrun (records lost while frozen in suspend): keep reading
+            continue
+        if not data:  # end of a test FIFO
+            time.sleep(0.2)
+            continue
+        for rec in data.decode(errors="replace").splitlines():
+            msg = rec.split(";", 1)[-1]
+            if gave_up or restart_at is not None or not CRASH.search(msg):
+                continue
+            crashes = [t for t in crashes if now - t <= WINDOW] + [now]
+            if len(crashes) < LIMIT:
+                continue
+            crashes = []
+            started_at = None
+            stop_wpss()
+            if attempt < len(PAUSES):
+                restart_at = now + PAUSES[attempt]
+                attempt += 1
+                log("WPSS crash loop: stopped (state %s), restart attempt %d in %d s" % (get("state"), attempt, PAUSES[attempt - 1]))
+            else:
+                gave_up = True
+                log("WPSS still crash-looping after %d restarts: left off (state %s), Wi-Fi needs a reboot" % (attempt, get("state")))
+    elif restart_at is not None and now >= restart_at:
+        restart_at = None
+        start_wpss()
+        started_at = now
+        log("WPSS restart attempt %d: state %s" % (attempt, get("state")))
+    elif started_at is not None and now - started_at >= STABLE:
+        started_at = None
+        if get("state") == "running":
+            attempt = 0
+            log("WPSS stable for %d s after the restart: pause counter reset" % STABLE)

@@ -1,0 +1,38 @@
+#!/bin/sh
+# M52XQ: start ONE camera application with a clean camera. The phone cameras can be owned by one program at a time
+# (plasma-camera, Megapixels, the virtual webcam): the other camera application and a stale copy of this one are
+# closed completely first (graceful SIGTERM, SIGKILL after 3 s), then the camera graph links are reset
+# (a link left enabled by the other program makes the next one fail with "Resource busy").
+#   usage: m52xq-camera-launch megapixels|plasma-camera [arguments]
+app="$1"; shift
+case "$app" in
+	megapixels|plasma-camera) ;;
+	*) echo "usage: $0 megapixels|plasma-camera" >&2; exit 2 ;;
+esac
+
+# process names are matched exactly (-x): neither this script nor the shell is ever matched
+for name in plasma-camera megapixels; do
+	pids=$(pgrep -x "$name")
+	[ -n "$pids" ] || continue
+	kill $pids 2>/dev/null
+	i=0
+	while [ $i -lt 30 ] && pgrep -x "$name" >/dev/null 2>&1; do
+		sleep 0.1
+		i=$((i + 1))
+	done
+	pgrep -x "$name" >/dev/null 2>&1 && kill -KILL $(pgrep -x "$name") 2>/dev/null
+done
+
+# the video encoder of Megapixels may still be finishing a file: let it close it
+i=0
+while [ $i -lt 30 ] && pgrep -x ffmpeg >/dev/null 2>&1; do
+	sleep 0.1
+	i=$((i + 1))
+done
+
+media-ctl -d /dev/media0 -r >/dev/null 2>&1
+# m52xq 2026-10-19: Megapixels crashed 1 min after every video recording in the Mesa threaded-context thread
+# (gdrv0, SIGSEGV in libgallium 26.2.3): run it without the gallium driver thread
+# m52xq 2026-10-21: plasma-camera as well (its 4K raw video read-back from the GPU, like Megapixels)
+export GALLIUM_THREAD=0
+exec "$app" "$@"

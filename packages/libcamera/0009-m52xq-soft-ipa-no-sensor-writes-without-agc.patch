@@ -1,0 +1,51 @@
+--- a/src/ipa/simple/soft_simple.cpp	2026-10-17 17:29:31.458593692 +0300
++++ b/src/ipa/simple/soft_simple.cpp	2026-10-17 17:36:25.222626159 +0300
+@@ -79,6 +79,8 @@
+ 	SwIspStats *stats_;
+ 	std::unique_ptr<CameraSensorHelper> camHelper_;
+ 	ControlInfoMap sensorInfoMap_;
++	/* m52xq: the tuning file lists an Agc algorithm (else the application drives the sensor) */
++	bool hasAgc_ = false;
+ 
+ 	/* Local parameter storage */
+ 	struct IPAContext context_;
+@@ -136,6 +138,20 @@
+ 	if (ret)
+ 		return ret;
+ 
++	/*
++	 * m52xq: without an Agc algorithm nothing here changes the exposure or
++	 * the gain, but processStats() still wrote the values of its delayed
++	 * controls history back to the sensor on every frame, overwriting what
++	 * the application (plasma-camera SensorAe) had set: the viewfinder
++	 * flickered between the two settings. Only an Agc may write them.
++	 */
++	hasAgc_ = false;
++	for (const auto &algo : (*data)["algorithms"].asList())
++		if (algo.contains("Agc"))
++			hasAgc_ = true;
++	LOG(IPASoft, Info) << "Sensor exposure/gain written by "
++			   << (hasAgc_ ? "the Agc algorithm" : "the application");
++
+ 	*ccmEnabled = context_.ccmEnabled;
+ 
+ 	params_ = nullptr;
+@@ -332,6 +348,18 @@
+ 
+ 	ControlList ctrls(sensorInfoMap_);
+ 
++	/*
++	 * m52xq: still push (an empty list): the pipeline's delayed controls
++	 * history is filled by push() only, and the next frame reads its
++	 * exposure/gain from there (an unfilled entry -> ControlValue type
++	 * assertion, plasma-camera aborted). An empty push copies the previous
++	 * values and marks nothing for writing.
++	 */
++	if (!hasAgc_) {
++		setSensorControls.emit(ctrls);
++		return;
++	}
++
+ 	auto &againNew = frameContext.sensor.gain;
+ 	ctrls.set(V4L2_CID_EXPOSURE, frameContext.sensor.exposure);
+ 	ctrls.set(V4L2_CID_ANALOGUE_GAIN,

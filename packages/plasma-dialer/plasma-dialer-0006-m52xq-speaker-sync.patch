@@ -1,0 +1,35 @@
+--- a/kde-telephony-daemon/src/dialer-manager.cpp	2026-09-08 13:55:56.000000000 +0300
++++ b/kde-telephony-daemon/src/dialer-manager.cpp	2026-10-30 06:09:16.987542200 +0200
+@@ -5,6 +5,8 @@
+ 
+ #include "dialer-manager.h"
+ 
++#include <QTimer>
++
+ #include <glib.h>
+ 
+ #ifndef LOWER_LIBCALLAUDIO_VERSION
+@@ -134,12 +136,23 @@
+     case DialerTypes::CallState::Active:
+         enable_call_mode();
+         m_needsDefaultAudioMode = true;
++        // m52xq: the call audio service resets the loud speaker when the mode is selected, but DialerUtils kept the flag of the
++        // previous call and the button showed "loud speaker" with the earpiece in use: read the state again
++        QTimer::singleShot(400, this, [this]() {
++            m_dialerUtils->fetchSpeakerMode();
++            m_dialerUtils->fetchMute();
++        });
+         break;
+     case DialerTypes::CallState::Terminated:
+         if (m_needsDefaultAudioMode) {
+             enable_default_mode();
+             m_needsDefaultAudioMode = false;
+         }
++        // m52xq: back to the earpiece at the end of the call: the speaker button of the next call must not start "on"
++        QTimer::singleShot(400, this, [this]() {
++            m_dialerUtils->fetchSpeakerMode();
++            m_dialerUtils->fetchMute();
++        });
+ 
+         break;
+     default:

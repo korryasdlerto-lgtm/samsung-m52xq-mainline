@@ -1,0 +1,652 @@
+#!/sbin/sh
+# postmarketOS mainline plasma v20 — m52xq (Samsung Galaxy M52 5G)
+# v20: rootfs rebuilt to test the HomeScreen/icons bug on different Plasma
+# releases. Tried: 6.6.6 (bug present), 6.7.4/plasma-mobile 6.7.5 (bug
+# present, identical error) -- this build: channel v25.12,
+# plasma-workspace + plasma-mobile 6.5.6 (bug status: testing).
+#
+# ОБНОВЛЕНО 2026-09-14 (v11): rootfs полностью пересобран через
+# pmbootstrap (Plasma 6.7.5, systemd-канал) вместо старого вручную
+# собранного образа. Из-за этого поменялись ДВЕ вещи, которые этот
+# скрипт раньше жёстко предполагал как неизменные (обе найдены и
+# починены после того, как v11 flash молча пропустил инъекцию, а
+# boot/vendor_boot вообще не записались):
+#
+# 1. Имена файлов ядра в zip сменились с boot_v7_build177_seccoord.img /
+#    vendor_boot_v55_bt_disabled.img (v9/v10) на boot_ubwc_yupik_fix.img /
+#    vendor_boot_v61_ubwc_fix.img (текущая рабочая GPU/UBWC-связка) --
+#    старые имена в zip больше не существуют. `unzip -p` на несуществующее
+#    имя у GNU unzip возвращает код 11 (и должен был сработать abort), но
+#    у busybox/toybox unzip внутри TWRP это молча пишет 0 байт и
+#    возвращает 0 -- скрипт продолжал как ни в чём не бывало, а
+#    boot/vendor_boot оставались НЕТРОНУТЫМИ (что бы там ни было
+#    прошито раньше). Подтверждено живой сверкой md5 после флеша.
+#
+# 2. samsung-m52xq.img в v11 -- это НЕ whole-disk GPT-образ (boot ext2 +
+#    root ext4), как было "неизменно с v5". Это `root.img` из
+#    `pmbootstrap install --split` -- ОДИН ext4-раздел с самого byte 0,
+#    без какой-либо таблицы разделов внутри. Старый код искал
+#    root-подраздел через kpartx/losetup на фиксированном offset
+#    511705088 (посчитанном для старой GPT-структуры) -- на новом
+#    образе там просто случайные данные файловой системы, не суперблок,
+#    mount закономерно падал ("WARNING: failed to mount /dev/block/loop2").
+#    Теперь $SYSTEM_DEV монтируется НАПРЯМУЮ, без offset/losetup вообще.
+#
+# ОБНОВЛЕНО 2026-09-12 (ночная сессия, v9): device tree доведён до конца
+# для WiFi (WCN6750/ath11k -- compatible-строки, remoteproc_wpss, AOSS
+# QMP) и Bluetooth (hci_uart_qca -- UART-узел вложен в свою QUP-обёртку,
+# настоящие регуляторы). Оба физически используют ОДИН чип и общий
+# сопроцессор (wpss), который TrustZone пока отклоняет с rc:-22 -- см.
+# README, раздел про wpss/TrustZone.
+#
+# ВАЖНО: эта сборка (v9) прошивает vendor_boot v55, где Bluetooth-узел
+# СПЕЦИАЛЬНО ВЫКЛЮЧЕН (status=disabled) -- живой тест v56 (с включённым
+# Bluetooth) показал реальный бутлуп: hci_uart_qca пытается достучаться
+# до чипа по UART и зависает намертво, потому что wpss (общий с WiFi
+# сопроцессор) не может загрузиться из-за той же TrustZone-стены. v56
+# остаётся в firmware/ отдельным файлом -- включать Bluetooth обратно
+# имеет смысл только ПОСЛЕ того, как wpss заработает (например, если
+# эксперимент с LineageOS 23 разблокирует TrustZone).
+#
+# Тач по-прежнему работает (см. более раннюю секцию README) -- реальные
+# координаты через закрытый Samsung-протокол "sec_input"
+# (REPORT_SEC_COORDINATE_EVENT=0xc1).
+#
+# Экран/GPU: настоящего Adreno-драйвера ещё нет (только simpledrm) --
+# компенсируется программным рендерингом (QT_QUICK_BACKEND=software +
+# KWIN_COMPOSE=Q, см. /etc/environment.d/95-swrender.conf в инъекции).
+# Автолок экрана отключён (kscreenlockerrc), иначе экран блокировки
+# зацикливается после каждого рестарта kwin.
+#
+# Эта сборка = build177 (ядро) + vendor_boot v55 (DTB: тач gpio105 +
+# WiFi/AOSS-QMP/Bluetooth compatible-фиксы + remoteproc_wpss, Bluetooth
+# выключен) + systemd-сервис автовосстановления шины тача при холодной
+# загрузке (touch-rebind-fix.service -- с v28 удалён, тач на SE13; идёт через инъекцию mainline-extras/
+# rootfs-files, как и всё остальное ниже).
+#
+# Инъекция mainline-extras/rootfs-files (по конвенции Halium-портов):
+# fstab с userdata-разделом под /var/log и coredump (тестовый
+# system-образ всего 3.3GB, легко забивается journal), настройки
+# рендеринга/автолока, (touch-rebind-fix.service удалён в v28), и настоящая
+# прошивка wpss.mdt (в /lib/firmware/) на случай если TrustZone
+# разблокируется.
+#
+# v9 (эта версия): починен поиск system root-сабраздела для инъекции --
+# v7 использовал blockdev --rereadpt (не работает для device-mapper),
+# v8 добавил kpartx -a, но живой флеш показал, что в ЭТОМ TWRP kpartx
+# вообще не установлен (`command -v kpartx` пусто) -- обе ветки были
+# мертворождёнными. Теперь третий, независимый от внешних утилит метод:
+# losetup с точным byte-offset/size root-раздела внутри samsung-m52xq.img
+# (посчитано один раз через `fdisk -l`, см. комментарий у SYSTEM_ROOT_OFFSET
+# ниже) -- это работает без kpartx/sgdisk/parted, только сам losetup.
+#
+# См. README-PORTIROVANIE-M52-MAINLINE.md для полной хронологии.
+
+OUTFD=$2
+ZIP=$3
+
+ui_print() {
+    echo -e "ui_print $1\nui_print" >> /proc/self/fd/$OUTFD
+}
+
+next_step() {
+    echo -e "progress $1 $2" >> /proc/self/fd/$OUTFD
+}
+
+abort() {
+    ui_print "ERROR: $1"
+    exit 1
+}
+
+ui_print "======================================"
+ui_print " postmarketOS mainline plasma v44 — m52xq"
+ui_print " boot + vendor_boot + system(rootfs-plasma_6.7.5)"
+ui_print " UFS, Touch, GPU, Brightness, Audio(earpiece, speaker, mic), WiFi, BT"
+ui_print " Build by Asdlerto Korry"
+ui_print " korryasdlerto@gmail.com"
+ui_print " https://github.com/korryasdlerto-lgtm/samsung-m52xq-mainline"
+ui_print "======================================"
+ui_print ""
+
+# --- Найти раздел boot ---
+BOOT_PART=""
+for p in /dev/block/by-name/boot /dev/block/bootdevice/by-name/boot /dev/block/platform/*/by-name/boot; do
+    [ -b "$p" ] && BOOT_PART="$p" && break
+done
+[ -z "$BOOT_PART" ] && abort "boot partition not found (by-name/boot missing)"
+
+# --- Найти раздел vendor_boot ---
+VBOOT_PART=""
+for p in /dev/block/by-name/vendor_boot /dev/block/bootdevice/by-name/vendor_boot /dev/block/platform/*/by-name/vendor_boot; do
+    [ -b "$p" ] && VBOOT_PART="$p" && break
+done
+[ -z "$VBOOT_PART" ] && abort "vendor_boot partition not found (by-name/vendor_boot missing)"
+
+ui_print "- boot partition: $BOOT_PART"
+ui_print "- vendor_boot partition: $VBOOT_PART"
+
+BOOT_IMG_NAME="firmware/boot_v248_release_quiet.img"
+VBOOT_IMG_NAME="firmware/vendor_boot_v238_nfc_se9.img"
+
+# busybox/toybox unzip inside TWRP does not reliably return a non-zero
+# exit code for "name not found in archive" the way GNU unzip does (found
+# live in v11: it silently wrote 0 bytes and returned 0, so boot/
+# vendor_boot were never actually touched). Check the listing explicitly
+# first so a renamed/missing entry aborts loudly instead of silently
+# no-op'ing onto whatever was already flashed before.
+unzip -l "$ZIP" "$BOOT_IMG_NAME" | grep -q "$BOOT_IMG_NAME" || abort "$BOOT_IMG_NAME not found in zip"
+unzip -l "$ZIP" "$VBOOT_IMG_NAME" | grep -q "$VBOOT_IMG_NAME" || abort "$VBOOT_IMG_NAME not found in zip"
+
+next_step 0.10 5
+ui_print "- Flashing boot.img..."
+unzip -p "$ZIP" "$BOOT_IMG_NAME" > "$BOOT_PART" || abort "failed to write $BOOT_IMG_NAME"
+
+next_step 0.10 5
+ui_print "- Flashing vendor_boot.img..."
+unzip -p "$ZIP" "$VBOOT_IMG_NAME" > "$VBOOT_PART" || abort "failed to write $VBOOT_IMG_NAME"
+
+# --- Найти раздел system -- сюда пишем ВЕСЬ samsung-m52xq.img ---
+SYSTEM_DEV=""
+for p in /dev/mapper/system /dev/block/mapper/system /dev/block/by-name/system /dev/block/bootdevice/by-name/system; do
+    [ -b "$p" ] && SYSTEM_DEV="$p" && break
+done
+[ -z "$SYSTEM_DEV" ] && abort "system device node not found (checked /dev/mapper/system and friends)"
+
+# --- Вырастить "system" в LP-метаданных до 8ГБ (десятичных), используя
+#     свободное место группы qti_dynamic_partitions. Возвращено в v20:
+#     v19b временно убирал этот блок, проверяя гипотезу, что сам цикл
+#     unmap+map портит таблицу разделов образа -- гипотеза live-тестом
+#     ОПРОВЕРГНУТА (warning остался идентичным что с ресайзом, что без),
+#     реальная причина оказалась в рассогласовании размера сектора
+#     (512 vs 4096, см. выше). Резайз возвращён как есть, т.к. новая
+#     версия Plasma может дать образ большего размера. Best-effort:
+#     если lptools недоступен или упадёт, флеш не прерываем -- останется
+#     старый размер, как раньше. ---
+LPTOOLS=""
+for p in /system/bin/lptools /sbin/lptools /bin/lptools; do
+    [ -x "$p" ] && LPTOOLS="$p" && break
+done
+if [ -n "$LPTOOLS" ]; then
+    # v29: try a fixed list of targets, largest first (8 -> 7 -> 6 -> 5.5 -> 5 GB).
+    # Free space in the shared LP group depends on which Android firmware
+    # was flashed last (UN1CA vs LineageOS23, see README); e.g. after в28
+    # only ~7.1GB was possible, so the old 8 -> 6 jump wasted ~1GB.
+    # No arithmetic on purpose (v22 fix #2): `lptools free` is unreliable
+    # this early ("E:unknown command [Free]") and toybox `[`/`$(( ))` in TWRP
+    # are 32-bit signed, wrong for any value >= 2GB. The numbers are only
+    # passed to lptools as strings. 5000000000 is the last step: the rootfs
+    # image (samsung-m52xq.img, 4930404352 bytes) still fits into it.
+    RESIZE_OK=0
+    for TARGET in 8000000000 7000000000 6000000000 5500000000 5000000000; do
+        ui_print "- Growing system in LP metadata to $TARGET bytes via $LPTOOLS..."
+        if "$LPTOOLS" resize system "$TARGET"; then
+            RESIZE_OK=1
+            break
+        fi
+        ui_print "  $TARGET unavailable, retrying with a smaller fixed target..."
+    done
+    [ "$RESIZE_OK" = "1" ] || ui_print "  WARNING: no target fits, keeping current system size."
+    if [ "$RESIZE_OK" = "1" ]; then
+        ui_print "  lptools resize OK."
+        ui_print "  Remapping system device node to pick up new size..."
+        "$LPTOOLS" unmap system 2>/dev/null
+        "$LPTOOLS" map system 2>/dev/null
+        SYSTEM_DEV=""
+        for p in /dev/mapper/system /dev/block/mapper/system /dev/block/by-name/system /dev/block/bootdevice/by-name/system; do
+            [ -b "$p" ] && SYSTEM_DEV="$p" && break
+        done
+        [ -z "$SYSTEM_DEV" ] && abort "system device node not found after lptools remap"
+    fi
+else
+    ui_print "  WARNING: lptools not found, keeping current system size."
+fi
+
+DEV_SIZE=$(blockdev --getsize64 "$SYSTEM_DEV" 2>/dev/null)
+ui_print "- system device: $SYSTEM_DEV (size=$DEV_SIZE)"
+blockdev --setrw "$SYSTEM_DEV" 2>/dev/null
+
+next_step 0.60 30
+# v19 change: samsung-m52xq.img now exceeds 4GiB (ZIP64 territory). TWRP's
+# busybox/toybox unzip cannot stream a >4GiB entry via `unzip -p` -- it
+# silently produces 0 bytes and exits 0 (same class of silent-failure bug
+# as the boot/vendor_boot name-mismatch found in v11, see comment above).
+# Confirmed live: `unzip -p "$ZIP" data/samsung-m52xq.img | wc -c` -> 0,
+# process killed, leaving the whole "system" partition untouched (all
+# zeros) while the script reported success.
+#
+# Fix follows the same pattern already proven on the sibling
+# plasmamobile/в21 Droidian port: TWRP's unzip -p ALSO allocates a buffer
+# close to the full uncompressed entry size, which OOMs this device
+# (~5.5GB RAM) on entries approaching ~5.4GB even when under the 4GiB
+# ZIP64 boundary -- so extraction chunk size needs its own safety margin
+# independent of the ZIP64 limit. The image is pre-split at build time
+# into 2 zip entries (~2.28GB each, data/rootfs-chunks/samsung-m52xq.img.part-N),
+# reassembled into a plain file on /data (which has ample free space)
+# with simple `>>` appends, THEN written to the system device in one dd
+# pass -- avoids relying on exact block-aligned dd seek= arithmetic
+# across chunk boundaries.
+ui_print "- Reassembling samsung-m52xq.img from chunks (avoids TWRP unzip OOM)..."
+rm -f /data/samsung-m52xq.img
+for part in \
+    samsung-m52xq.img.part-0 \
+    samsung-m52xq.img.part-1 \
+; do
+    ui_print "  - $part"
+    unzip -p "$ZIP" "data/rootfs-chunks/$part" >> /data/samsung-m52xq.img || abort "failed to copy $part"
+done
+[ -s /data/samsung-m52xq.img ] || abort "samsung-m52xq.img reassembly produced an empty file"
+
+ui_print "- Writing samsung-m52xq.img to system..."
+dd if=/data/samsung-m52xq.img of="$SYSTEM_DEV" bs=4M 2>/dev/null \
+    || abort "failed to write samsung-m52xq.img to $SYSTEM_DEV"
+rm -f /data/samsung-m52xq.img
+
+next_step 0.10 2
+ui_print "- Done."
+ui_print "  boot.img written to $BOOT_PART"
+ui_print "  vendor_boot.img written to $VBOOT_PART"
+ui_print "  samsung-m52xq.img written to $SYSTEM_DEV"
+ui_print ""
+ui_print "  userdata was NOT touched."
+
+# --- Inject mainline-extras/rootfs-files onto the just-written system root,
+#     matching the same zip-based injection convention used by the Halium
+#     ports (never bake fixes directly into the shared samsung-m52xq.img).
+#     v20 fix: samsung-m52xq.img IS a whole-disk GPT image (boot+root, per
+#     deviceinfo_rootfs_image_sector_size=4096) -- the earlier v11 comment
+#     claiming otherwise was wrong. Every previous mount attempt here (and
+#     the boot-time MAPDYN hook, and every host-side inspection this whole
+#     session) used the WRONG assumed sector size (512 instead of the
+#     image's real 4096), so the GPT header/partitions were never found
+#     even though they always existed. This device's storage genuinely
+#     reports 4096-byte native sectors, so `sgdisk` auto-detects it
+#     correctly with zero manual sector-size flags -- confirmed live.
+#     TWRP's toybox losetup has no -P (partition scan), so we read
+#     partition 2's (root) start/size from sgdisk and losetup it with an
+#     explicit byte offset/sizelimit instead (both of which ARE supported
+#     by toybox losetup: -o OFFSET -S SIZE). NOTE: the byte-size
+#     multiplication (sectors * 4096) overflows toybox ash's 32-bit
+#     arithmetic for anything over ~2GiB -- confirmed live -- so it must
+#     be done in awk (double precision), not "$((...))". This step is
+#     still best-effort: if any step fails, print a warning and continue
+#     -- the base system was already written successfully above and must
+#     not be held hostage by this. ---
+ui_print ""
+ui_print "- Injecting mainline-extras/rootfs-files onto system root..."
+
+P2_INFO=$(sgdisk --info=2 "$SYSTEM_DEV" 2>/dev/null)
+P2_START=$(echo "$P2_INFO" | grep '^First sector:' | awk '{print $3}')
+P2_SIZE_SECTORS=$(echo "$P2_INFO" | grep '^Partition size:' | awk '{print $3}')
+P2_LOOP=""
+if [ -n "$P2_START" ] && [ -n "$P2_SIZE_SECTORS" ]; then
+    P2_START_BYTES=$(awk -v a="$P2_START" 'BEGIN{printf "%.0f", a*4096}')
+    P2_SIZE_BYTES=$(awk -v a="$P2_SIZE_SECTORS" 'BEGIN{printf "%.0f", a*4096}')
+    P2_LOOP=$(losetup -f -s -o "$P2_START_BYTES" -S "$P2_SIZE_BYTES" "$SYSTEM_DEV" 2>/dev/null)
+fi
+
+if [ -n "$P2_LOOP" ]; then
+    SYSTEM_ROOT_PART="$P2_LOOP"
+else
+    # v24 fix: samsung-m52xq.img is not always a whole-disk GPT image
+    # (pmOS_boot+pmOS_root as p1/p2, like в16/в17) -- since v11 it can
+    # also be a FLAT ext4 filesystem starting at byte 0 with no partition
+    # table at all (pmbootstrap install --split's root.img, like в15),
+    # which sgdisk finds nothing on. The main system-write step above
+    # already handles both cases by writing straight to $SYSTEM_DEV
+    # regardless of image layout; this injection step never got the same
+    # fallback and just gave up silently. Try mounting $SYSTEM_DEV itself
+    # directly as ext4 -- works for the flat-image case.
+    ui_print "  no GPT p2 found, trying to mount $SYSTEM_DEV directly (flat image)..."
+    SYSTEM_ROOT_PART="$SYSTEM_DEV"
+fi
+
+if [ -n "$SYSTEM_ROOT_PART" ]; then
+    ROOTFS_MNT=/mnt/m52xq-rootfs-inject
+    mkdir -p "$ROOTFS_MNT"
+    if mount -t ext4 -o rw "$SYSTEM_ROOT_PART" "$ROOTFS_MNT" 2>/dev/null; then
+        rm -rf /tmp/.m52xq-extras-tmp
+        if unzip -o -q "$ZIP" 'mainline-extras/*' -d /tmp/.m52xq-extras-tmp; then
+            EXTRAS=/tmp/.m52xq-extras-tmp/mainline-extras
+            if [ -d "$EXTRAS/rootfs-files" ]; then
+                # v9 hotfix (found live during the v9 flash itself): toybox's
+                # "cp -a" (Android/TWRP's cp, NOT GNU coreutils) throws
+                # "Too many symbolic links encountered" when the SOURCE has a
+                # real directory named e.g. "lib" and the DESTINATION already
+                # has "lib" as a merged-usr symlink (lib -> usr/lib) -- it
+                # does not merge into the resolved target like GNU cp does.
+                # `tar` extraction is not a safe alternative either: it was
+                # tested and found to DELETE the destination symlink and
+                # replace it with a real directory, which would silently
+                # break the merged-usr layout for the whole OS. Fix: copy
+                # each top-level entry individually, and if the destination
+                # entry is itself a symlink, resolve it first and copy INTO
+                # the resolved real directory instead of onto the symlink.
+                COPY_FAILED=0
+                # v31 fix: TWRP runs with umask 0, so every directory unzip/mkdir
+                # creates here is 0777 -- and "cp -a dir/. target/" then copies
+                # that mode onto the REAL rootfs dirs (/etc, /usr, /usr/bin,
+                # /usr/lib, /mnt ... all became 0777 on в30; sudo-rs refuses to
+                # run with a world-writable /etc). umask 022 for our own mkdirs,
+                # and after the copy every directory that came from rootfs-files
+                # is reset to 0755 below.
+                umask 022
+                for item in "$EXTRAS"/rootfs-files/*; do
+                    [ -e "$item" ] || continue
+                    name=$(basename "$item")
+                    target="$ROOTFS_MNT/$name"
+                    if [ -L "$target" ]; then
+                        real=$(readlink -f "$target")
+                        mkdir -p "$real"
+                        cp -a "$item"/. "$real"/ || COPY_FAILED=1
+                    else
+                        mkdir -p "$target"
+                        cp -a "$item"/. "$target"/ || COPY_FAILED=1
+                    fi
+                done
+                (cd "$EXTRAS/rootfs-files" && find . -type d) | while read -r d; do
+                    [ "$d" = "." ] && continue
+                    chmod 755 "$ROOTFS_MNT/${d#./}" 2>/dev/null
+                done
+                [ "$COPY_FAILED" = "0" ] \
+                    && ui_print "  rootfs-files copied onto $SYSTEM_ROOT_PART." \
+                    || ui_print "  WARNING: cp of rootfs-files failed partway through."
+                mkdir -p "$ROOTFS_MNT/etc/systemd/system/local-fs.target.wants"
+                if [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-prep-userdata-varlog.service" ]; then
+                    ln -sf ../m52xq-prep-userdata-varlog.service \
+                        "$ROOTFS_MNT/etc/systemd/system/local-fs.target.wants/m52xq-prep-userdata-varlog.service"
+                fi
+                mkdir -p "$ROOTFS_MNT/etc/systemd/system/sysinit.target.wants"
+                if [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-set-default-password.service" ]; then
+                    ln -sf ../m52xq-set-default-password.service \
+                        "$ROOTFS_MNT/etc/systemd/system/sysinit.target.wants/m52xq-set-default-password.service"
+                fi
+                # v25 addition: a manually-set password (via passwd/chpasswd)
+                # should survive reboot on its own, without us hardcoding any
+                # specific value into a unit file. m52xq-password-backup.path
+                # watches /etc/shadow and snapshots it to
+                # /etc/.m52xq-shadow-backup on every change; m52xq-password-
+                # restore.service replays that snapshot back onto /etc/shadow
+                # early on every subsequent boot (no-op on the very first
+                # boot, since no backup exists yet).
+                if [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-password-restore.service" ]; then
+                    ln -sf ../m52xq-password-restore.service \
+                        "$ROOTFS_MNT/etc/systemd/system/sysinit.target.wants/m52xq-password-restore.service"
+                fi
+                mkdir -p "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants"
+                if [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-password-backup.path" ]; then
+                    ln -sf ../m52xq-password-backup.path \
+                        "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/m52xq-password-backup.path"
+                fi
+                # v28: touch is on the real SE13 bus (i2c@a94000) now; the old
+                # i2c-gpio rebind workaround only fails, remove it if the
+                # rootfs image still carries it.
+                rm -f "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/touch-rebind-fix.service" \
+                      "$ROOTFS_MNT/etc/systemd/system/touch-rebind-fix.service" \
+                      "$ROOTFS_MNT/usr/local/bin/touch-rebind-fix.sh"
+                # v33: m52xq-bootreport.service (early USB bring-up diagnostics baked
+                # into the rootfs image) dumps a huge report into /dev/kmsg at every
+                # boot -- it floods the kernel ring buffer (boot messages lost) and
+                # fails with "cat: write error". Not needed any more: mask it.
+                rm -f "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/m52xq-bootreport.service"
+                ln -sf /dev/null "$ROOTFS_MNT/etc/systemd/system/m52xq-bootreport.service"
+                # v26: the kernel tries to boot the ADSP at ~0.6s, before
+                # rootfs (and /lib/firmware/adsp.*) is mounted, and gives up;
+                # m52xq-adsp-start.service starts it once rootfs is up.
+                if [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-adsp-start.service" ]; then
+                    ln -sf ../m52xq-adsp-start.service \
+                        "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/m52xq-adsp-start.service"
+                fi
+                # v26: same for Bluetooth -- hci_uart_qca's setup runs before
+                # rootfs is up, qca/msbtfw11.mbn is not found; rebind once.
+                if [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-bt-firmware.service" ]; then
+                    ln -sf ../m52xq-bt-firmware.service \
+                        "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/m52xq-bt-firmware.service"
+                fi
+                # v38: Venus video decoder (venus-core also releases sync_state of the interconnects)
+                if [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-venus.service" ]; then
+                    ln -sf ../m52xq-venus.service \
+                        "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/m52xq-venus.service"
+                fi
+                # v39: call noise suppression + Samsung voice calibration (ADSP topologies, q6cvp)
+                if [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-voice-ns.service" ]; then
+                    ln -sf ../m52xq-voice-ns.service \
+                        "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/m52xq-voice-ns.service"
+                fi
+                # v39: camera stack switch (mainline camera; releases the sync_state of the camera power domains)
+                if [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-camera-switch.service" ]; then
+                    ln -sf ../m52xq-camera-switch.service \
+                        "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/m52xq-camera-switch.service"
+                fi
+                # v40: dual SIM: re-apply the saved SIM mode / data SIM / flight mode after every boot
+                if [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-sim-mode-boot.service" ]; then
+                    ln -sf ../m52xq-sim-mode-boot.service \
+                        "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/m52xq-sim-mode-boot.service"
+                fi
+                # v40: end windowless apps just before a sleep (m52xq-app-reaper)
+                if [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-app-reaper.service" ]; then
+                    mkdir -p "$ROOTFS_MNT/etc/systemd/system/sleep.target.wants"
+                    ln -sf ../m52xq-app-reaper.service \
+                        "$ROOTFS_MNT/etc/systemd/system/sleep.target.wants/m52xq-app-reaper.service"
+                fi
+                # v42: stop a WPSS (Wi-Fi) crash loop and restart it after a pause (m52xq-wpss-guard)
+                if [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-wpss-guard.service" ]; then
+                    mkdir -p "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants"
+                    ln -sf ../m52xq-wpss-guard.service \
+                        "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/m52xq-wpss-guard.service"
+                fi
+                # v42: NFC on/off as saved by the quick setting, off by default (m52xq-nfc-boot)
+                if [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-nfc-boot.service" ]; then
+                    mkdir -p "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants"
+                    ln -sf ../m52xq-nfc-boot.service \
+                        "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/m52xq-nfc-boot.service"
+                fi
+                # v43: Wi-Fi WoW knobs of the WCN6750 firmware (m52xq-wow-params: WMI_WOW_ENABLE flags 0x20)
+                if [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-wow-params.service" ]; then
+                    mkdir -p "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants"
+                    ln -sf ../m52xq-wow-params.service \
+                        "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/m52xq-wow-params.service"
+                fi
+                # v44: retry / idle suspend (m52xq-suspend-guard) and the SMS / telephony daemon restart after a lost notification (m52xq-notify-heal)
+                for u in m52xq-suspend-guard m52xq-notify-heal; do
+                    if [ -f "$ROOTFS_MNT/etc/systemd/system/$u.service" ]; then
+                        mkdir -p "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants"
+                        ln -sf ../$u.service "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/$u.service"
+                    fi
+                done
+                # v44: PulseAudio stuck after a resume -> restart (user unit)
+                if [ -f "$ROOTFS_MNT/etc/systemd/user/m52xq-audio-unstick.service" ]; then
+                    mkdir -p "$ROOTFS_MNT/etc/systemd/user/default.target.wants"
+                    ln -sf ../m52xq-audio-unstick.service \
+                        "$ROOTFS_MNT/etc/systemd/user/default.target.wants/m52xq-audio-unstick.service"
+                fi
+                # v43: sound of notifications (Telegram etc.; mobileshell ignores the sound hints) and the screen on a Telegram call (user units)
+                for u in m52xq-notify-sound m52xq-call-screen-wake; do
+                    if [ -f "$ROOTFS_MNT/etc/systemd/user/$u.service" ]; then
+                        mkdir -p "$ROOTFS_MNT/etc/systemd/user/default.target.wants"
+                        ln -sf ../$u.service "$ROOTFS_MNT/etc/systemd/user/default.target.wants/$u.service"
+                    fi
+                done
+                # v39: the removed auto-brightness helper must not survive from an older injection
+                rm -f "$ROOTFS_MNT/usr/local/bin/m52xq-autobrightness-once" \
+                    "$ROOTFS_MNT/etc/xdg/autostart/m52xq-autobrightness-once.desktop"
+                # v39: compile the GSettings schemas so 90-m52xq-megapixels.gschema.override takes effect
+                if [ -x "$ROOTFS_MNT/usr/bin/glib-compile-schemas" ]; then
+                    chroot "$ROOTFS_MNT" /usr/bin/glib-compile-schemas /usr/share/glib-2.0/schemas \
+                        && ui_print "  GSettings schemas compiled." \
+                        || ui_print "  WARNING: glib-compile-schemas failed (Megapixels keeps saving DNG)."
+                fi
+                # v38: turn the screen on when a notification arrives (user unit)
+                if [ -f "$ROOTFS_MNT/etc/systemd/user/m52xq-notify-screen-wake.service" ]; then
+                    mkdir -p "$ROOTFS_MNT/etc/systemd/user/default.target.wants"
+                    ln -sf ../m52xq-notify-screen-wake.service \
+                        "$ROOTFS_MNT/etc/systemd/user/default.target.wants/m52xq-notify-screen-wake.service"
+                fi
+                # v38: the GPU runtime-suspends now (GMU resume is fixed): make sure no older
+                # injection leaves the "never runtime-suspend" rule behind
+                rm -f "$ROOTFS_MNT/etc/udev/rules.d/99-m52xq-gpu-no-runtime-suspend.rules"
+                # v27: kwin must composite on the GPU. The old pre-GPU workaround
+                # KWIN_COMPOSE=Q (95-swrender.conf) must not be active -- the
+                # injection only adds files, so disable it here in case the base
+                # rootfs image still carries it. The GPU must not runtime-suspend
+                # (udev 99-m52xq-gpu-no-runtime-suspend.rules, injected): resume
+                # breaks GMU OOB and kwin's OpenGL scene hangs the GPU.
+                if [ -f "$ROOTFS_MNT/etc/environment.d/95-swrender.conf" ]; then
+                    mv -f "$ROOTFS_MNT/etc/environment.d/95-swrender.conf" \
+                        "$ROOTFS_MNT/etc/environment.d/95-swrender.conf.disabled"
+                fi
+                # v26: this phone's own Bluetooth address (the NVM only has a
+                # placeholder). Read it here, on the device being flashed, from
+                # EFS bluetooth/bt_addr -- strictly read-only (ro,noload: not
+                # even the ext4 journal is replayed) -- and hand it to the
+                # rootfs; m52xq-bt-addr.py sets it at boot. Never baked into
+                # the zip, so every phone gets its own address.
+                BT_ADDR=""
+                if [ -f /efs/bluetooth/bt_addr ]; then
+                    BT_ADDR=$(cat /efs/bluetooth/bt_addr 2>/dev/null)
+                else
+                    for p in /dev/block/by-name/efs /dev/block/bootdevice/by-name/efs; do
+                        [ -e "$p" ] || continue
+                        mkdir -p /tmp/m52xq-efs
+                        if mount -t ext4 -o ro,noload "$p" /tmp/m52xq-efs; then
+                            BT_ADDR=$(cat /tmp/m52xq-efs/bluetooth/bt_addr 2>/dev/null)
+                            umount /tmp/m52xq-efs
+                        fi
+                        rmdir /tmp/m52xq-efs 2>/dev/null
+                        break
+                    done
+                fi
+                BT_ADDR=$(echo "$BT_ADDR" | tr -d ' \r\n')
+                if echo "$BT_ADDR" | grep -qE '^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$'; then
+                    mkdir -p "$ROOTFS_MNT/etc/m52xq"
+                    echo "$BT_ADDR" > "$ROOTFS_MNT/etc/m52xq/bt_addr"
+                    chmod 600 "$ROOTFS_MNT/etc/m52xq/bt_addr"
+                    ui_print "- Bluetooth address taken from this phone's EFS"
+                else
+                    ui_print "  WARNING: no Bluetooth address in EFS -- BT stays unconfigured"
+                fi
+                # v27: sensors (accelerometer, light) via the Qualcomm sensor
+                # core on the ADSP. hexagonrpcd (injected files, not in the
+                # base image) serves the sensors PD its config and registry
+                # over fastrpc and runs as the fastrpc user, which apk would
+                # normally create -- create it here if the image lacks it.
+                grep -q '^fastrpc:' "$ROOTFS_MNT/etc/group" || \
+                    echo 'fastrpc:x:113:fastrpc' >> "$ROOTFS_MNT/etc/group"
+                grep -q '^fastrpc:' "$ROOTFS_MNT/etc/passwd" || \
+                    echo 'fastrpc:x:108:113:FastRPC:/var/lib/fastrpc:/sbin/nologin' >> "$ROOTFS_MNT/etc/passwd"
+                grep -q '^fastrpc:' "$ROOTFS_MNT/etc/shadow" || \
+                    echo 'fastrpc:!:20722:0:99999:7:::' >> "$ROOTFS_MNT/etc/shadow"
+                for svc in hexagonrpcd-adsp-sensorspd.service hexagonrpcd-adsp-rootpd.service; do
+                    [ -f "$ROOTFS_MNT/usr/lib/systemd/system/$svc" ] && \
+                        ln -sf "/usr/lib/systemd/system/$svc" \
+                            "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/$svc"
+                done
+                # v33: modem (MPSS) + IPA: mobile data, GPS, calls via ModemManager.
+                # The modem firmware is this phone's own, copied from its `modem`
+                # partition (vfat, mounted strictly read-only) like EFS/persist above;
+                # the IPA GSI firmware is in the boot ramdisk and mainline-extras.
+                # rmtfs (-s starts the modem remoteproc) + tqftpserv + the one-shot
+                # m52xq-modem-setup (SIM session, GNSS engine lock/mode) are enabled.
+                MODEM_FW_OK=0
+                for p in /dev/block/by-name/modem /dev/block/bootdevice/by-name/modem; do
+                    [ -b "$p" ] || continue
+                    mkdir -p /tmp/m52xq-modem
+                    if mount -t vfat -o ro "$p" /tmp/m52xq-modem; then
+                        if [ -f /tmp/m52xq-modem/image/modem.mdt ]; then
+                            FW="$ROOTFS_MNT/usr/lib/firmware"
+                            mkdir -p "$FW"
+                            cp /tmp/m52xq-modem/image/modem.mdt /tmp/m52xq-modem/image/modem.b* \
+                               /tmp/m52xq-modem/image/modemr.jsn "$FW"/ && \
+                            cp -r /tmp/m52xq-modem/image/modem_pr "$FW"/ && MODEM_FW_OK=1
+                            chmod 644 "$FW"/modem.* "$FW"/modemr.jsn 2>/dev/null
+                            find "$FW/modem_pr" -type d -exec chmod 755 {} + 2>/dev/null
+                            find "$FW/modem_pr" -type f -exec chmod 644 {} + 2>/dev/null
+                        fi
+                        umount /tmp/m52xq-modem
+                    fi
+                    rmdir /tmp/m52xq-modem 2>/dev/null
+                    break
+                done
+                if [ "$MODEM_FW_OK" = "1" ]; then
+                    ui_print "- Modem firmware taken from this phone's modem partition"
+                else
+                    ui_print "  WARNING: no modem firmware found -- modem/GPS/mobile data stay off"
+                fi
+                for svc in rmtfs.service tqftpserv.service; do
+                    [ -f "$ROOTFS_MNT/usr/lib/systemd/system/$svc" ] && \
+                        ln -sf "/usr/lib/systemd/system/$svc" \
+                            "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/$svc"
+                done
+                [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-modem-setup.service" ] && \
+                    ln -sf ../m52xq-modem-setup.service \
+                        "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/m52xq-modem-setup.service"
+                # v35: per-app location permissions -> GeoClue conf.d (Location tile)
+                [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-gps-perms.service" ] && \
+                    ln -sf ../m52xq-gps-perms.service \
+                        "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/m52xq-gps-perms.service"
+                # v35: virtual webcams (v4l2loopback /dev/video20 front, /dev/video21 rear) for Telegram & co.
+                [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-virtualcam.service" ] && \
+                    ln -sf ../m52xq-virtualcam.service \
+                        "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/m52xq-virtualcam.service"
+                # v34: blank screen + lock touch at the ear during calls (Plasma Mobile has none)
+                [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-incall-proximity.service" ] && \
+                    ln -sf ../m52xq-incall-proximity.service \
+                        "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/m52xq-incall-proximity.service"
+                # v34: modem voice path (q6voice CS-Voice + codec mixers) up for the length of every call
+                [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-voicecall.service" ] && \
+                    ln -sf ../m52xq-voicecall.service \
+                        "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/m52xq-voicecall.service"
+                # NetworkManager ignores connection files that are not 0600 root
+                for f in "$ROOTFS_MNT"/etc/NetworkManager/system-connections/m52xq-*.nmconnection; do
+                    [ -f "$f" ] && chown 0:0 "$f" && chmod 600 "$f"
+                done
+                # The sensor registry holds this phone's own factory
+                # calibration (persist sensors/registry/registry). Copy it
+                # here, on the device being flashed, from persist mounted
+                # strictly read-only (ro,noload); hexagonrpcd maps
+                # /mnt/vendor/persist/sensors/registry/registry to
+                # sensors/registry/, so the files go there flat.
+                SNS_REG="$ROOTFS_MNT/usr/share/qcom/sm7325/Samsung/m52xq/sensors/registry"
+                mkdir -p "$SNS_REG"
+                for p in /dev/block/by-name/persist /dev/block/bootdevice/by-name/persist; do
+                    [ -e "$p" ] || continue
+                    mkdir -p /tmp/m52xq-persist
+                    if mount -t ext4 -o ro,noload "$p" /tmp/m52xq-persist; then
+                        if [ -d /tmp/m52xq-persist/sensors/registry/registry ]; then
+                            cp -a /tmp/m52xq-persist/sensors/registry/registry/. "$SNS_REG"/ && \
+                                ui_print "- Sensor registry taken from this phone's persist"
+                        fi
+                        umount /tmp/m52xq-persist
+                    fi
+                    rmdir /tmp/m52xq-persist 2>/dev/null
+                    break
+                done
+                [ -n "$(ls -A "$SNS_REG" 2>/dev/null)" ] || \
+                    ui_print "  WARNING: no sensor registry in persist -- sensors stay unavailable"
+                chown -R 108:113 "$SNS_REG"
+                mkdir -p "$ROOTFS_MNT/mnt/userdata"
+                # v10 hotfix: everything injected under home/user/ (e.g.
+                # kscreenlockerrc) lands owned by root, because TWRP's unzip
+                # + cp -a pipeline runs entirely as root and does not
+                # restore the original (user:user) ownership from the zip.
+                # Root-owned files under /home/user break anything that
+                # writes there at runtime -- confirmed to break kbuildsycoca6
+                # (~/.cache) and saved KDE settings (e.g. dark theme
+                # selection never persisting) on a freshly-flashed device.
+                [ -d "$ROOTFS_MNT/home/user" ] && chown -R 10000:10000 "$ROOTFS_MNT/home/user"
+            else
+                ui_print "  WARNING: mainline-extras/rootfs-files not found in zip."
+            fi
+        else
+            ui_print "  WARNING: failed to extract mainline-extras from zip."
+        fi
+        umount "$ROOTFS_MNT"
+    else
+        ui_print "  WARNING: failed to mount $SYSTEM_ROOT_PART -- skipping"
+        ui_print "  rootfs-files injection. Base flash is unaffected."
+    fi
+    [ -n "$P2_LOOP" ] && losetup -d "$P2_LOOP" 2>/dev/null
+else
+    ui_print "  WARNING: skipping rootfs-files injection. Base flash is unaffected."
+fi
+
+exit 0

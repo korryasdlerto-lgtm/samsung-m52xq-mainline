@@ -1,0 +1,111 @@
+#!/bin/sh
+# M52XQ: Wi-Fi hotspot next to the Wi-Fi client connection. The chip (ath11k) allows managed<=1 + AP<=16 on ONE channel
+# (iw list: "valid interface combinations"), as the stock firmware does with its second interface swlan0. The access point
+# gets its own interface wlan1 (named wlan* so that the postmarketOS firewall accepts DHCP/forwarding from it), the channel
+# of the running client link (2.4 GHz channel 6 if there is none), DHCP by dnsmasq and NAT to whatever the default route is.
+# Started and stopped as m52xq-hotspot.service.
+. /etc/m52xq-hotspot.conf
+AP=wlan1
+NET=10.42.0.0/24
+HOSTAPD_CONF=/run/m52xq-hostapd.conf
+
+PREV_FILE=/run/m52xq-hotspot-prev-connection
+
+restore_client() { # back to the 5 GHz connection that was active before the hotspot moved the client link to 2.4 GHz
+	if [ -f "$PREV_FILE" ]; then
+		prev=$(cat "$PREV_FILE"); rm -f "$PREV_FILE"
+		[ -n "$prev" ] && nmcli connection up "$prev" ifname wlan0 >/dev/null 2>&1
+	fi
+}
+
+cleanup() {
+	[ -f /run/m52xq-dnsmasq.pid ] && kill "$(cat /run/m52xq-dnsmasq.pid)" 2>/dev/null
+	rm -f /run/m52xq-dnsmasq.pid /run/m52xq-dnsmasq.leases "$HOSTAPD_CONF"
+	nft delete table ip m52xq_nat 2>/dev/null
+	ip link set $AP down 2>/dev/null
+	iw dev $AP del 2>/dev/null
+}
+trap 'cleanup; restore_client' EXIT INT TERM
+cleanup
+
+# Many devices (and the stock behaviour) need a 2.4 GHz hotspot: the access point shares the channel of the client link,
+# so when the client link is on 5 GHz and a 2.4 GHz connection of the same router is configured (sta_24=...), move the
+# client link there first (the previous connection comes back when the hotspot stops).
+freq=$(iw dev wlan0 link 2>/dev/null | awk '/freq:/ {printf "%d", $2}')
+if [ -n "$sta_24" ] && [ -n "$freq" ] && [ "$freq" -ge 5000 ]; then
+	prev=$(nmcli -g NAME,DEVICE connection show --active | awk -F: '$2=="wlan0" {print $1; exit}')
+	echo "$prev" > "$PREV_FILE"
+	echo "m52xq-hotspot: client link on 5 GHz -> switching to '$sta_24' (2.4 GHz)"
+	nmcli connection up "$sta_24" ifname wlan0 >/dev/null 2>&1
+	for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+		f=$(iw dev wlan0 link 2>/dev/null | awk '/freq:/ {printf "%d", $2}')
+		[ -n "$f" ] && [ "$f" -lt 3000 ] && break
+		sleep 1
+	done
+	f=$(iw dev wlan0 link 2>/dev/null | awk '/freq:/ {printf "%d", $2}')
+	if [ -z "$f" ] || [ "$f" -ge 3000 ]; then
+		echo "m52xq-hotspot: could not join '$sta_24', staying on the previous connection"
+		restore_client
+	fi
+fi
+
+# channel of the client link
+freq=$(iw dev wlan0 link 2>/dev/null | awk '/freq:/ {printf "%d", $2}')
+if [ -n "$freq" ] && [ "$freq" -ge 5000 ]; then
+	ch=$(( (freq - 5000) / 5 )); mode=a
+	case $ch in
+	36|40|44|48) c0=42 ;; 52|56|60|64) c0=58 ;; 100|104|108|112) c0=106 ;; 116|120|124|128) c0=122 ;;
+	132|136|140|144) c0=138 ;; 149|153|157|161) c0=155 ;; *) c0= ;;
+	esac
+	case $ch in
+	36|44|52|60|100|108|116|124|132|140|149|157) ht="[HT40+]" ;; *) ht="[HT40-]" ;;
+	esac
+	extra="ieee80211n=1
+ht_capab=$ht[SHORT-GI-20][SHORT-GI-40]"
+	if [ -n "$c0" ]; then
+		extra="$extra
+ieee80211ac=1
+vht_oper_chwidth=1
+vht_oper_centr_freq_seg0_idx=$c0"
+	fi
+elif [ -n "$freq" ]; then
+	ch=$(( (freq - 2407) / 5 )); mode=g
+	extra="ieee80211n=1"
+else
+	ch=6; mode=g; extra="ieee80211n=1"
+fi
+echo "m52xq-hotspot: client link ${freq:-none} MHz -> channel $ch ($mode)"
+
+mac=$(cat /sys/class/net/wlan0/address)
+last=$(printf '%02x' $(( (0x${mac##*:} + 1) % 256 )))
+apmac="${mac%:*}:$last"
+iw dev wlan0 interface add $AP type __ap || exit 1
+ip link set $AP address "$apmac"
+ip addr add 10.42.0.1/24 dev $AP
+ip link set $AP up
+
+cat > "$HOSTAPD_CONF" <<CFG
+interface=$AP
+driver=nl80211
+ssid=$ssid
+hw_mode=$mode
+channel=$ch
+$extra
+wmm_enabled=1
+auth_algs=1
+wpa=2
+wpa_key_mgmt=WPA-PSK
+rsn_pairwise=CCMP
+wpa_passphrase=$passphrase
+CFG
+
+sysctl -qw net.ipv4.ip_forward=1
+nft add table ip m52xq_nat
+nft add chain ip m52xq_nat post '{ type nat hook postrouting priority 100 ; }'
+nft add rule ip m52xq_nat post ip saddr $NET oifname != "$AP" masquerade
+
+dnsmasq --conf-file=/dev/null --interface=$AP --bind-interfaces --except-interface=lo --port=0 \
+	--dhcp-range=10.42.0.10,10.42.0.100,12h --dhcp-option=3,10.42.0.1 --dhcp-option=6,1.1.1.1,8.8.8.8 \
+	--pid-file=/run/m52xq-dnsmasq.pid --dhcp-leasefile=/run/m52xq-dnsmasq.leases
+
+hostapd "$HOSTAPD_CONF"
