@@ -8,7 +8,7 @@ Not Halium, not libhybris, not the Android kernel: the phone runs a mainline
 Linux 7.1.2 kernel with device drivers and fixes, and a normal Linux
 userspace. Tested on one SM-M526B. Personal, unofficial project.
 
-**Status (release v44 / "unofficial v1", 2026-11-01): a daily-usable
+**Status (release "unofficial v1", 2026-11-01): a daily-usable
 Linux phone** - calls, SMS, mobile data on two SIMs, Wi-Fi, Bluetooth,
 GPU-accelerated UI, sound, GPS, sensors, cameras, deep sleep that wakes for
 calls, SMS and Telegram messages.
@@ -79,7 +79,7 @@ calls, SMS and Telegram messages.
 Requirements: unlocked bootloader, TWRP for m52xq, a microSD card with the
 zips, backups of EFS, persist, modem, boot, vendor_boot and vbmeta.
 
-- Flashable zip (1.9 GB): <https://drive.google.com/file/d/1my1k5Hmky13wSR7z21cfibyqICJNlW5F/view?usp=sharing>
+- Flashable zip (1.9 GB): [postmarketos-m52xq-mainline-plasma-unofficial-v1.zip](https://drive.google.com/file/d/144tpTxWZ9abbORYdreZ5RAORVHYxRKRO/view?usp=sharing), md5 `f26412c368728f5a061da137dd3a542a`
 - Video guide: <https://www.youtube.com/watch?v=Kg9ajKq3kkw>
 
 Flash **UN1CA_3.1.0** first to get the maximum system partition size (the
@@ -89,12 +89,18 @@ After LineageOS 23 the partition is 1 GB smaller, but the install still works.
 TWRP steps:
 
 ```
-Wipe - Format Data - yes - enter - Back - Back - Advanced Wipe - Data - Repair or Change File System - Change File System - EXT4 - Swipe to Change - Back - Back - Back - Back - Back - Install - Select Storage - Micro SD card - UN1CA_3.1.0-a5bf09f2_20260604_m52xq-sign.zip - Swipe to confirm Flash - Back - Back - Wipe - Format Data - enter - Back - Back - Advanced Wipe - Data - Repair or Change File System - Change File System - EXT4 - Swipe to Change - Back - Back - Back - Back - Back - Install - postmarketos-m52xq-mainline-plasma-unofficialv1.zip - Swipe to confirm Flash - Reboot System
+Wipe - Format Data - yes - enter - Back - Back - Advanced Wipe - Data - Repair or Change File System - Change File System - EXT4 - Swipe to Change - Back - Back - Back - Back - Back - Install - Select Storage - Micro SD card - UN1CA_3.1.0-a5bf09f2_20260604_m52xq-sign.zip - Swipe to confirm Flash - Back - Back - Wipe - Format Data - enter - Back - Back - Advanced Wipe - Data - Repair or Change File System - Change File System - EXT4 - Swipe to Change - Back - Back - Back - Back - Back - Install - postmarketos-m52xq-mainline-plasma-unofficial-v1.zip - Swipe to confirm Flash - Reboot System
 ```
 
-The installer writes boot and vendor_boot, writes the rootfs to `system`, puts
-the overlay of `rootfs-overlay/` on top and takes the Bluetooth address, the
-modem firmware and the sensor registry from the phone's own partitions.
+The installer writes boot and vendor_boot, writes the rootfs to `system` and puts
+the overlay of `rootfs-overlay/` on top. The Samsung/Qualcomm device firmware is
+not in the zip: the installer copies it, read-only, from the phone's own
+partitions - ADSP, GPU zap shader, IPA (mobile data) and Venus from `apnhlos`,
+Bluetooth firmware and sensor configs from `vendor`, the modem from `modem`, the
+sensor registry from `persist`, the Bluetooth address from `EFS`. The IPA firmware
+is appended to the boot ramdisk as a second (gzip) initramfs archive, because the
+built-in IPA driver needs it before the rootfs is mounted. `vendor` must come from
+a Samsung-based ROM (stock, UN1CA or LineageOS).
 
 Default password (screen unlock and root): `112233`. Change the unlock
 password:
@@ -124,9 +130,9 @@ Stock firmware can always be restored with Odin.
 | `device-tree/vendor_boot-m52xq-v148.dts` | the device tree in vendor_boot v238 (based on the stock board DTB, with the mainline fixes) |
 | `device-tree/sm7325-samsung-m52xq.dts` | early upstream-style draft, not used by the release |
 | `camx/` | experimental CamX camera path: our patch to the Qualcomm GPL camera driver, the `m52xq-gdsc-reg` module, status |
-| `tools/` | `m52xq-gnss.py` (GPS), `audit_gcc_clock_ids.py` (finds downstream/mainline clock ID mix-ups in the DT) |
+| `tools/` | `m52xq-gnss.py` (GPS), `audit_gcc_clock_ids.py` (finds downstream/mainline clock ID mix-ups in the DT), `boot_ramdisk_drop.py` (removes files from the boot.img ramdisk) |
 | `docs/RESEARCH-LOG-RU.md` | the full research and build log (Russian), every finding with commands and md5 |
-| `docs/CHANGELOG-v44-RU.txt` | what changed in v44 (Russian) |
+| `docs/CHANGELOG-v1-RU.txt`, `docs/CHANGELOG-v44-RU.txt` | what changed in unofficial v1 and in v44 (Russian) |
 
 ## Building
 

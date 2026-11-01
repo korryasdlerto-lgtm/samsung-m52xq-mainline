@@ -99,7 +99,7 @@ abort() {
 }
 
 ui_print "======================================"
-ui_print " postmarketOS mainline plasma v44 — m52xq"
+ui_print " postmarketOS mainline plasma v1 — m52xq"
 ui_print " boot + vendor_boot + system(rootfs-plasma_6.7.5)"
 ui_print " UFS, Touch, GPU, Brightness, Audio(earpiece, speaker, mic), WiFi, BT"
 ui_print " Build by Asdlerto Korry"
@@ -125,7 +125,7 @@ done
 ui_print "- boot partition: $BOOT_PART"
 ui_print "- vendor_boot partition: $VBOOT_PART"
 
-BOOT_IMG_NAME="firmware/boot_v248_release_quiet.img"
+BOOT_IMG_NAME="firmware/boot_v249_noipa.img"
 VBOOT_IMG_NAME="firmware/vendor_boot_v238_nfc_se9.img"
 
 # busybox/toybox unzip inside TWRP does not reliably return a non-zero
@@ -137,9 +137,57 @@ VBOOT_IMG_NAME="firmware/vendor_boot_v238_nfc_se9.img"
 unzip -l "$ZIP" "$BOOT_IMG_NAME" | grep -q "$BOOT_IMG_NAME" || abort "$BOOT_IMG_NAME not found in zip"
 unzip -l "$ZIP" "$VBOOT_IMG_NAME" | grep -q "$VBOOT_IMG_NAME" || abort "$VBOOT_IMG_NAME not found in zip"
 
+# v1 (в45): the IPA firmware (yupik_ipa_fws.*, proprietary) is not in the zip. The kernel needs it in the initramfs
+# (IPA is built in and probes before the rootfs is mounted), so it is appended to the ramdisk of boot.img here, from
+# this phone's own apnhlos partition, as a second uncompressed newc cpio archive (the kernel unpacks every archive).
+m52xq_boot_add_ipa() {
+    IMG="$1"; A=/tmp/m52xq-apn-boot; ST=/tmp/m52xq-ipa
+    rm -rf "$ST"; mkdir -p "$A" "$ST/usr/lib/firmware" || return 1
+    got=0
+    for p in /dev/block/by-name/apnhlos /dev/block/bootdevice/by-name/apnhlos; do
+        [ -b "$p" ] || continue
+        if mount -t vfat -o ro "$p" "$A"; then
+            [ -f "$A/image/yupik_ipa_fws.mdt" ] && cp "$A"/image/yupik_ipa_fws.* "$ST/usr/lib/firmware/" && got=1
+            umount "$A"
+        fi
+        break
+    done
+    rmdir "$A" 2>/dev/null
+    [ "$got" = 1 ] || return 1
+    chmod 644 "$ST"/usr/lib/firmware/*
+    ks=$(od -An -tu4 -j8 -N4 "$IMG" | tr -d ' ')
+    rs=$(od -An -tu4 -j12 -N4 "$IMG" | tr -d ' ')
+    roff=$(( 4096 + (ks + 4095) / 4096 * 4096 ))
+    end=$(( roff + rs ))
+    head -c "$end" "$IMG" > "$IMG.new" || return 1
+    n=$(( (4 - end % 4) % 4 ))
+    [ "$n" -gt 0 ] && dd if=/dev/zero bs=1 count="$n" 2>/dev/null >> "$IMG.new"
+    # gzip compressed: the bootloader puts the 70-byte vendor_boot ramdisk in front of this ramdisk, so an uncompressed
+    # cpio would not start 4-byte aligned in the initrd and the kernel stops with "invalid magic" (v1 test 2026-11-01);
+    # a gzip member is recognised at any offset
+    ( cd "$ST" && find usr/lib/firmware -type f | sort | cpio -o -H newc | gzip -9 ) >> "$IMG.new" || return 1
+    sz=$(stat -c %s "$IMG.new")
+    nrs=$(( sz - roff ))
+    n=$(( (4096 - sz % 4096) % 4096 ))
+    [ "$n" -gt 0 ] && dd if=/dev/zero bs=1 count="$n" 2>/dev/null >> "$IMG.new"
+    h=$(printf '%08x' "$nrs")
+    printf '%s' "${h:6:2}${h:4:2}${h:2:2}${h:0:2}" | xxd -r -p | dd of="$IMG.new" bs=1 seek=12 conv=notrunc 2>/dev/null
+    [ "$(od -An -tu4 -j12 -N4 "$IMG.new" | tr -d ' ')" = "$nrs" ] || return 1
+    mv "$IMG.new" "$IMG"
+    rm -rf "$ST"
+    return 0
+}
+
 next_step 0.10 5
 ui_print "- Flashing boot.img..."
-unzip -p "$ZIP" "$BOOT_IMG_NAME" > "$BOOT_PART" || abort "failed to write $BOOT_IMG_NAME"
+unzip -p "$ZIP" "$BOOT_IMG_NAME" > /tmp/m52xq-boot.img || abort "failed to extract $BOOT_IMG_NAME"
+if m52xq_boot_add_ipa /tmp/m52xq-boot.img; then
+    ui_print "  IPA firmware taken from this phone's apnhlos partition"
+else
+    ui_print "  WARNING: no IPA firmware on apnhlos -- mobile data will not work"
+fi
+cat /tmp/m52xq-boot.img > "$BOOT_PART" || abort "failed to write $BOOT_IMG_NAME"
+rm -f /tmp/m52xq-boot.img /tmp/m52xq-boot.img.new
 
 next_step 0.10 5
 ui_print "- Flashing vendor_boot.img..."
@@ -566,6 +614,60 @@ if [ -n "$SYSTEM_ROOT_PART" ]; then
                     rmdir /tmp/m52xq-modem 2>/dev/null
                     break
                 done
+                # v1 (в45): the other proprietary firmware is not in the zip either; copied from this phone's own
+                # apnhlos (ADSP, GPU zap shader, IPA, Venus) and vendor (Bluetooth, sensor configs) partitions, read-only.
+                FW="$ROOTFS_MNT/usr/lib/firmware"
+                APN_OK=0
+                for p in /dev/block/by-name/apnhlos /dev/block/bootdevice/by-name/apnhlos; do
+                    [ -b "$p" ] || continue
+                    mkdir -p /tmp/m52xq-apn
+                    if mount -t vfat -o ro "$p" /tmp/m52xq-apn; then
+                        I=/tmp/m52xq-apn/image
+                        if [ -f "$I/adsp.mdt" ] && [ -f "$I/vpu20_1v.mdt" ]; then
+                            mkdir -p "$FW/qcom/vpu-2.0"
+                            cp "$I"/adsp.mdt "$I"/adsp.b* "$I"/adspr.jsn "$I"/adsps.jsn "$I"/adspua.jsn \
+                               "$I"/a660_zap.* "$I"/yupik_ipa_fws.* "$FW"/ && APN_OK=1
+                            for f in "$I"/vpu20_1v.*; do
+                                cp "$f" "$FW/qcom/vpu-2.0/venus.${f##*.}" || APN_OK=0
+                            done
+                            cp "$I/vpu20_1v.mdt" "$FW/qcom/vpu-2.0/venus.mbn" || APN_OK=0
+                            chmod 644 "$FW"/adsp* "$FW"/a660_zap.* "$FW"/yupik_ipa_fws.* "$FW"/qcom/vpu-2.0/* 2>/dev/null
+                        fi
+                        umount /tmp/m52xq-apn
+                    fi
+                    rmdir /tmp/m52xq-apn 2>/dev/null
+                    break
+                done
+                if [ "$APN_OK" = "1" ]; then
+                    ui_print "- ADSP / GPU / IPA / Venus firmware taken from this phone's apnhlos partition"
+                else
+                    ui_print "  WARNING: firmware missing on apnhlos -- sound, sensors, GPU or video may not work"
+                fi
+                VEN_OK=0
+                for p in /dev/block/mapper/vendor /dev/mapper/vendor /dev/block/by-name/vendor; do
+                    [ -b "$p" ] || continue
+                    mkdir -p /tmp/m52xq-vendor
+                    if mount -t erofs -o ro "$p" /tmp/m52xq-vendor 2>/dev/null || \
+                       mount -t ext4 -o ro,noload "$p" /tmp/m52xq-vendor 2>/dev/null; then
+                        V=/tmp/m52xq-vendor
+                        if [ -f "$V/firmware/msbtfw11.mbn" ] && [ -d "$V/etc/sensors/config" ]; then
+                            SN="$ROOTFS_MNT/usr/share/qcom/sm7325/Samsung/m52xq/sensors"
+                            mkdir -p "$FW/qca" "$SN/config"
+                            cp "$V"/firmware/msbtfw11.mbn "$V"/firmware/msbtfw11.tlv "$V"/firmware/msnv11.bin "$FW/qca/" && \
+                            cp "$V/etc/sensors/sns_reg_config" "$SN/sns_reg.conf" && \
+                            cp "$V"/etc/sensors/config/*.json "$SN/config/" && VEN_OK=1
+                            chmod 644 "$FW"/qca/* "$SN/sns_reg.conf" "$SN"/config/* 2>/dev/null
+                        fi
+                        umount /tmp/m52xq-vendor
+                    fi
+                    rmdir /tmp/m52xq-vendor 2>/dev/null
+                    [ "$VEN_OK" = "1" ] && break
+                done
+                if [ "$VEN_OK" = "1" ]; then
+                    ui_print "- Bluetooth firmware and sensor configs taken from this phone's vendor partition"
+                else
+                    ui_print "  WARNING: vendor partition not readable -- Bluetooth / sensors may not work"
+                fi
                 if [ "$MODEM_FW_OK" = "1" ]; then
                     ui_print "- Modem firmware taken from this phone's modem partition"
                 else

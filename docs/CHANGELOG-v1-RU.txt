@@ -1,0 +1,72 @@
+в45 (создана 2026-11-01 по команде «делай все это в папке в45»). Цель: релизный архив БЕЗ проприетарных прошивок в zip
+(«с точки зрения законов все чисто»). Баннер установщика: «plasma v1» (релизная версия 1, по команде), имя архива
+postmarketos-m52xq-mainline-plasma-unofficialv1.zip (как на Google Drive / в теме XDA).
+
+ЧТО В ZIP v44 ПРОПРИЕТАРНОЕ (проверено 2026-11-01):
+- образ rootfs (в35/data/rootfs-chunks, смонтирован ro через dm-linear): из прошивок только regulatory.db(.p7s) (свободная) - ЧИСТЫЙ.
+- boot v248 ramdisk: usr/lib/firmware/yupik_ipa_fws.{mdt,b00-b04} (IPA, проприетарная); qcom/a660_gmu.bin, a660_sqe.fw = linux-firmware
+  (md5 cd3a2352…, aef1fcec… = lf_a660_*), regulatory.db - свободные.
+- оверлей mainline-extras/rootfs-files: lib/firmware (adsp*, adsp*.jsn, a660_zap*, wpss*, yupik_ipa_fws*), qca/ (msbtfw11, msnv11),
+  ath11k/WCN6750/hw1.0/board-2.bin, qcom/vpu-2.0 (venus), qcom/sm7325/samsung/m52xq (Global_cal.acdb + m52xq_voice_cal_*.bin, получены
+  нашим генератором из стоковых acdb), usr/share/qcom/sm7325/Samsung/m52xq/sensors (sns_reg.conf + config/*.json со стокового vendor).
+ГДЕ ЭТО ЕСТЬ НА САМОМ ТЕЛЕФОНЕ (TWRP, только чтение):
+- apnhlos (vfat, /dev/block/by-name/apnhlos, image/): adsp.*, adspr/adsps/adspua.jsn, a660_zap.*, vpu20_1v.* (= venus), yupik_ipa_fws.*
+- vendor (erofs, /dev/block/mapper/vendor): firmware/wpss.*, msbtfw11.mbn/.tlv, msnv11.bin; etc/audconf/OPEN/*_cal.acdb; etc/sensors/{config,sns_reg_config}
+- modem (vfat): modem.* (установщик уже копирует), persist (реестр датчиков, уже копирует), efs (адрес BT, уже копирует).
+
+ПЛАН в45:
+1. boot v249 = boot v248 с ramdisk без yupik_ipa_fws.* (ядро #437 то же).
+2. update-binary: копирует при установке с apnhlos/vendor все прошивки выше по тем же путям, что были в оверлее;
+   IPA - дописывает в ramdisk boot на телефоне (newc cpio через toybox, поправка ramdisk_size в заголовке), ДО записи boot.
+3. калибровки голоса: генератор (наш Python) запускается при первой загрузке на телефоне из скопированных acdb.
+4. каркас .v45-zip-stage = .v44-zip-stage без проприетарных файлов; zip -9 изнутри; проверка: ни одного проприетарного файла в zip.
+5. проверка на телефоне: установка в TWRP + загрузка + звук/звонок/датчики/Wi-Fi/BT/модем/камера-видео (Venus)/GPU.
+
+2026-11-01 ~19:5x: ПАУЗА по вопросу пользователя «смотри не сломай порт!!! это реально так критично???». Ничего не записано на телефон;
+в TWRP разделы rootfs/modem/apnhlos/vendor/dsp монтировались только для чтения и отмонтированы (loop0 отключён).
+Первая попытка boot v249: ramdisk boot v248 сжат gzip (1f8b…), скрипт kernel-src/boot_ramdisk_drop.py ждёт несжатый newc - образ НЕ собран.
+Решение по в45 - за пользователем.
+
+=== 2026-11-01 ~20:1x: решение пользователя «все 3 оставь как есть» ===
+В zip ОСТАЮТСЯ: wpss.* (версия UN1CA, на vendor телефона другая), ath11k/WCN6750/hw1.0/board-2.bin (наша сборка из стокового bdwlan.elf),
+qcom/sm7325/samsung/m52xq/Global_cal.acdb + m52xq_voice_cal_*.bin; a660_gmu.bin/a660_sqe.fw (linux-firmware, свободные).
+УБИРАЮТСЯ из zip (на телефоне побайтно те же файлы, md5 сверены по всем 123 файлам):
+  apnhlos/image: adsp.mdt/b*, adspr/adsps/adspua.jsn, a660_zap.*, yupik_ipa_fws.*, vpu20_1v.* -> qcom/vpu-2.0/venus.{mdt,bNN} + venus.mbn (= mdt)
+  vendor: firmware/msbtfw11.mbn/.tlv, msnv11.bin -> qca/; etc/sensors/sns_reg_config -> usr/share/qcom/sm7325/Samsung/m52xq/sensors/sns_reg.conf,
+          etc/sensors/config/*.json -> .../sensors/config/
+boot v249 (test-images/boot_v249_noipa.img, md5 2ba7241acd2c3a72e0f0a99f6545bbef, 45821952 Б) = boot v248 без yupik_ipa_fws.* в ramdisk
+  (kernel-src/boot_ramdisk_drop.py; ramdisk gzip, 337 -> 331 записей; ядро и заголовок кроме ramdisk_size те же).
+update-binary в45 (META-INF/com/google/android/update-binary, sh -n ok): баннер «plasma v1»; BOOT_IMG_NAME=firmware/boot_v249_noipa.img;
+  функция m52xq_boot_add_ipa: apnhlos ro -> newc cpio (toybox cpio) дописывается после gzip ramdisk (выравнивание 4), ramdisk_size в заголовке,
+  выравнивание образа 4096, затем запись в boot; блоки копирования apnhlos (ADSP/ZAP/IPA/Venus) и vendor (BT, датчики) в rootfs перед модемом.
+ПРОВЕРКА функции в TWRP на копии (/tmp/t-boot.img, раздел boot НЕ трогался, apnhlos ro): APPEND-OK; на ПК: ядро/заголовок = v249,
+  gzip-часть не изменена, второй архив 070701 с 6 файлами IPA (0644), md5 = IPA из initramfs v248. Загрузка на телефоне ещё НЕ проверялась.
+
+=== ZIP unofficial-v1 СОБРАН И ЗАЛИТ (2026-11-01 ~19:5x по ПК, по команде «так назови, собирай и заливай в дата для проверки») ===
+архив/postmarketos-m52xq-mainline-plasma-unofficial-v1.zip, 1 893 286 995 Б, md5 1aba70bf2c60fffd6b894f90c9eb62f6 (.md5 рядом), unzip -t: No errors.
+Каркас архив/.v45-zip-stage = .v44-zip-stage (rsync, без boot v248, ЧТО_НОВОГО, update-binary) + firmware/boot_v249_noipa.img + update-binary в45
++ ЧТО_НОВОГО (в45 + в44, MAC/SSID/IP/домашние пути заменены); из rootfs-files удалены 113 проприетарных файлов (список = diff ниже).
+Проверки: check-rootfs-files-paths ok, -xtype l 0, симлинки только 2 куска rootfs (в35), sh -n update-binary ok. zip -9 изнутри каркаса, 6 мин, rc=0.
+Состав v44 -> v1: boot_v248 -> boot_v249_noipa; убраны adsp*, a660_zap*, yupik_ipa_fws*, qca/msbtfw11*/msnv11.bin, qcom/vpu-2.0/venus*, sensors/sns_reg.conf
++ sensors/config/*.json; больше ничего не менялось. Поиск этих имён в списке zip - пусто.
+Залит: adb push в /data (TWRP; до заливки /data был пустой, 24K), 47 с, md5 на телефоне = 1aba70bf… Установка и перезагрузка - командой пользователя.
+ПРОВЕРИТЬ ПОСЛЕ УСТАНОВКИ: строки установщика «IPA firmware taken…», «ADSP / GPU / IPA / Venus firmware taken…», «Bluetooth firmware and sensor configs taken…»;
+после загрузки: мобильный интернет (IPA), звук/звонок (ADSP), GPU/интерфейс (zap), видео Venus, Bluetooth, датчики (автоповорот, приближение), Wi-Fi.
+- УСТАНОВКА unofficial-v1 в TWRP (пользователь): RC=0, 125 с; строки: IPA firmware taken (apnhlos) -> boot; ADSP / GPU / IPA / Venus firmware taken (apnhlos); Bluetooth firmware and sensor configs taken (vendor); BT address (EFS), Modem (modem), Sensor registry (persist); WARNING нет. Загрузка ещё не проверена.
+
+=== 2026-11-01 ~18:0x (тел.): v1 ЗАГРУЗИЛСЯ, НО IPA НЕ ПОДНЯЛСЯ -> модем падает (enl2_dl fatal, 3 раза за 2 мин) ===
+dmesg: «Initramfs unpacking failed: invalid magic at start of compressed archive»; «Direct firmware load for yupik_ipa_fws.mdt failed with error -2»,
+«probe with driver ipa failed with error -2». wpss/modem/adsp running, остальное (ADSP с apnhlos и т.д.) загрузилось.
+ПРИЧИНА: initrd = ramdisk vendor_boot (70 байт, VNDRBOOT v3) + ramdisk boot. Дописанный НЕсжатый newc cpio оказался на смещении %4 = 2 от начала
+initrd; ядро принимает несжатый cpio только с 4-байтовой границы -> invalid magic. В тесте функции в TWRP (без vendor ramdisk) этого не было видно.
+ИСПРАВЛЕНИЕ (update-binary в45 и каркас): архив IPA дописывается сжатым gzip (cpio -o -H newc | gzip -9) - gzip-член ядро распознаёт по
+сигнатуре 1f8b на любом смещении. Модель распаковки на ПК (vendor 70/0/1/2/3 байт): 2 архива, ошибок нет.
+- ZIP v1 ПЕРЕСОБРАН с исправлением (IPA gzip): md5 f26412c368728f5a061da137dd3a542a, 1 893 288 343 Б, unzip -t ok, список файлов = первая сборка; старый файл заменён (mv). Залит adb push в /data (TWRP), md5 сверен. Установка - пользователем.
+- УСТАНОВКА исправленного v1 (f26412c3…): RC=0, 125 с, все строки прошивок с телефона, WARNING нет. Boot в разделе: ramdisk 11639160 Б; модель распаковки ядра (vendor ramdisk 70 Б): 2 gzip-архива, во 2-м IPA, без invalid magic. Загрузка - следующая проверка.
+- ЗАГРУЗКА исправленного v1 (2026-11-01 18:19 по тел.), ssh по USB: system running, failed-юнитов нет; initramfs без «invalid magic»;
+  «ipa 1e40000.ipa: IPA driver setup completed successfully», modem starting/running events; wpss/modem/adsp running; падений модема 0.
+  ModemManager: 2 модема (Kyivstar LTE, life:) UMTS); data-sim=2 -> qmapmux1.0 100.91.x.x/30, curl через qmapmux1.0 = HTTP 302 (ответ из сети
+  получен, вероятно перенаправление оператора). Датчики: акселерометр/свет/приближение (iio-sensor-proxy), hexagonrpcd оба active.
+  Звук: карта SM-M526B-WCD938X, sink Speaker. Bluetooth: контроллер (адрес из EFS) Powered yes. GPU: kwin работает, ошибок zap нет.
+  Venus: /dev/video* есть, ошибок прошивки нет. Wi-Fi: wlan0 connected. «Direct firmware load ... failed» за загрузку: 0.
+  Ждёт проверки пользователем: звонок (звук в трубке/динамике/микрофон), запись видео (Venus), автоповорот, Bluetooth-устройство.
