@@ -19,7 +19,7 @@ calls, SMS and Telegram messages.
 |---|---|
 | This repository | installer, rootfs overlay (scripts, services, configs), patched package recipes, device tree, documentation |
 | Kernel | [sc7280-mainline-linux-m52xq](https://github.com/korryasdlerto-lgtm/sc7280-mainline-linux-m52xq), branch `master` = the kernel in v44 (7.1.2 #437), config `arch/arm64/configs/m52xq_defconfig` |
-| Kernel binaries | [release v44-kernel-437](https://github.com/korryasdlerto-lgtm/sc7280-mainline-linux-m52xq/releases/tag/v44-kernel-437): Image, appended DTB, modules, vendor_boot, config (no firmware) |
+| Kernel binaries | [release v44-kernel-437](https://github.com/korryasdlerto-lgtm/sc7280-mainline-linux-m52xq/releases/tag/v44-kernel-437): boot.img of v1 (without the IPA firmware), Image, appended DTB, modules, vendor_boot, config |
 
 ## What works
 
