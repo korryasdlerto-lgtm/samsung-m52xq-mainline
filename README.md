@@ -129,6 +129,7 @@ Stock firmware can always be restored with Odin.
 | `pmaports-device/` | `device-samsung-m52xq` and `linux-samsung-m52xq` |
 | `device-tree/vendor_boot-m52xq-v148.dts` | the device tree in vendor_boot v238 (based on the stock board DTB, with the mainline fixes) |
 | `device-tree/sm7325-samsung-m52xq.dts` | early upstream-style draft, not used by the release |
+| `upstream/` | bugs found here that are not specific to this phone, with ready kernel patches (`upstream/README.md`) |
 | `camx/` | experimental CamX camera path: our patch to the Qualcomm GPL camera driver, the `m52xq-gdsc-reg` module, status |
 | `tools/` | `m52xq-gnss.py` (GPS), `audit_gcc_clock_ids.py` (finds downstream/mainline clock ID mix-ups in the DT), `boot_ramdisk_drop.py` (removes files from the boot.img ramdisk) |
 | `docs/RESEARCH-LOG-RU.md` | the full research and build log (Russian), every finding with commands and md5 |

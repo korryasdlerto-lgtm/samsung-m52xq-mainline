@@ -1,0 +1,48 @@
+From 3fd0ffb886da4e915ddc7458b8dd48b53f4a0e3f Mon Sep 17 00:00:00 2001
+From: Asdlerto Korry <korryasdlerto@gmail.com>
+Date: Sun, 1 Nov 2026 21:21:48 +0200
+Subject: [PATCH] usb: typec: ucsi: Fix printing of a fwnode with %pOFn
+
+ucsi_glink and ucsi_huawei_gaokun walk the connector nodes with
+device_for_each_child_node(), which yields a struct fwnode_handle, but
+print it with %pOFn, which expects a struct device_node. vsprintf then
+treats the fwnode_handle as a device_node and calls fwnode_get_name()
+on a pointer into the middle of it, so the "missing reg property" error
+path oopses instead of printing the message (seen with the same code in
+pmic_glink_altmode on a Samsung Galaxy M52 5G).
+
+Use %pfwP, the specifier for the name of a fwnode.
+---
+ drivers/usb/typec/ucsi/ucsi_glink.c         | 2 +-
+ drivers/usb/typec/ucsi/ucsi_huawei_gaokun.c | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/usb/typec/ucsi/ucsi_glink.c b/drivers/usb/typec/ucsi/ucsi_glink.c
+index 12e07b9..a517d9b 100644
+--- a/drivers/usb/typec/ucsi/ucsi_glink.c
++++ b/drivers/usb/typec/ucsi/ucsi_glink.c
+@@ -429,7 +429,7 @@ static int pmic_glink_ucsi_probe(struct auxiliary_device *adev,
+ 
+ 		ret = fwnode_property_read_u32(fwnode, "reg", &port);
+ 		if (ret < 0) {
+-			dev_err(dev, "missing reg property of %pOFn\n", fwnode);
++			dev_err(dev, "missing reg property of %pfwP\n", fwnode);
+ 			return ret;
+ 		}
+ 
+diff --git a/drivers/usb/typec/ucsi/ucsi_huawei_gaokun.c b/drivers/usb/typec/ucsi/ucsi_huawei_gaokun.c
+index ca749fd..d564ddc 100644
+--- a/drivers/usb/typec/ucsi/ucsi_huawei_gaokun.c
++++ b/drivers/usb/typec/ucsi/ucsi_huawei_gaokun.c
+@@ -413,7 +413,7 @@ static int gaokun_ucsi_ports_init(struct gaokun_ucsi *uec)
+ 	device_for_each_child_node(dev, fwnode) {
+ 		ret = fwnode_property_read_u32(fwnode, "reg", &port);
+ 		if (ret < 0) {
+-			dev_err(dev, "missing reg property of %pOFn\n", fwnode);
++			dev_err(dev, "missing reg property of %pfwP\n", fwnode);
+ 			fwnode_handle_put(fwnode);
+ 			return ret;
+ 		}
+-- 
+2.25.1
+

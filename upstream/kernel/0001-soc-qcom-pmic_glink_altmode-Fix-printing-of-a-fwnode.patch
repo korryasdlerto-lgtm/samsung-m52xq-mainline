@@ -1,0 +1,48 @@
+From d53c0c407bc3faf5f042e911babe8cf860eb7720 Mon Sep 17 00:00:00 2001
+From: Asdlerto Korry <korryasdlerto@gmail.com>
+Date: Sun, 1 Nov 2026 21:21:47 +0200
+Subject: [PATCH] soc: qcom: pmic_glink_altmode: Fix printing of a fwnode
+ with %pOFn
+
+pmic_glink_altmode_probe() walks the child nodes with
+device_for_each_child_node(), which yields a struct fwnode_handle, but
+prints it with %pOFn, which expects a struct device_node. vsprintf then
+treats the fwnode_handle as a device_node and passes &dn->fwnode to
+fwnode_get_name(), i.e. a pointer into the middle of the handle, and
+calls through a garbage fwnode->ops. The error path ("missing reg
+property") therefore oopses instead of printing the message:
+
+  lr : fwnode_get_name+0x34/0x50
+  ...
+  device_node_string
+  pointer
+  vsnprintf
+  ...
+  pmic_glink_altmode_probe
+
+It was hit on a Samsung Galaxy M52 5G (SM7325) whose vendor device tree
+has an extra "qcom,pmic-glink" compatible node without a reg property.
+
+Use %pfwP, the specifier for the name of a fwnode.
+
+Fixes: 080b4e24852b ("soc: qcom: pmic_glink: Introduce altmode support")
+---
+ drivers/soc/qcom/pmic_glink_altmode.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/soc/qcom/pmic_glink_altmode.c b/drivers/soc/qcom/pmic_glink_altmode.c
+index 619bad2..90286b0 100644
+--- a/drivers/soc/qcom/pmic_glink_altmode.c
++++ b/drivers/soc/qcom/pmic_glink_altmode.c
+@@ -595,7 +595,7 @@ static int pmic_glink_altmode_probe(struct auxiliary_device *adev,
+ 	device_for_each_child_node(dev, fwnode) {
+ 		ret = fwnode_property_read_u32(fwnode, "reg", &port);
+ 		if (ret < 0) {
+-			dev_err(dev, "missing reg property of %pOFn\n", fwnode);
++			dev_err(dev, "missing reg property of %pfwP\n", fwnode);
+ 			fwnode_handle_put(fwnode);
+ 			return ret;
+ 		}
+-- 
+2.25.1
+

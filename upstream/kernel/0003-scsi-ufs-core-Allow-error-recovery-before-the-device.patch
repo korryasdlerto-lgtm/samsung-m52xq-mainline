@@ -1,0 +1,102 @@
+From f3c8ae0f5330db340fcba73aee451b2edf334032 Mon Sep 17 00:00:00 2001
+From: Asdlerto Korry <korryasdlerto@gmail.com>
+Date: Sun, 1 Nov 2026 21:21:49 +0200
+Subject: [RFC PATCH] scsi: ufs: core: Allow error recovery before the device
+ W-LUN exists
+
+ufshcd_err_handling_should_stop() returns true while hba->ufs_device_wlun
+is NULL, i.e. until the first probe has added the device W-LUN. If the
+link fails during that first probe (for example NOP OUT failing after
+link startup), the error handler therefore never resets the host or the
+link: it only marks the state operational and returns, and the probe
+keeps failing until it gives up.
+
+On a Samsung Galaxy M52 5G (SM7325) the first link startup regularly
+ends in PA errors (LINERESET). With the W-LUN check removed, the error
+handler performs a real host reset and restore and the device comes up;
+without it, it never does.
+
+Removing the check exposes three places that dereference
+hba->ufs_device_wlun unconditionally on this path:
+ufshcd_rpm_get_sync()/ufshcd_rpm_put(), ufshcd_err_handling_prepare()
+and ufshcd_recover_pm_error(). Skip the W-LUN runtime PM handling there
+when the W-LUN does not exist yet; there is nothing to resume and no
+regular SCSI I/O before it is added.
+
+Note: the error handler then calls ufshcd_verify_dev_init() through
+ufshcd_reset_and_restore() while the tag set is quiesced. This needs the
+pseudo SCSI device queue to be unquiesced in ufshcd_err_handling_prepare()
+(as done upstream), otherwise blk_execute_rq() waits forever.
+---
+ drivers/ufs/core/ufshcd-priv.h |  4 ++++
+ drivers/ufs/core/ufshcd.c      | 13 +++++++++----
+ 2 files changed, 13 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/ufs/core/ufshcd-priv.h b/drivers/ufs/core/ufshcd-priv.h
+index 0a72148..370d004 100644
+--- a/drivers/ufs/core/ufshcd-priv.h
++++ b/drivers/ufs/core/ufshcd-priv.h
+@@ -382,6 +382,8 @@ static inline int ufshcd_update_ee_usr_mask(struct ufs_hba *hba,
+ 
+ static inline int ufshcd_rpm_get_sync(struct ufs_hba *hba)
+ {
++	if (!hba->ufs_device_wlun)
++		return 0;
+ 	return pm_runtime_get_sync(&hba->ufs_device_wlun->sdev_gendev);
+ }
+ 
+@@ -407,6 +409,8 @@ static inline int ufshcd_rpm_resume(struct ufs_hba *hba)
+ 
+ static inline void ufshcd_rpm_put(struct ufs_hba *hba)
+ {
++	if (!hba->ufs_device_wlun)
++		return;
+ 	pm_runtime_put(&hba->ufs_device_wlun->sdev_gendev);
+ }
+ 
+diff --git a/drivers/ufs/core/ufshcd.c b/drivers/ufs/core/ufshcd.c
+index c3f0895..71a08ed 100644
+--- a/drivers/ufs/core/ufshcd.c
++++ b/drivers/ufs/core/ufshcd.c
+@@ -6655,8 +6655,9 @@ static void ufshcd_err_handling_prepare(struct ufs_hba *hba)
+ 	 */
+ 	pm_runtime_get_sync(hba->dev);
+ 	ufshcd_rpm_get_sync(hba);
+-	if (pm_runtime_status_suspended(&hba->ufs_device_wlun->sdev_gendev) ||
+-	    hba->is_sys_suspended) {
++	if (hba->ufs_device_wlun &&
++	    (pm_runtime_status_suspended(&hba->ufs_device_wlun->sdev_gendev) ||
++	     hba->is_sys_suspended)) {
+ 		enum ufs_pm_op pm_op;
+ 
+ 		/*
+@@ -6699,7 +6700,6 @@ static void ufshcd_err_handling_unprepare(struct ufs_hba *hba)
+ static inline bool ufshcd_err_handling_should_stop(struct ufs_hba *hba)
+ {
+ 	return (!hba->is_powered || hba->shutting_down ||
+-		!hba->ufs_device_wlun ||
+ 		hba->ufshcd_state == UFSHCD_STATE_ERROR ||
+ 		(!(hba->saved_err || hba->saved_uic_err || hba->force_reset ||
+ 		   ufshcd_is_link_broken(hba))));
+@@ -6708,12 +6708,17 @@ static inline bool ufshcd_err_handling_should_stop(struct ufs_hba *hba)
+ #ifdef CONFIG_PM
+ static void ufshcd_recover_pm_error(struct ufs_hba *hba)
+ {
+-	struct scsi_target *starget = hba->ufs_device_wlun->sdev_target;
++	struct scsi_target *starget;
+ 	struct Scsi_Host *shost = hba->host;
+ 	struct scsi_device *sdev;
+ 	struct request_queue *q;
+ 	bool resume_sdev_queues = false;
+ 
++	/* Nothing to recover before the device W-LUN has been added */
++	if (!hba->ufs_device_wlun)
++		return;
++	starget = hba->ufs_device_wlun->sdev_target;
++
+ 	hba->is_sys_suspended = false;
+ 
+ 	/*
+-- 
+2.25.1
+
