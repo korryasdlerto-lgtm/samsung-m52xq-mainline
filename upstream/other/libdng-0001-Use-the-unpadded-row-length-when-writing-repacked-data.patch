@@ -1,0 +1,35 @@
+From 4a2c537a56a71176eb1d0e1460d839b35109448d Mon Sep 17 00:00:00 2001
+From: Asdlerto Korry <korryasdlerto@gmail.com>
+Date: Mon, 2 Nov 2026 02:41:49 +0200
+Subject: [PATCH] Use the unpadded row length when writing repacked data
+
+libdng_repack() drops the line padding of the source buffer and writes the
+rows back to back, but the scanline loop still advances by the stride
+passed to libdng_set_stride(). With a padded stride (for example qcom-camss
+aligns RAW10 lines to 16 bytes, 4624 px -> 5780 bytes of data in a
+5792 byte line) every row is read 12 bytes further than the previous one
+and the image is smeared diagonally.
+
+When the data was repacked, use the length of a packed row instead.
+---
+ src/libdng.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/libdng.c b/src/libdng.c
+index f989150..db379ad 100644
+--- a/src/libdng.c
++++ b/src/libdng.c
+@@ -535,6 +535,10 @@ libdng_write_with_thumbnail(libdng_info *dng, const char *path, unsigned int wid
+ 	TIFFSetField(tif, DNGTAG_WHITELEVEL, 1, &dng->whitelevel);
+ 
+ 	unsigned int stride = dng->stride;
++	if (dng->needs_repack) {
++		/* libdng_repack() writes rows without the source line padding */
++		stride = ((uint64_t) width * dng->bit_depth + 7) / 8;
++	}
+ 	for (int row = 0; row < height; row++) {
+ 		TIFFWriteScanline(tif, (void *) raw_frame + (row * stride), row, 0);
+ 	}
+-- 
+2.25.1
+

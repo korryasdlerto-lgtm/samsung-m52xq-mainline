@@ -1,4 +1,4 @@
-From f3c8ae0f5330db340fcba73aee451b2edf334032 Mon Sep 17 00:00:00 2001
+From e19d852e0a8e81dc823e7d125cd7335fc1cee371 Mon Sep 17 00:00:00 2001
 From: Asdlerto Korry <korryasdlerto@gmail.com>
 Date: Sun, 1 Nov 2026 21:21:49 +0200
 Subject: [RFC PATCH] scsi: ufs: core: Allow error recovery before the device
@@ -27,16 +27,18 @@ Note: the error handler then calls ufshcd_verify_dev_init() through
 ufshcd_reset_and_restore() while the tag set is quiesced. This needs the
 pseudo SCSI device queue to be unquiesced in ufshcd_err_handling_prepare()
 (as done upstream), otherwise blk_execute_rq() waits forever.
+
+Signed-off-by: Asdlerto Korry <korryasdlerto@gmail.com>
 ---
  drivers/ufs/core/ufshcd-priv.h |  4 ++++
  drivers/ufs/core/ufshcd.c      | 13 +++++++++----
  2 files changed, 13 insertions(+), 4 deletions(-)
 
 diff --git a/drivers/ufs/core/ufshcd-priv.h b/drivers/ufs/core/ufshcd-priv.h
-index 0a72148..370d004 100644
+index e55c2a02c1f5..2cb0d542d114 100644
 --- a/drivers/ufs/core/ufshcd-priv.h
 +++ b/drivers/ufs/core/ufshcd-priv.h
-@@ -382,6 +382,8 @@ static inline int ufshcd_update_ee_usr_mask(struct ufs_hba *hba,
+@@ -385,6 +385,8 @@ static inline int ufshcd_update_ee_usr_mask(struct ufs_hba *hba,
  
  static inline int ufshcd_rpm_get_sync(struct ufs_hba *hba)
  {
@@ -45,7 +47,7 @@ index 0a72148..370d004 100644
  	return pm_runtime_get_sync(&hba->ufs_device_wlun->sdev_gendev);
  }
  
-@@ -407,6 +409,8 @@ static inline int ufshcd_rpm_resume(struct ufs_hba *hba)
+@@ -410,6 +412,8 @@ static inline int ufshcd_rpm_resume(struct ufs_hba *hba)
  
  static inline void ufshcd_rpm_put(struct ufs_hba *hba)
  {
@@ -55,10 +57,10 @@ index 0a72148..370d004 100644
  }
  
 diff --git a/drivers/ufs/core/ufshcd.c b/drivers/ufs/core/ufshcd.c
-index c3f0895..71a08ed 100644
+index fd52deb72d21..9767fbc7b870 100644
 --- a/drivers/ufs/core/ufshcd.c
 +++ b/drivers/ufs/core/ufshcd.c
-@@ -6655,8 +6655,9 @@ static void ufshcd_err_handling_prepare(struct ufs_hba *hba)
+@@ -6876,8 +6876,9 @@ static void ufshcd_err_handling_prepare(struct ufs_hba *hba)
  	 */
  	pm_runtime_get_sync(hba->dev);
  	ufshcd_rpm_get_sync(hba);
@@ -70,7 +72,7 @@ index c3f0895..71a08ed 100644
  		enum ufs_pm_op pm_op;
  
  		/*
-@@ -6699,7 +6700,6 @@ static void ufshcd_err_handling_unprepare(struct ufs_hba *hba)
+@@ -6926,7 +6927,6 @@ static void ufshcd_err_handling_unprepare(struct ufs_hba *hba)
  static inline bool ufshcd_err_handling_should_stop(struct ufs_hba *hba)
  {
  	return (!hba->is_powered || hba->shutting_down ||
@@ -78,7 +80,7 @@ index c3f0895..71a08ed 100644
  		hba->ufshcd_state == UFSHCD_STATE_ERROR ||
  		(!(hba->saved_err || hba->saved_uic_err || hba->force_reset ||
  		   ufshcd_is_link_broken(hba))));
-@@ -6708,12 +6708,17 @@ static inline bool ufshcd_err_handling_should_stop(struct ufs_hba *hba)
+@@ -6935,12 +6935,17 @@ static inline bool ufshcd_err_handling_should_stop(struct ufs_hba *hba)
  #ifdef CONFIG_PM
  static void ufshcd_recover_pm_error(struct ufs_hba *hba)
  {

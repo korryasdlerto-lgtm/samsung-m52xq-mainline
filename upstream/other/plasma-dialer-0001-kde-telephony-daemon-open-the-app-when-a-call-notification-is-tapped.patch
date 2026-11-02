@@ -1,0 +1,74 @@
+From bb33874550ef9cf928fa14f40d550ce3a8cae22b Mon Sep 17 00:00:00 2001
+From: Asdlerto Korry <korryasdlerto@gmail.com>
+Date: Mon, 2 Nov 2026 02:41:49 +0200
+Subject: [PATCH] kde-telephony-daemon: open the app when a call notification
+ is tapped
+
+The incoming call and missed call notifications only have the Accept and
+Reject buttons, so tapping the notification itself (or the missed call
+entry in the notification history) does nothing.
+
+Add a default action: the incoming call notification opens the call
+screen, the missed call notification opens the dialer.
+---
+ .../src/notification-manager.cpp              | 22 +++++++++++++++++--
+ 1 file changed, 20 insertions(+), 2 deletions(-)
+
+diff --git a/kde-telephony-daemon/src/notification-manager.cpp b/kde-telephony-daemon/src/notification-manager.cpp
+index dd3b2fa..f7dac8f 100644
+--- a/kde-telephony-daemon/src/notification-manager.cpp
++++ b/kde-telephony-daemon/src/notification-manager.cpp
+@@ -27,9 +27,8 @@ static bool getScreenSaverActive()
+     return active;
+ }
+ 
+-static void launchCallScreen()
++static void launchDesktopApp(const QString &desktopName)
+ {
+-    const auto desktopName = QStringLiteral("org.kde.plasma.callscreen");
+     const KService::Ptr appService = KService::serviceByDesktopName(desktopName);
+     if (!appService) {
+         qWarning() << "Could not find " << desktopName;
+@@ -39,6 +38,16 @@ static void launchCallScreen()
+     job.start();
+ }
+ 
++static void launchCallScreen()
++{
++    launchDesktopApp(QStringLiteral("org.kde.plasma.callscreen"));
++}
++
++static void launchDialer()
++{
++    launchDesktopApp(QStringLiteral("org.kde.plasma.dialer"));
++}
++
+ NotificationManager::NotificationManager(QObject *parent)
+     : QObject(parent)
+     , m_ringingNotification(std::make_unique<KNotification>(QStringLiteral("ringing"), KNotification::Persistent | KNotification::LoopSound, this))
+@@ -128,6 +137,10 @@ void NotificationManager::onCallStateChanged(const DialerTypes::CallData &callDa
+                 missedCallNotification->setComponentName(QStringLiteral("plasma-dialer"));
+                 missedCallNotification->setTitle(i18n("Missed call"));
+                 missedCallNotification->setText(i18n("Missed call from %1", callerDisplay));
++                auto openAction = missedCallNotification->addDefaultAction(i18n("Open"));
++                connect(openAction, &KNotificationAction::activated, this, [] {
++                    launchDialer();
++                });
+                 missedCallNotification->sendEvent();
+             }
+         }
+@@ -155,6 +168,11 @@ void NotificationManager::openRingingNotification(const QString &deviceUni,
+     // with swipe decision.
+     m_ringingNotification->setHint(QStringLiteral("category"), QStringLiteral("x-kde.incoming-call"));
+ 
++    auto openAction = m_ringingNotification->addDefaultAction(i18n("Open"));
++    connect(openAction, &KNotificationAction::activated, this, [] {
++        launchCallScreen();
++    });
++
+     auto acceptAction = m_ringingNotification->addAction(i18n("Accept"));
+     connect(acceptAction, &KNotificationAction::activated, this, [this, deviceUni, callUni] {
+         accept(deviceUni, callUni);
+-- 
+2.25.1
+

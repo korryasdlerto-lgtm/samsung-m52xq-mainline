@@ -1,4 +1,4 @@
-From 3fd0ffb886da4e915ddc7458b8dd48b53f4a0e3f Mon Sep 17 00:00:00 2001
+From 5e5e3e171c1bd0ece9180879c59a487d7a236f34 Mon Sep 17 00:00:00 2001
 From: Asdlerto Korry <korryasdlerto@gmail.com>
 Date: Sun, 1 Nov 2026 21:21:48 +0200
 Subject: [PATCH] usb: typec: ucsi: Fix printing of a fwnode with %pOFn
@@ -12,16 +12,20 @@ path oopses instead of printing the message (seen with the same code in
 pmic_glink_altmode on a Samsung Galaxy M52 5G).
 
 Use %pfwP, the specifier for the name of a fwnode.
+
+Fixes: c6165ed2f425 ("usb: ucsi: glink: use the connector orientation GPIO to provide switch events")
+Fixes: 00327d7f2c8c ("usb: typec: ucsi: add Huawei Matebook E Go ucsi driver")
+Signed-off-by: Asdlerto Korry <korryasdlerto@gmail.com>
 ---
  drivers/usb/typec/ucsi/ucsi_glink.c         | 2 +-
  drivers/usb/typec/ucsi/ucsi_huawei_gaokun.c | 2 +-
  2 files changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/drivers/usb/typec/ucsi/ucsi_glink.c b/drivers/usb/typec/ucsi/ucsi_glink.c
-index 12e07b9..a517d9b 100644
+index 1db0c88d817e..4b4905624d61 100644
 --- a/drivers/usb/typec/ucsi/ucsi_glink.c
 +++ b/drivers/usb/typec/ucsi/ucsi_glink.c
-@@ -429,7 +429,7 @@ static int pmic_glink_ucsi_probe(struct auxiliary_device *adev,
+@@ -433,7 +433,7 @@ static int pmic_glink_ucsi_probe(struct auxiliary_device *adev,
  
  		ret = fwnode_property_read_u32(fwnode, "reg", &port);
  		if (ret < 0) {
@@ -31,10 +35,10 @@ index 12e07b9..a517d9b 100644
  		}
  
 diff --git a/drivers/usb/typec/ucsi/ucsi_huawei_gaokun.c b/drivers/usb/typec/ucsi/ucsi_huawei_gaokun.c
-index ca749fd..d564ddc 100644
+index 57b37fca150c..fc74c205181e 100644
 --- a/drivers/usb/typec/ucsi/ucsi_huawei_gaokun.c
 +++ b/drivers/usb/typec/ucsi/ucsi_huawei_gaokun.c
-@@ -413,7 +413,7 @@ static int gaokun_ucsi_ports_init(struct gaokun_ucsi *uec)
+@@ -430,7 +430,7 @@ static int gaokun_ucsi_ports_init(struct gaokun_ucsi *uec)
  	device_for_each_child_node(dev, fwnode) {
  		ret = fwnode_property_read_u32(fwnode, "reg", &port);
  		if (ret < 0) {
