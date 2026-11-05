@@ -1,0 +1,38 @@
+#!/bin/sh
+# m52xq: cold-restart WPSS (Wi-Fi) so that it actually comes up again.
+# A WPSS that was stopped (rmmod ath11k_ahb, crash loop, failed recovery) dies on the next start with
+# "fatal error: ccpm_mhi.c:397:mhi_issue_request Failed" unless the WCN6750 chip is re-initialised first.
+# The Bluetooth driver (hci_uart_qca) does that on probe (BT_EN low/high + chip setup), so:
+#   unload ath11k_ahb -> unbind/bind Bluetooth -> load ath11k_ahb.
+# Found and checked on the phone 2026-11-02 (0 crashes, Wi-Fi connected). Needs root.
+BT=serial0-0
+D=/sys/bus/serial/drivers/hci_uart_qca
+# в48: find the WPSS remoteproc by name (remoteproc0 is the modem on some boots: the wait below then watched the modem)
+RP=/sys/class/remoteproc/remoteproc2
+for r in /sys/class/remoteproc/remoteproc*; do [ "$(cat $r/name 2>/dev/null)" = wpss ] && RP=$r; done
+log() { echo "m52xq-wpss-restart: $*" > /dev/kmsg 2>/dev/null; echo "$*"; }
+
+[ "$(id -u)" = 0 ] || { echo "needs root" >&2; exit 1; }
+[ -w "$RP/recovery" ] && echo enabled > "$RP/recovery" 2>/dev/null
+if lsmod | grep -q '^ath11k_ahb'; then
+	modprobe -r ath11k_ahb || { log "rmmod ath11k_ahb failed"; exit 1; }
+fi
+sleep 2
+[ "$(cat $RP/state)" = offline ] || log "wpss state $(cat $RP/state) after rmmod"
+if [ -e "$D/$BT" ]; then
+	echo "$BT" > "$D/unbind"
+	sleep 1
+fi
+[ -e "$D/$BT" ] || echo "$BT" > "$D/bind"
+# wait for the Bluetooth chip setup ("QCA setup on UART is completed"), max 15 s
+i=0
+while [ $i -lt 15 ] && [ ! -e /sys/class/bluetooth/hci0 ]; do sleep 1; i=$((i + 1)); done
+sleep 4
+# в48: the re-probed controller is "unconfigured" again (placeholder NVM address): give it this phone's address, as at boot
+# (m52xq-bt-firmware); without it BlueZ has no adapter and Bluetooth could not be switched on after a Wi-Fi tile off/on
+[ -x /usr/local/bin/m52xq-bt-addr.py ] && /usr/local/bin/m52xq-bt-addr.py >/dev/null 2>&1 && log "bluetooth address set again"
+modprobe ath11k_ahb || { log "modprobe ath11k_ahb failed"; exit 1; }
+i=0
+while [ $i -lt 20 ] && [ "$(cat $RP/state)" != running ]; do sleep 1; i=$((i + 1)); done
+log "done: wpss $(cat $RP/state)"
+[ "$(cat $RP/state)" = running ]

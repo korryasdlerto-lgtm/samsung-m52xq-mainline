@@ -14,6 +14,10 @@ Window {
 
 	property bool busy: false
 	property string message: ""
+	// в48: texts in the system language (Qt.locale(); qmlscene gets LANG of the session): ru ko ja zh (simplified) hi ar, else English
+	readonly property string lang: Qt.locale().name.substring(0, 2)
+	readonly property var texts: {"Reboot menu": {"ru": "Меню перезагрузки", "ko": "재부팅 메뉴", "ja": "再起動メニュー", "zh": "重启菜单", "hi": "रीबूट मेनू", "ar": "قائمة إعادة التشغيل"}, "Reboot": {"ru": "Перезагрузка", "ko": "재부팅", "ja": "再起動", "zh": "重启", "hi": "रीबूट", "ar": "إعادة التشغيل"}, "Reboot to Recovery": {"ru": "Перезагрузка в Recovery", "ko": "리커버리로 재부팅", "ja": "リカバリーで再起動", "zh": "重启到 Recovery", "hi": "रिकवरी में रीबूट", "ar": "إعادة التشغيل إلى Recovery"}, "Power off": {"ru": "Выключение", "ko": "전원 끄기", "ja": "電源を切る", "zh": "关机", "hi": "पावर ऑफ़", "ar": "إيقاف التشغيل"}, "Cancel": {"ru": "Отмена", "ko": "취소", "ja": "キャンセル", "zh": "取消", "hi": "रद्द करें", "ar": "إلغاء"}, "Rebooting…": {"ru": "Перезагрузка…", "ko": "재부팅 중…", "ja": "再起動中…", "zh": "正在重启…", "hi": "रीबूट हो रहा है…", "ar": "جارٍ إعادة التشغيل…"}, "Rebooting to Recovery…": {"ru": "Перезагрузка в Recovery…", "ko": "리커버리로 재부팅 중…", "ja": "リカバリーで再起動中…", "zh": "正在重启到 Recovery…", "hi": "रिकवरी में रीबूट हो रहा है…", "ar": "جارٍ إعادة التشغيل إلى Recovery…"}, "Powering off…": {"ru": "Выключение…", "ko": "전원 끄는 중…", "ja": "電源を切っています…", "zh": "正在关机…", "hi": "पावर ऑफ़ हो रहा है…", "ar": "جارٍ إيقاف التشغيل…"}}
+	function t(s) { var d = texts[s]; return (d && d[lang] !== undefined) ? d[lang] : s }
 	readonly property bool landscape: width > height
 	readonly property real u: landscape ? Math.min(width / 36, height / 12) : Math.min(width / 20, height / 24)
 
@@ -79,10 +83,10 @@ Window {
 				columnSpacing: win.u * 0.7
 				rowSpacing: win.u * 0.7
 
-				Big { text: "Reboot"; accent: "#2f7de1"; enabled: !win.busy; onClicked: win.choose("reboot", "Rebooting…") }
-				Big { text: "Reboot to Recovery"; enabled: !win.busy; onClicked: win.choose("recovery", "Rebooting to Recovery…") }
-				Big { text: "Power off"; accent: "#b3392f"; enabled: !win.busy; onClicked: win.choose("poweroff", "Powering off…") }
-				Big { text: "Cancel"; enabled: !win.busy; onClicked: Qt.quit() }
+				Big { text: win.t("Reboot"); accent: "#2f7de1"; enabled: !win.busy; onClicked: win.choose("reboot", win.t("Rebooting…")) }
+				Big { text: win.t("Reboot to Recovery"); enabled: !win.busy; onClicked: win.choose("recovery", win.t("Rebooting to Recovery…")) }
+				Big { text: win.t("Power off"); accent: "#b3392f"; enabled: !win.busy; onClicked: win.choose("poweroff", win.t("Powering off…")) }
+				Big { text: win.t("Cancel"); enabled: !win.busy; onClicked: Qt.quit() }
 			}
 		}
 	}

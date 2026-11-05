@@ -1,0 +1,16 @@
+# M52XQ (v47): PulseAudio as its own user service. pulseaudio.desktop is Hidden (its start-pulseaudio-x11 loaded
+# module-x11-xsmp, which ended PA together with Xwayland), and pmOS ships no pulseaudio user unit, so PA got autospawned by
+# its first client -- pactl in m52xq-call-screen-wake -- and lived in THAT service's cgroup: restarting the service killed PA
+# and kde-telephony-daemon kept a dead canberra context (incoming calls without a ringtone, 2026-11-05).
+[Unit]
+Description=M52XQ: PulseAudio sound server (own service, not inside a client's cgroup)
+Before=graphical-session-pre.target m52xq-call-screen-wake.service m52xq-notify-sound.service m52xq-audio-unstick.service
+ConditionUser=!root
+
+[Service]
+ExecStart=/usr/bin/pulseaudio --daemonize=no --log-target=syslog
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

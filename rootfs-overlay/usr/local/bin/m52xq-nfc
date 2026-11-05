@@ -4,7 +4,8 @@
 # "on" = rfkill unblock + NFC device up + neard (ConstantPoll: reads tags when one is held to the back);
 # "off" = neard stopped, device down, rfkill blocked. Switching needs root: as the user it starts
 # m52xq-nfc@on|off.service (polkit: 50-m52xq-nfc.rules); the state survives a reboot (m52xq-nfc-boot.service).
-is_on() { nfctool -l 2>/dev/null | grep -q "Powered: Yes"; }
+# v47: the switch state, not "Powered" -- m52xq-nfc-poll powers the chip off while the display is off
+is_on() { [ "$(cat /var/lib/m52xq/nfc 2>/dev/null)" = on ]; }
 
 case "$1" in
 status)

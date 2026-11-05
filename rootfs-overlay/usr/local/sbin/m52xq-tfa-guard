@@ -1,0 +1,31 @@
+#!/bin/sh
+# M52XQ (в50): the TFA9878 amplifier is configured over I2C (GPI DMA 900000) when the speaker PCM opens. Now and then the DMA reports
+# "Event without a pending descriptor" and the amplifier stays SILENT although the PCM runs (hw_ptr moves): a ringtone or a
+# message sound was lost at random (2026-11-05: silent call 21:56:21 with the error in the same second, next call without it played).
+# m52xq-voicecall retries for the loud speaker in a call; this does the same for normal playback: re-open the sink on that error.
+export PULSE_SERVER=unix:/run/user/10000/pulse/native PULSE_COOKIE=/home/user/.config/pulse/cookie
+MM=/proc/asound/card0/pcm0p/sub0/status		# MultiMedia1: PulseAudio speaker sink
+VOICE=/proc/asound/card0/pcm5p/sub0/status	# CS-Voice: open during a call, m52xq-voicecall handles the amplifier then
+last=0
+journalctl -k -f -n0 -o cat | while read -r line; do
+	case "$line" in
+	*"Event without a pending descriptor"*) ;;
+	*) continue ;;
+	esac
+	now=$(date +%s)
+	[ $((now - last)) -lt 4 ] && continue
+	last=$now
+	# the error comes while the PCM is being started: give it a moment
+	i=0
+	while [ $i -lt 15 ] && [ "$(awk '/state:/{print $2}' $MM 2>/dev/null)" != RUNNING ]; do sleep 0.1; i=$((i + 1)); done
+	[ "$(awk '/state:/{print $2}' $MM 2>/dev/null)" = RUNNING ] || continue
+	[ "$(head -n1 $VOICE 2>/dev/null)" = closed ] || continue
+	sink=$(pactl list sinks short 2>/dev/null | awk '/platform-sound/{print $2; exit}')
+	[ -n "$sink" ] || continue
+	v=$(pactl get-sink-volume "$sink" 2>/dev/null | awk '/front-left/{print $3}')
+	pactl suspend-sink "$sink" 1
+	sleep 0.3
+	pactl suspend-sink "$sink" 0
+	[ -n "$v" ] && pactl set-sink-volume "$sink" "$v"
+	echo "GPI error at speaker start: sink re-opened, amplifier configured again (volume $v)"
+done

@@ -6,9 +6,11 @@
 # This watches the kernel log: LIMIT WPSS crashes within WINDOW seconds -> recovery off + stop, then after a pause one clean
 # start (pauses 60 s, 5 min, 15 min); still looping after the last pause -> WPSS stays off until a reboot.
 # A start that keeps WPSS running for STABLE seconds resets the pause counter.
+# 2026-11-02: a plain remoteproc "start" of a stopped WPSS dies again with "mhi_issue_request Failed": the WCN6750 chip has to
+# be re-initialised first (Bluetooth driver rebind). The restart is therefore done by m52xq-wpss-restart when it is installed.
 # Test knobs (environment): M52XQ_KMSG (default /dev/kmsg), M52XQ_RP_DIR (default: the remoteproc named "wpss"),
 # M52XQ_PAUSES (comma-separated seconds).
-import os, re, select, time
+import os, re, select, subprocess, time
 
 WINDOW = 60
 LIMIT = 5
@@ -62,7 +64,17 @@ def stop_wpss():
         put("state", "stop")
 
 
+RESTART = os.environ.get("M52XQ_RESTART", "/usr/local/sbin/m52xq-wpss-restart")
+
+
 def start_wpss():
+    if os.access(RESTART, os.X_OK):
+        try:
+            r = subprocess.run([RESTART], capture_output=True, text=True, timeout=120)
+            log("%s: rc %d %s" % (RESTART, r.returncode, (r.stdout or "").strip().splitlines()[-1:] or ""))
+        except (OSError, subprocess.SubprocessError) as e:
+            log("%s failed: %s" % (RESTART, e))
+        return
     if get("state") != "offline":
         put("state", "stop")
     put("recovery", "enabled")

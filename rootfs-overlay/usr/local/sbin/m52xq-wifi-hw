@@ -1,0 +1,22 @@
+#!/bin/sh
+# m52xq: real Wi-Fi power off/on for the quick-settings tile (run as root, via sudoers.d/m52xq-wifi-hw).
+# off: unload ath11k_ahb -> WPSS (Wi-Fi subsystem) is shut down completely (no power at all, unlike rfkill,
+#      with which the WPSS firmware never sleeps).
+# on:  m52xq-wpss-restart (re-init WCN6750 through the Bluetooth driver, then load ath11k_ahb), allow autoconnect.
+case "$1" in
+off)
+	lsmod | grep -q '^ath11k_ahb' && modprobe -r ath11k_ahb
+	echo "m52xq-wifi-hw: off (wpss $(cat /sys/class/remoteproc/remoteproc0/state))" > /dev/kmsg
+	;;
+on)
+	lsmod | grep -q '^ath11k_ahb' || /usr/local/sbin/m52xq-wpss-restart >/dev/null
+	i=0
+	while [ $i -lt 15 ] && ! ip link show wlan0 >/dev/null 2>&1; do sleep 1; i=$((i + 1)); done
+	[ "$(nmcli radio wifi)" = enabled ] || nmcli radio wifi on
+	nmcli dev set wlan0 autoconnect yes 2>/dev/null
+	echo "m52xq-wifi-hw: on (wpss $(cat /sys/class/remoteproc/remoteproc0/state))" > /dev/kmsg
+	;;
+*)
+	echo "usage: $0 on|off" >&2; exit 2
+	;;
+esac

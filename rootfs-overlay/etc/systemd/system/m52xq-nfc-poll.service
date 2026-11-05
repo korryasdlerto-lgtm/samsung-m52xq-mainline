@@ -1,0 +1,9 @@
+[Unit]
+Description=M52XQ: NFC polling only while the display is on
+After=neard.service
+BindsTo=neard.service
+
+[Service]
+ExecStart=/usr/local/sbin/m52xq-nfc-poll
+Restart=on-failure
+RestartSec=5

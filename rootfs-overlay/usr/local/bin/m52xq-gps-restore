@@ -1,0 +1,16 @@
+#!/bin/sh
+# M52XQ: ModemManager does not keep the GNSS location sources across restarts, so after a boot the "Location" tile is
+# off although the user's switch org.gnome.system.location is still on (2026-11-03): turn the GNSS engine back on.
+[ "$(gsettings get org.gnome.system.location enabled 2>/dev/null)" = true ] || exit 0
+i=0
+while [ $i -lt 60 ]; do
+	for m in $(mmcli -L 2>/dev/null | grep -o "Modem/[0-9]*" | cut -d/ -f2); do
+		if mmcli -m $m --location-status 2>/dev/null | grep -q "capabilities:.*gps-raw"; then
+			exec /usr/local/bin/m52xq-gps on
+		fi
+	done
+	sleep 2
+	i=$((i + 1))
+done
+echo "m52xq-gps-restore: no modem with a GNSS engine after 120 s" >&2
+exit 1

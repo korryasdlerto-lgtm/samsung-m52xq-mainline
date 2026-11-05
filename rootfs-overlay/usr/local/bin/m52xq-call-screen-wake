@@ -5,6 +5,8 @@
 # (journalctl --user -u m52xq-call-screen-wake). Our own notification sounds (paplay) and other apps are ignored.
 export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
 RT="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+RAISE_JS=/usr/local/share/m52xq/m52xq-raise-dialer.js
+RAISE_TG_JS=/usr/local/share/m52xq/m52xq-raise-telegram.js
 pactl subscribe 2>/dev/null | while read -r line; do
 	case "$line" in
 	*"'new' on sink-input #"*) ;;
@@ -17,14 +19,56 @@ pactl subscribe 2>/dev/null | while read -r line; do
 		/^Sink Input #/ { f = 0 }
 		f && (/application.name/ || /application.process.binary/) { gsub(/^[ \t]+/, ""); printf "%s; ", $0 }')
 	echo "new sound stream #$idx: $info"
+	# v47: also the GSM ringtone of the phone app (kde-telephony-daemon / plasma-dialer): the dialer does not switch the
+	# display on by itself, and m52xq-notify-screen-wake keeps it off for notifications -- an incoming call rang with a
+	# dark screen and could only be answered from the notification (2026-11-05)
 	case "$info" in
-	*Telegram*) ;;
+	*Telegram*) who=Telegram ;;
+	*kde-telephony-daemon* | *plasma-dialer*) who=phone ;;
 	*) continue ;;
 	esac
 	# the same hand-over to m52xq-wifi-dark as for a notification: this wake-up brought something for the user, stay awake
 	touch "$RT/m52xq-notify-woke"
 	if kscreen-doctor --dpms show 2>/dev/null | grep -q ': off'; then
 		kscreen-doctor --dpms on >/dev/null 2>&1
-		echo "Telegram sound: display on"
+		echo "$who sound: display on"
 	fi
+	# v47: a ringing GSM call must show the dialer window. With an UNLOCKED screen kde-telephony-daemon starts no window (only
+	# a notification with Accept/Decline), and a dialer that is already running keeps its window minimised. So: start
+	# plasma-dialer if needed, then un-minimise + activate its window through a KWin script -- once per incoming call.
+	# v47: Telegram call window. A Telegram sound still playing after 2 s is the ringtone (message sounds are shorter): show
+	# the call window through a KWin script (KWin refuses Telegram's own activation while locked); once per minute at most.
+	if [ "$who" = Telegram ]; then
+		(
+			sleep 2
+			pactl list sink-inputs short 2>/dev/null | grep -q "^$idx[[:space:]]" || exit 0
+			now=$(date +%s); last=$(cat "$RT/m52xq-tg-raised" 2>/dev/null || echo 0)
+			[ $((now - last)) -lt 60 ] && exit 0
+			echo "$now" > "$RT/m52xq-tg-raised"
+			Q=/usr/lib/qt6/bin/qdbus
+			id=$($Q org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript "$RAISE_TG_JS" m52xq-raise-telegram 2>/dev/null)
+			[ -n "$id" ] && $Q org.kde.KWin "/Scripting/Script$id" org.kde.kwin.Script.run >/dev/null 2>&1
+			sleep 1
+			$Q org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript m52xq-raise-telegram >/dev/null 2>&1
+			echo "Telegram ringtone (stream #$idx): call window raised (kwin script id ${id:-none})"
+		) &
+		continue
+	fi
+	[ "$who" = phone ] || continue
+	call=$(for m in $(timeout 5 mmcli -L 2>/dev/null | sed -n 's|.*/Modem/\([0-9]*\) .*|\1|p'); do
+		timeout 5 mmcli -m "$m" --voice-list-calls 2>/dev/null; done | sed -n 's|.*/Call/\([0-9]*\) incoming (ringing-in).*|\1|p' | head -n1)
+	[ -n "$call" ] || continue
+	[ "$(cat "$RT/m52xq-call-raised" 2>/dev/null)" = "$call" ] && continue
+	echo "$call" > "$RT/m52xq-call-raised"
+	if ! pidof plasma-dialer >/dev/null 2>&1; then
+		setsid plasma-dialer >/dev/null 2>&1 &
+		echo "call $call: plasma-dialer started"
+		sleep 2
+	fi
+	Q=/usr/lib/qt6/bin/qdbus
+	id=$($Q org.kde.KWin /Scripting org.kde.kwin.Scripting.loadScript "$RAISE_JS" m52xq-raise-dialer 2>/dev/null)
+	[ -n "$id" ] && $Q org.kde.KWin "/Scripting/Script$id" org.kde.kwin.Script.run >/dev/null 2>&1
+	sleep 1
+	$Q org.kde.KWin /Scripting org.kde.kwin.Scripting.unloadScript m52xq-raise-dialer >/dev/null 2>&1
+	echo "call $call: dialer window raised (kwin script id ${id:-none})"
 done

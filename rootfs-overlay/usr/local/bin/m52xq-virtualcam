@@ -9,8 +9,10 @@
 import os, signal, subprocess, sys, time
 
 DEVS = {'front': '/dev/video20', 'rear': '/dev/video21'}
-FRONT_ID = '/base/soc/cci@ac4b000/i2c-bus@0/camera@1a'	# imx616
-REAR_ID = '/base/soc/cci@ac4a000/i2c-bus@0/camera@2d'	# s5kgw3
+# libcamera camera id = DT path: /base/soc/... with the old downstream DT, /base/soc@0/... with the upstream-style DT (v47)
+_SOC = 'soc@0' if os.path.isdir('/proc/device-tree/soc@0') else 'soc'
+FRONT_ID = '/base/%s/cci@ac4b000/i2c-bus@0/camera@1a' % _SOC	# imx616
+REAR_ID = '/base/%s/cci@ac4a000/i2c-bus@0/camera@2d' % _SOC	# s5kgw3
 
 CONF = '/etc/m52xq-virtualcam.conf'
 SLEEP_FLAG = '/run/m52xq-camera-sleep'	# set by the sleep hook m52xq-camera-sleep.sh: no real camera while the system sleeps

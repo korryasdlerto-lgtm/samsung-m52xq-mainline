@@ -6,14 +6,17 @@
 # Runs as ExecStartPost of usb-signaller.service: for up to 30 s, if the Type-C
 # port's data role is host but the role switch is not, put host back. With a PC
 # or charger attached the port is "device" and nothing is touched.
+# v47: the role switch is "a600000.ssusb-role-switch" with the old downstream DT
+# and "a600000.usb-role-switch" with the upstream-style DT; look it up on every
+# pass (it may register after this script starts).
 PORT=/sys/class/typec/port0/data_role
-URS=/sys/class/usb_role/a600000.ssusb-role-switch/role
 
 i=0
 while [ $i -lt 30 ]; do
 	sleep 1
 	i=$((i + 1))
-	[ -r "$PORT" ] && [ -w "$URS" ] || continue
+	URS=$(ls /sys/class/usb_role/a600000.*-role-switch/role 2>/dev/null | head -n 1)
+	[ -r "$PORT" ] && [ -n "$URS" ] && [ -w "$URS" ] || continue
 	case "$(cat "$PORT")" in
 	*"[host]"*) ;;
 	*) continue ;;

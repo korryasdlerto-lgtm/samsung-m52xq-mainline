@@ -5,10 +5,10 @@ postmarketOS + KDE Plasma Mobile on a **mainline Linux kernel** for the
 Qualcomm Snapdragon 778G / SM7325, platform "yupik").
 
 Not Halium, not libhybris, not the Android kernel: the phone runs a mainline
-Linux 7.1.2 kernel with device drivers and fixes, and a normal Linux
+Linux 7.1.13 kernel with device drivers and fixes, and a normal Linux
 userspace. Tested on one SM-M526B. Personal, unofficial project.
 
-**Status (release "unofficial v1", 2026-11-01): a daily-usable
+**Status (release "unofficial v2", 2026-11-05, see [changes from v1](docs/CHANGES-v1-to-v2.md)): a daily-usable
 Linux phone** - calls, SMS, mobile data on two SIMs, Wi-Fi, Bluetooth,
 GPU-accelerated UI, sound, GPS, sensors, cameras, deep sleep that wakes for
 calls, SMS and Telegram messages.
@@ -18,7 +18,7 @@ calls, SMS and Telegram messages.
 | | |
 |---|---|
 | This repository | installer, rootfs overlay (scripts, services, configs), patched package recipes, device tree, documentation |
-| Kernel | [sc7280-mainline-linux-m52xq](https://github.com/korryasdlerto-lgtm/sc7280-mainline-linux-m52xq), branch `master` = the kernel in v44 (7.1.2 #437), config `arch/arm64/configs/m52xq_defconfig` |
+| Kernel | [sc7280-mainline-linux-m52xq](https://github.com/korryasdlerto-lgtm/sc7280-mainline-linux-m52xq), branch `master` = the kernel in v2 (7.1.13 #442), config `arch/arm64/configs/m52xq_defconfig` |
 | Kernel binaries | [release v44-kernel-437](https://github.com/korryasdlerto-lgtm/sc7280-mainline-linux-m52xq/releases/tag/v44-kernel-437): boot.img of v1 (without the IPA firmware), Image, appended DTB, modules, vendor_boot, config |
 
 ## What works
@@ -54,7 +54,7 @@ calls, SMS and Telegram messages.
 - Hardware video encoding / decoding (Venus, vpu-2.0): the Venus driver of the
   kernel repository (`drivers/media/platform/qcom/venus`, with `secure.c` for
   the secure non-pixel buffer the m52xq firmware needs), built as modules
-  (`CONFIG_VIDEO_QCOM_VENUS=m`) and installed to `/usr/lib/modules/7.1.2/extra/venus`.
+  (`CONFIG_VIDEO_QCOM_VENUS=m`) and installed to `/usr/lib/modules/7.1.13/extra/venus`.
   The Venus firmware is not in this repository.
 - Second path, experimental: Qualcomm GPL camera driver + CamX userspace
   (`camx/`). Step 1 is done (the driver builds against our kernel and binds on
@@ -79,7 +79,7 @@ calls, SMS and Telegram messages.
 Requirements: unlocked bootloader, TWRP for m52xq, a microSD card with the
 zips, backups of EFS, persist, modem, boot, vendor_boot and vbmeta.
 
-- Flashable zip (1.9 GB): [postmarketos-m52xq-mainline-plasma-unofficial-v1.zip](https://drive.google.com/file/d/144tpTxWZ9abbORYdreZ5RAORVHYxRKRO/view?usp=sharing), md5 `f26412c368728f5a061da137dd3a542a`
+- Flashable zip (1.9 GB): [postmarketos-m52xq-mainline-plasma-unofficial-v2-50.zip](https://drive.google.com/file/d/1wb-yCNfqBNN3Js4yHMrzy68bpGtp389x/view?usp=sharing), md5 `ce6903082a6632d9ff209262dd317748`
 - Video guide: <https://www.youtube.com/watch?v=Kg9ajKq3kkw>
 
 Flash **UN1CA_3.1.0** first to get the maximum system partition size (the
@@ -89,7 +89,7 @@ After LineageOS 23 the partition is 1 GB smaller, but the install still works.
 TWRP steps:
 
 ```
-Wipe - Format Data - yes - enter - Back - Back - Advanced Wipe - Data - Repair or Change File System - Change File System - EXT4 - Swipe to Change - Back - Back - Back - Back - Back - Install - Select Storage - Micro SD card - UN1CA_3.1.0-a5bf09f2_20260604_m52xq-sign.zip - Swipe to confirm Flash - Back - Back - Wipe - Format Data - enter - Back - Back - Advanced Wipe - Data - Repair or Change File System - Change File System - EXT4 - Swipe to Change - Back - Back - Back - Back - Back - Install - postmarketos-m52xq-mainline-plasma-unofficial-v1.zip - Swipe to confirm Flash - Reboot System
+Wipe - Format Data - yes - enter - Back - Back - Advanced Wipe - Data - Repair or Change File System - Change File System - EXT4 - Swipe to Change - Back - Back - Back - Back - Back - Install - Select Storage - Micro SD card - UN1CA_3.1.0-a5bf09f2_20260604_m52xq-sign.zip - Swipe to confirm Flash - Back - Back - Wipe - Format Data - enter - Back - Back - Advanced Wipe - Data - Repair or Change File System - Change File System - EXT4 - Swipe to Change - Back - Back - Back - Back - Back - Install - postmarketos-m52xq-mainline-plasma-unofficial-v2-50.zip - Swipe to confirm Flash - Reboot System
 ```
 
 The installer writes boot and vendor_boot, writes the rootfs to `system` and puts

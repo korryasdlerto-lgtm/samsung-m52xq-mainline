@@ -1,57 +1,13 @@
-Files of the v44 installer overlay (mainline-extras/rootfs-files) that are NOT in this repository.
+Files of the v2 installer overlay (mainline-extras/rootfs-files) that are NOT in this repository.
 Proprietary firmware and sensor configs come from the phone itself or from the stock firmware;
 binaries are built from packages/ (pmaports recipes with our patches) or are unmodified upstream builds.
 
+etc/m52xq-sensorspd-enable	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
 etc/m52xq-touch-inhibit	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
 home/user/Music/.keep	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
 lib/firmware/a660_gmu.bin	proprietary firmware / sensor config / kernel module	55256	179caf2e3b7d5481c3567c2987f5be32
 lib/firmware/a660_sqe.fw	proprietary firmware / sensor config / kernel module	40496	08b7662ccd6815333aed6bce9bd69bd7
-lib/firmware/a660_zap.b00	proprietary firmware / sensor config / kernel module	148	61aa5785be8a4f16715395e740847347
-lib/firmware/a660_zap.b01	proprietary firmware / sensor config / kernel module	6560	83ed1481ae9d3b8b6d72e09b11cfe0be
-lib/firmware/a660_zap.b02	proprietary firmware / sensor config / kernel module	1976	e1341c9fa6f3b4d55ec0ecca0980198f
-lib/firmware/a660_zap.mdt	proprietary firmware / sensor config / kernel module	6708	b997f86a3316f666d198d75a87661b51
-lib/firmware/adsp.b00	proprietary firmware / sensor config / kernel module	1204	949898161b34f34c153f0e99f46f8716
-lib/firmware/adsp.b01	proprietary firmware / sensor config / kernel module	8144	4fdc0ac2444c6b83ddb3cc8b6d881b14
-lib/firmware/adsp.b02	proprietary firmware / sensor config / kernel module	7496	15d33e8159ed2e26f884534eba072e96
-lib/firmware/adsp.b03	proprietary firmware / sensor config / kernel module	2663560	8e58c8f40ed4f573eaee319db9a3ca56
-lib/firmware/adsp.b04	proprietary firmware / sensor config / kernel module	26876	a2a5701d62682f9ed5a60fd7cb4ebc4e
-lib/firmware/adsp.b05	proprietary firmware / sensor config / kernel module	28512	9cd6a97395a2aa4a4ffd8757b58a3f92
-lib/firmware/adsp.b06	proprietary firmware / sensor config / kernel module	1096	be1fe07c15d077ee2b2c3f083ab75b3a
-lib/firmware/adsp.b07	proprietary firmware / sensor config / kernel module	409600	0c9e54f364937fc38a46c51750e7cd81
-lib/firmware/adsp.b08	proprietary firmware / sensor config / kernel module	1092	b3bd8419f1dff94efb6d20143fdda0d3
-lib/firmware/adsp.b09	proprietary firmware / sensor config / kernel module	2660	b7a6dc8b1045beee6c73cee38c829f38
-lib/firmware/adsp.b10	proprietary firmware / sensor config / kernel module	2045192	acbb76e8a635b302fcf6f331093986f5
-lib/firmware/adsp.b11	proprietary firmware / sensor config / kernel module	174048	5e913299e4674633a40c40bbf15e6dcb
-lib/firmware/adsp.b12	proprietary firmware / sensor config / kernel module	3056	079e3800aaf5e0aa45a23427f8d52614
-lib/firmware/adsp.b13	proprietary firmware / sensor config / kernel module	5548	43cc696081c5bdce8e1ff42d3fcacc3e
-lib/firmware/adsp.b14	proprietary firmware / sensor config / kernel module	101792	385f4450cc184c3ef2669f60aa81dba7
-lib/firmware/adsp.b15	proprietary firmware / sensor config / kernel module	81320	7c5448d5b7353cdb003e21e07e0c59fb
-lib/firmware/adsp.b16	proprietary firmware / sensor config / kernel module	774144	cb5558e9f01585f52f67b98ad8c17182
-lib/firmware/adsp.b17	proprietary firmware / sensor config / kernel module	1462776	a0c12f53fb1cbc66a4af143ad9f4dcb4
-lib/firmware/adsp.b18	proprietary firmware / sensor config / kernel module	278532	5345d8fa06f63a1be76457e76ff8008b
-lib/firmware/adsp.b19	proprietary firmware / sensor config / kernel module	15587	aba1916fc092f21f8c297dd3c72eee86
-lib/firmware/adsp.b20	proprietary firmware / sensor config / kernel module	13224	03d81330cd0118fa7f91ea1baac5751f
-lib/firmware/adsp.b21	proprietary firmware / sensor config / kernel module	1572	a304628087169edb4d629ba72405d805
-lib/firmware/adsp.b22	proprietary firmware / sensor config / kernel module	38944	1c325bd464436bcacbbd5017defbbfba
-lib/firmware/adsp.b23	proprietary firmware / sensor config / kernel module	50276	78481e4867b5bc7b8c04418a98ae8683
-lib/firmware/adsp.b24	proprietary firmware / sensor config / kernel module	353580	037b5c101068de60f1ec16ceca4c8a67
-lib/firmware/adsp.b25	proprietary firmware / sensor config / kernel module	207480	081e1bdf8c7aac26525dee4631012458
-lib/firmware/adsp.b26	proprietary firmware / sensor config / kernel module	9598320	8c50eaa8816b65fb453abf8b5077c7bb
-lib/firmware/adsp.b27	proprietary firmware / sensor config / kernel module	964280	ade4185e3ab2c78124669184a20c73cd
-lib/firmware/adsp.b29	proprietary firmware / sensor config / kernel module	8088	89f5c0eac206f70378bb61608c5b20fb
-lib/firmware/adsp.b30	proprietary firmware / sensor config / kernel module	220936	cea1ad5343af696f99ad361f390ad119
-lib/firmware/adsp.b31	proprietary firmware / sensor config / kernel module	8020	475ec261195f7d6d13427c320316e3cb
-lib/firmware/adsp.b32	proprietary firmware / sensor config / kernel module	1477	87381add68fb5499912b3480d44d8afb
-lib/firmware/adsp.b33	proprietary firmware / sensor config / kernel module	40989	cb9691c0411bd30d5cff569e9cfb020f
-lib/firmware/adsp.b34	proprietary firmware / sensor config / kernel module	371408	4cda7b3c9983ec054092fe149fa624e6
-lib/firmware/adsp.mdt	proprietary firmware / sensor config / kernel module	9348	7c486c09dcd3114240ce74c3a84c5945
-lib/firmware/adspr.jsn	proprietary firmware / sensor config / kernel module	513	5d262bb7661402a8d7ca9724bbb45d46
-lib/firmware/adsps.jsn	proprietary firmware / sensor config / kernel module	515	cddb328503f04c634cc3251b89dad765
-lib/firmware/adspua.jsn	proprietary firmware / sensor config / kernel module	703	a43d66d0549e33cf421e25be06260ce0
 lib/firmware/ath11k/WCN6750/hw1.0/board-2.bin	proprietary firmware / sensor config / kernel module	928004	b5e5ed0a28ee415682e741789bc781f1
-lib/firmware/qca/msbtfw11.mbn	proprietary firmware / sensor config / kernel module	184620	b44f10e137755899a6aa29dc1320c870
-lib/firmware/qca/msbtfw11.tlv	proprietary firmware / sensor config / kernel module	172044	050dab288e34c179fe9c50b2f07be295
-lib/firmware/qca/msnv11.bin	proprietary firmware / sensor config / kernel module	6213	3e92b545e48838bc72e49e408217607e
 lib/firmware/qcom/sm7325/samsung/m52xq/Global_cal.acdb	proprietary firmware / sensor config / kernel module	41132	96c04a80f89088a18d4c6cec736ce5eb
 lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_16k.bin	proprietary firmware / sensor config / kernel module	4972	d857ad33993a0409c8bf82f7272a97ad
 lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_48k.bin	proprietary firmware / sensor config / kernel module	4972	c71043d5c09986d6b1e76f6c07bdf163
@@ -60,13 +16,13 @@ lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_bt_16k.bin	proprietary fi
 lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_bt_48k.bin	proprietary firmware / sensor config / kernel module	5012	6676dee0755a36c5c06b70187799859a
 lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_bt_8k.bin	proprietary firmware / sensor config / kernel module	4956	28a1dba996b189f51698804e7faad6ea
 lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_handset_16k.bin	proprietary firmware / sensor config / kernel module	4972	d857ad33993a0409c8bf82f7272a97ad
-lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_handset_48k.bin	proprietary firmware / sensor config / kernel module	4972	c71043d5c09986d6b1e76f6c07bdf163
+lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_handset_48k.bin	proprietary firmware / sensor config / kernel module	3528	932b567f96acc889dbfa4aa547bcb137
 lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_handset_8k.bin	proprietary firmware / sensor config / kernel module	4972	d46d1e07c8941a3c8ad2dc8b875c0711
 lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_headset_16k.bin	proprietary firmware / sensor config / kernel module	4888	a2dfd67d2bdb0f9dcbf9953ac6704faa
 lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_headset_48k.bin	proprietary firmware / sensor config / kernel module	4888	329c4b606a333580d74391294d5f6b27
 lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_headset_8k.bin	proprietary firmware / sensor config / kernel module	4888	190ad6a39de450d5eb279eaad38052f5
 lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_speaker_16k.bin	proprietary firmware / sensor config / kernel module	4972	0d44cf969ebfb7f67e500c532f1ef58d
-lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_speaker_48k.bin	proprietary firmware / sensor config / kernel module	4972	65f5e108538a84d51a2c73e967cdde9d
+lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_speaker_48k.bin	proprietary firmware / sensor config / kernel module	3528	e3495f75b04fe2a906b387da05234c45
 lib/firmware/qcom/sm7325/samsung/m52xq/m52xq_voice_cal_speaker_8k.bin	proprietary firmware / sensor config / kernel module	4972	eff4ccf88d6c5a6df80e0ec631f4a7fb
 lib/firmware/wpss.b00	proprietary firmware / sensor config / kernel module	340	74b8a6f8da0f89be113b6ee55967d031
 lib/firmware/wpss.b01	proprietary firmware / sensor config / kernel module	6848	e2d0f978dccbd5cc8148e17826af4f36
@@ -77,12 +33,6 @@ lib/firmware/wpss.b05	proprietary firmware / sensor config / kernel module	23243
 lib/firmware/wpss.b06	proprietary firmware / sensor config / kernel module	266684	b7349153a65e950d923f75ce21bdbbc1
 lib/firmware/wpss.b07	proprietary firmware / sensor config / kernel module	1176368	ab56807567cec6891cc7f407d0702e95
 lib/firmware/wpss.mdt	proprietary firmware / sensor config / kernel module	7188	4c4c5e4f58cb4d10dbee68be801008a1
-lib/firmware/yupik_ipa_fws.b00	proprietary firmware / sensor config / kernel module	212	942e702e212f0dc36cba2d2aa917a543
-lib/firmware/yupik_ipa_fws.b01	proprietary firmware / sensor config / kernel module	6656	7a990dff9006b58d7df6fdeb27a703c3
-lib/firmware/yupik_ipa_fws.b02	proprietary firmware / sensor config / kernel module	15360	fcd628f07ef2cb759e00a432f2927c22
-lib/firmware/yupik_ipa_fws.b03	proprietary firmware / sensor config / kernel module	128	f012db03ebbde9ce8650993112ee430b
-lib/firmware/yupik_ipa_fws.b04	proprietary firmware / sensor config / kernel module	840	2f27bb0f29d7aff232444f9e93b42e95
-lib/firmware/yupik_ipa_fws.mdt	proprietary firmware / sensor config / kernel module	6868	e884b4c56f12fecf5970124fd385b702
 lib/modules/7.1.2/extra/v4l2loopback.ko	proprietary firmware / sensor config / kernel module	586016	4a2fcb0bb3f7ff07796f3c3f46043366
 lib/modules/7.1.2/kernel/drivers/net/wireless/ath/ath11k/ath11k_ahb.ko	proprietary firmware / sensor config / kernel module	675360	0eb4cbdfd20d497dce87f50e3d787bb9
 lib/modules/7.1.2/modules.alias	proprietary firmware / sensor config / kernel module	397	5d9bf2d5dc67dce5e93a628984d14ca6
@@ -192,20 +142,6 @@ usr/lib/ModemManager/libmm-shared-quectel.so	binary built from the recipes in pa
 usr/lib/ModemManager/libmm-shared-sierra.so	binary built from the recipes in packages/ or upstream	67272	81e9ec66d1ea022f8a1bad64250e4643
 usr/lib/ModemManager/libmm-shared-telit.so	binary built from the recipes in packages/ or upstream	132808	4d062902da81b180fd66a5506591a3ef
 usr/lib/ModemManager/libmm-shared-xmm.so	binary built from the recipes in packages/ or upstream	67192	6dd49cd8b2380a45f1c07e883c0f394e
-usr/lib/firmware/qcom/vpu-2.0/venus.b00	proprietary firmware / sensor config / kernel module	692	86a9e18d8320043a2f58ee0f6af0fe17
-usr/lib/firmware/qcom/vpu-2.0/venus.b01	proprietary firmware / sensor config / kernel module	7376	b0abb53e8ddf41fd0545e941a012191a
-usr/lib/firmware/qcom/vpu-2.0/venus.b02	proprietary firmware / sensor config / kernel module	300	b0f069bbecdeba4a23d0d65c96ce9367
-usr/lib/firmware/qcom/vpu-2.0/venus.b03	proprietary firmware / sensor config / kernel module	20	cb24261b83d97279f0dbfa45c42c01c2
-usr/lib/firmware/qcom/vpu-2.0/venus.b04	proprietary firmware / sensor config / kernel module	20	f3b3bb898b95440b391d0f7c25086397
-usr/lib/firmware/qcom/vpu-2.0/venus.b05	proprietary firmware / sensor config / kernel module	20	f05c4f03a9283589091c31be065c6fed
-usr/lib/firmware/qcom/vpu-2.0/venus.b06	proprietary firmware / sensor config / kernel module	20	d81a5c71adbe6aae61e4b4a8e121e446
-usr/lib/firmware/qcom/vpu-2.0/venus.b07	proprietary firmware / sensor config / kernel module	24	eb667b725e1602ba8b9300293a4a2272
-usr/lib/firmware/qcom/vpu-2.0/venus.b08	proprietary firmware / sensor config / kernel module	16	ec2d6ced2030acafa2b680b83eb3ab63
-usr/lib/firmware/qcom/vpu-2.0/venus.b09	proprietary firmware / sensor config / kernel module	939472	4ea414b0867e1c98dfb2cb82f5c9f3df
-usr/lib/firmware/qcom/vpu-2.0/venus.b10	proprietary firmware / sensor config / kernel module	43120	7a667e5dbf60ce5b2f0fcef90f23221d
-usr/lib/firmware/qcom/vpu-2.0/venus.b19	proprietary firmware / sensor config / kernel module	32	0d68af0904dd698b16ffc9cd28b9b0c8
-usr/lib/firmware/qcom/vpu-2.0/venus.mbn	proprietary firmware / sensor config / kernel module	8068	e092b4f8671c174dd3a773ea894ac96f
-usr/lib/firmware/qcom/vpu-2.0/venus.mdt	proprietary firmware / sensor config / kernel module	8068	e092b4f8671c174dd3a773ea894ac96f
 usr/lib/girepository-1.0/ModemManager-1.0.typelib	binary built from the recipes in packages/ or upstream	353144	6d9b061d586c2d035e30b3599e84266d
 usr/lib/gstreamer-1.0/libgstlibcamera.so	binary built from the recipes in packages/ or upstream	198952	5ecbd98ed3e116358142560e600e8c1b
 usr/lib/libKirigami.so.6.30.0	binary built from the recipes in packages/ or upstream	266672	f786d504b7b22e80919ead4bc60e5957
@@ -240,13 +176,11 @@ usr/lib/libcamera.so.0.7.2	binary built from the recipes in packages/ or upstrea
 usr/lib/libcamera/ipa/ipa_mali_c55.so	binary built from the recipes in packages/ or upstream	329640	260540e3af880561857123185575d20f
 usr/lib/libcamera/ipa/ipa_mali_c55.so.sign	binary built from the recipes in packages/ or upstream	256	fbca5cfc084b04b45d25b3f94fbca51c
 usr/lib/libcamera/ipa/ipa_rkisp1.so	binary built from the recipes in packages/ or upstream	526248	0cdd10a573b28a2c41c3792bbc0f51af
-usr/lib/libcamera/ipa/ipa_rkisp1.so.sign	binary built from the recipes in packages/ or upstream	256	48aae95707d6f494c1918f96ee91c458
 usr/lib/libcamera/ipa/ipa_rpi_pisp.so	binary built from the recipes in packages/ or upstream	591784	39c634ad563c25c2e559e6e0fd37a12b
 usr/lib/libcamera/ipa/ipa_rpi_pisp.so.sign	binary built from the recipes in packages/ or upstream	256	d36819ac3e8b7594cbc105c6125d0b81
 usr/lib/libcamera/ipa/ipa_rpi_vc4.so	binary built from the recipes in packages/ or upstream	591784	251ad7edd94c64174b81ea18a5155575
 usr/lib/libcamera/ipa/ipa_rpi_vc4.so.sign	binary built from the recipes in packages/ or upstream	256	be1df97c9ba1c0e51f2e5db6ce647513
 usr/lib/libcamera/ipa/ipa_soft_simple.so	binary built from the recipes in packages/ or upstream	198576	c30bbbdb29849a620cbd762c497554f6
-usr/lib/libcamera/ipa/ipa_soft_simple.so.sign	binary built from the recipes in packages/ or upstream	256	999cadfc0ca8645f73359a12adacb914
 usr/lib/libdng.so.1.2.0	binary built from the recipes in packages/ or upstream	67400	3edcb13477640b5e085ed4697cda48b2
 usr/lib/libexec/kde-telephony-daemon	binary built from the recipes in packages/ or upstream	267640	282cbcf0635dad271099364183eb9e58
 usr/lib/libexec/modem-daemon	binary built from the recipes in packages/ or upstream	266520	54404a7212016986d734d971dfb6cea1
@@ -262,12 +196,50 @@ usr/lib/libqrtr.so.1	binary built from the recipes in packages/ or upstream	6737
 usr/lib/libqrtr.so.1.2	binary built from the recipes in packages/ or upstream	67376	324c15d97f6477aad5f42b92db5d69c2
 usr/lib/libssc.so.2	binary built from the recipes in packages/ or upstream	133016	e21b1925bfeb1bf2c063150d233cf669
 usr/lib/m52xq/libssc.so.2	binary built from the recipes in packages/ or upstream	133016	e828fb6ca0fb2ddc1df5a7ac4a39c202
+usr/lib/modules/7.1.13/extra/v4l2loopback.ko	proprietary firmware / sensor config / kernel module	586288	517e5e37f820787f9e3aa2da9e7900d9
+usr/lib/modules/7.1.13/extra/venus/v4l2-mem2mem.ko	proprietary firmware / sensor config / kernel module	474656	a3eb093314989970a2dd0573af34f675
+usr/lib/modules/7.1.13/extra/venus/venus-core.ko	proprietary firmware / sensor config / kernel module	3494712	66e37be242a191fd03ac4b6c945e6480
+usr/lib/modules/7.1.13/extra/venus/venus-dec.ko	proprietary firmware / sensor config / kernel module	762528	080cf3d8c93bcbeb6fab3ffc7140115e
+usr/lib/modules/7.1.13/extra/venus/venus-enc.ko	proprietary firmware / sensor config / kernel module	766840	3e4ccc60aa83995cc4520660b028f5b4
+usr/lib/modules/7.1.13/extra/venus/videobuf2-dma-contig.ko	proprietary firmware / sensor config / kernel module	326688	5367cb66e7f0612ad2d1423b9e5d990c
+usr/lib/modules/7.1.13/kernel/drivers/gpu/drm/panel/panel-novatek-nt37701.ko	proprietary firmware / sensor config / kernel module	28416	afc0f2c7381006140795dee59482a50a
+usr/lib/modules/7.1.13/kernel/drivers/input/touchscreen/focaltech_touch/fts_tp.ko	proprietary firmware / sensor config / kernel module	234104	0f91f47d63120a6de05e9f07e551685a
+usr/lib/modules/7.1.13/kernel/drivers/input/touchscreen/focaltech_touch_ft3658u/focaltech_ts.ko	proprietary firmware / sensor config / kernel module	129808	6276538707c12d05514df858c22c61de
+usr/lib/modules/7.1.13/kernel/drivers/media/common/videobuf2/videobuf2-dma-contig.ko	proprietary firmware / sensor config / kernel module	21080	7b9e276cd582bc2cc708dcfdf3cbc9df
+usr/lib/modules/7.1.13/kernel/drivers/media/i2c/gc02m1b.ko	proprietary firmware / sensor config / kernel module	25800	e2593a846bd5236d3ec504b451ee6bc2
+usr/lib/modules/7.1.13/kernel/drivers/media/platform/qcom/venus/venus-core.ko	proprietary firmware / sensor config / kernel module	198592	d6689434625495140e741fbf80982f46
+usr/lib/modules/7.1.13/kernel/drivers/media/platform/qcom/venus/venus-dec.ko	proprietary firmware / sensor config / kernel module	42232	6ac49fee6f7c3e4f1ed0b6061bdb9c30
+usr/lib/modules/7.1.13/kernel/drivers/media/platform/qcom/venus/venus-enc.ko	proprietary firmware / sensor config / kernel module	41080	97685f4553844eccb803e4596aa3494e
+usr/lib/modules/7.1.13/kernel/drivers/media/v4l2-core/v4l2-mem2mem.ko	proprietary firmware / sensor config / kernel module	52400	1e5c3dc46a489e66ae5b078f4c9281ff
+usr/lib/modules/7.1.13/kernel/drivers/net/wireless/ath/ath11k/ath11k_ahb.ko	proprietary firmware / sensor config / kernel module	37984	31bfd4a5f0f2c388d55e6806f60146d0
+usr/lib/modules/7.1.13/kernel/drivers/pci/pwrctrl/pci-pwrctrl-tc9563.ko	proprietary firmware / sensor config / kernel module	15912	109b72b4cd2e4e2d343573d72ec86efd
+usr/lib/modules/7.1.13/kernel/drivers/power/sequencing/pwrseq-qcom-wcn.ko	proprietary firmware / sensor config / kernel module	22560	dca06b0c0ab83b92a1eaef053f30a868
+usr/lib/modules/7.1.13/kernel/drivers/regulator/wl2864c-regulator.ko	proprietary firmware / sensor config / kernel module	16904	66cd61a63bea3c4312b8a370a6b3b8ac
+usr/lib/modules/7.1.13/kernel/drivers/soc/qcom/m52xq-icp.ko	proprietary firmware / sensor config / kernel module	38848	889dc2439b0710831192915581d15d6b
+usr/lib/modules/7.1.13/kernel/net/ipv4/ip_tunnel.ko	proprietary firmware / sensor config / kernel module	35544	c33778add9792b6a9464de3e527bbfe5
+usr/lib/modules/7.1.13/kernel/net/ipv4/tunnel4.ko	proprietary firmware / sensor config / kernel module	10216	af511184279afc8128574103ee245e1f
+usr/lib/modules/7.1.13/kernel/net/ipv6/sit.ko	proprietary firmware / sensor config / kernel module	37552	fad890a4728ee478b5a47656fce197c0
+usr/lib/modules/7.1.13/modules.alias	proprietary firmware / sensor config / kernel module	3214	2c4c63ef71922e573c0779d69b0c1a15
+usr/lib/modules/7.1.13/modules.alias.bin	proprietary firmware / sensor config / kernel module	2942	cc536b8dcda6e09dfa6cd072c03076da
+usr/lib/modules/7.1.13/modules.builtin	proprietary firmware / sensor config / kernel module	19444	23ff8ded6cfe21691602869bb82ac349
+usr/lib/modules/7.1.13/modules.builtin.alias.bin	proprietary firmware / sensor config / kernel module	180430	c1325d7087815326488ff1ae4b613d0f
+usr/lib/modules/7.1.13/modules.builtin.bin	proprietary firmware / sensor config / kernel module	21227	1d94e7fd85343ac7447e6250a7c9ca5e
+usr/lib/modules/7.1.13/modules.builtin.modinfo	proprietary firmware / sensor config / kernel module	292736	5e05212522923ad23766c36f7ef9be2f
+usr/lib/modules/7.1.13/modules.dep	proprietary firmware / sensor config / kernel module	1280	dcdf5e2404c7af8696daf088034461e3
+usr/lib/modules/7.1.13/modules.dep.bin	proprietary firmware / sensor config / kernel module	2122	82ea1d0c95f4197eff3d7403e6a71fd7
+usr/lib/modules/7.1.13/modules.devname	proprietary firmware / sensor config / kernel module	0	d41d8cd98f00b204e9800998ecf8427e
+usr/lib/modules/7.1.13/modules.order	proprietary firmware / sensor config / kernel module	809	f45adfe6cb17b95191aef9fcd63c243e
+usr/lib/modules/7.1.13/modules.softdep	proprietary firmware / sensor config / kernel module	55	ccf8f3611141656ba5594771bec06202
+usr/lib/modules/7.1.13/modules.symbols	proprietary firmware / sensor config / kernel module	7050	b763ecd38eef846412ba26525aa117be
+usr/lib/modules/7.1.13/modules.symbols.bin	proprietary firmware / sensor config / kernel module	7560	8bc8c0bb5d01d16ed37e4f7d369306d4
+usr/lib/modules/7.1.13/modules.weakdep	proprietary firmware / sensor config / kernel module	55	484a00a83a3e88ae47b55d84647b9c1e
 usr/lib/modules/7.1.2/extra/venus/v4l2-mem2mem.ko	proprietary firmware / sensor config / kernel module	474392	2acc116a0221aa946f898634c828e6bf
 usr/lib/modules/7.1.2/extra/venus/venus-core.ko	proprietary firmware / sensor config / kernel module	3708432	048cfb6472f7ea4abbc0aec771154c20
 usr/lib/modules/7.1.2/extra/venus/venus-dec.ko	proprietary firmware / sensor config / kernel module	764088	833581c61e29ec1c9e599723827b06cd
 usr/lib/modules/7.1.2/extra/venus/venus-enc.ko	proprietary firmware / sensor config / kernel module	766608	339b578b1911f28842daeff3270174e7
 usr/lib/modules/7.1.2/extra/venus/videobuf2-dma-contig.ko	proprietary firmware / sensor config / kernel module	326472	c9c31988ca58ed718f66994d22955ce0
 usr/lib/qt6/plugins/plasma/applets/org.kde.plasma.mobile.homescreen.folio.so	binary built from the recipes in packages/ or upstream	1715160	d80d2e4b4733210566efd5d32d4afb46
+usr/lib/qt6/plugins/plasma/kcms/systemsettings/kcm_mobile_wifi.so	binary built from the recipes in packages/ or upstream	133744	f18f1114b7b2b696fcf8f0876160007a
 usr/lib/qt6/plugins/plasma/kcms/systemsettings/kcm_plasmakeyboard.so	binary built from the recipes in packages/ or upstream	68024	4e5a8c66ef8d301808f6a454dc62c6c9
 usr/lib/qt6/plugins/platforminputcontexts/libqtvirtualkeyboardplugin.so	binary built from the recipes in packages/ or upstream	67768	4f4d846a0a61543d1ddae9a5cbc63188
 usr/lib/qt6/qml/QtQuick/VirtualKeyboard/Components/libqtvkbcomponentsplugin.so	binary built from the recipes in packages/ or upstream	789224	22130b6b64087a2893236b3ad5ca486f
@@ -860,52 +832,6 @@ usr/share/plasma/keyboard/layouts/zh_CN/numbers.fallback	binary built from the r
 usr/share/plasma/keyboard/layouts/zh_TW/dialpad.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
 usr/share/plasma/keyboard/layouts/zh_TW/digits.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
 usr/share/plasma/keyboard/layouts/zh_TW/numbers.fallback	binary built from the recipes in packages/ or upstream	0	d41d8cd98f00b204e9800998ecf8427e
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/kodiak_ak991x_0.json	proprietary firmware / sensor config / kernel module	6129	6d899de0c223f9f4ede261c2b537bcca
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/kodiak_ak991x_1.json	proprietary firmware / sensor config / kernel module	6310	540badfc0b187d9fcd83b66055104769
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/kodiak_default_sensors.json	proprietary firmware / sensor config / kernel module	5693	4c9b0015026924b6dfd65630d6590972
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/kodiak_lsm6dsm_0.json	proprietary firmware / sensor config / kernel module	6773	f41149a441e4d894c5133696b3c139d4
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/kodiak_stk3a0x_0.json	proprietary firmware / sensor config / kernel module	2233	cfff34c7fc8c12c39f8c098c442e4f14
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/lsm6dsm_0.json	proprietary firmware / sensor config / kernel module	1879	909bc680525295b5229ca6ff5a7878e8
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_amd.json	proprietary firmware / sensor config / kernel module	623	ac20de6deb7b6200a3d8d628dcea00ad
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_amd_sw_disabled.json	proprietary firmware / sensor config / kernel module	265	2bdc0dd6cef6bff884ac1afa3b4fc1fe
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_amd_sw_enabled.json	proprietary firmware / sensor config / kernel module	437	0fd22de3a4337e7a3d9d381c35e9e9bb
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_aont.json	proprietary firmware / sensor config / kernel module	142	0a099f915baa0c1448be158d8ff1273d
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_basic_gestures.json	proprietary firmware / sensor config / kernel module	1094	880508ba323951403ee8f42a65a27ee9
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_bring_to_ear.json	proprietary firmware / sensor config / kernel module	1115	a11bc653f9227cdb93ca7e9deedfebd5
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_ccd.json	proprietary firmware / sensor config / kernel module	6311	61c412a844ad72ac1ac5055c5f638cff
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_ccd_v2_walk.json	proprietary firmware / sensor config / kernel module	464	09416fcdf8187efdd81ad446262536ba
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_ccd_v3_1_walk.json	proprietary firmware / sensor config / kernel module	1295	7cbb8e18ea59fb8760a3f33b02df6f72
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_ccd_v3_walk.json	proprietary firmware / sensor config / kernel module	1223	396d59c7c1db17d14e878e83164f4357
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_cm.json	proprietary firmware / sensor config / kernel module	674	2b17fa3f7c2013ff0707fb1b78906905
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_dae.json	proprietary firmware / sensor config / kernel module	885	0ce9980c0fa523c9f43f16004558ef8b
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_device_orient.json	proprietary firmware / sensor config / kernel module	1116	5382e42f1118dea0197b9254a39973e1
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_diag_filter.json	proprietary firmware / sensor config / kernel module	5929	eca9cd6b6a8929ec742c53e1f4d3e58f
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_distance_bound.json	proprietary firmware / sensor config / kernel module	1031	a2133b1dd6098cfd67b17c7b8b19e6dc
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_dpc.json	proprietary firmware / sensor config / kernel module	821	328de07c3e3363f9b65e659d49a85982
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_facing.json	proprietary firmware / sensor config / kernel module	793	20768000530332733060532e99b68d57
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_fmv.json	proprietary firmware / sensor config / kernel module	1306	aa549763824cfbc41123e08783e7d306
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_fmv_legacy.json	proprietary firmware / sensor config / kernel module	1576	b6e0b41f66b8f1126bb2dc3d42329ff6
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_geomag_rv.json	proprietary firmware / sensor config / kernel module	1105	1daa1c3166c573411125798f3cba43e2
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_gyro_cal.json	proprietary firmware / sensor config / kernel module	842	eb514b4dd249d5b746a387d7c8ef8b25
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_heart_rate.json	proprietary firmware / sensor config / kernel module	3612	1e3f67a4acecc01cefa6995634f238b6
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_mag_cal.json	proprietary firmware / sensor config / kernel module	528	9553a5869ed9f49899a240933da44ea8
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_mag_cal_legacy.json	proprietary firmware / sensor config / kernel module	327	476efd633a330f7a794e760e6688017e
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_multishake.json	proprietary firmware / sensor config / kernel module	800	ededc338c04c8543782e6caca0e07040
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_pedometer.json	proprietary firmware / sensor config / kernel module	969	b109d683bf36eeb95b25b3761a34a025
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_rmd.json	proprietary firmware / sensor config / kernel module	775	0254caebe8c8fce4aeedc7809ebffe0a
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_rotv.json	proprietary firmware / sensor config / kernel module	734	b6363ecf355455a370fb2f069643ea35
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_smd.json	proprietary firmware / sensor config / kernel module	1240	869fb52804602f51d902a7b4c934eaab
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_tilt.json	proprietary firmware / sensor config / kernel module	701	67de0257a53ecb159ec9e9069e291ab5
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_tilt_sw_disabled.json	proprietary firmware / sensor config / kernel module	274	fd5afe4e89318ef553825da8739d41fe
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_tilt_sw_enabled.json	proprietary firmware / sensor config / kernel module	414	e61b1dd05ce824add6e924a6eaa33054
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_tilt_to_wake.json	proprietary firmware / sensor config / kernel module	1482	1ef603674b1e4dd6afc24aa88630dc8a
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/config/sns_wrist_pedo.json	proprietary firmware / sensor config / kernel module	654	e77234401f71b00df3613113dcc56517
-usr/share/qcom/sm7325/Samsung/m52xq/sensors/sns_reg.conf	proprietary firmware / sensor config / kernel module	433	9d2f3cd0ee0182b92cfa6d8cd1a58e82
-usr/share/qcom/sm7325/Samsung/m52xq/socinfo/hw_platform	proprietary firmware / sensor config / kernel module	4	989e73f48cf5109fe8dd79d00a7df37a
-usr/share/qcom/sm7325/Samsung/m52xq/socinfo/platform_subtype	proprietary firmware / sensor config / kernel module	8	afc86b28be8cacb1266dcee54b11ca3e
-usr/share/qcom/sm7325/Samsung/m52xq/socinfo/platform_subtype_id	proprietary firmware / sensor config / kernel module	2	897316929176464ebc9ad085f31e7284
-usr/share/qcom/sm7325/Samsung/m52xq/socinfo/platform_version	proprietary firmware / sensor config / kernel module	6	74ca24d4d965600a1b15d718be3803bf
-usr/share/qcom/sm7325/Samsung/m52xq/socinfo/soc_id	proprietary firmware / sensor config / kernel module	4	a3431c0758a8cc2bb7d75c0c548f8aa0
 usr/share/sounds/m52xq/dtmf-0.wav	binary built from the recipes in packages/ or upstream	26504	c9ba606a14be4a2410da1c4ed4195fa7
 usr/share/sounds/m52xq/dtmf-1.wav	binary built from the recipes in packages/ or upstream	26504	df8367eaf8792280007452c5e51f5d66
 usr/share/sounds/m52xq/dtmf-2.wav	binary built from the recipes in packages/ or upstream	26504	aab1127571777ddae3ae36a08a5bb037

@@ -7,7 +7,10 @@ class Msg(ctypes.Structure):
     _fields_ = [("addr", ctypes.c_uint16), ("flags", ctypes.c_uint16), ("len", ctypes.c_uint16), ("buf", ctypes.POINTER(ctypes.c_uint8))]
 class Rd(ctypes.Structure):
     _fields_ = [("msgs", ctypes.POINTER(Msg)), ("nmsgs", ctypes.c_uint32)]
-fd = os.open("/dev/i2c-24", os.O_RDWR)
+# the fuel gauge bus: i2c-24 on the downstream DTB, i2c-3 on the upstream DTS (2026-11-03)
+import glob
+bus = [p.split("/")[-1].split("-")[0] for p in glob.glob("/sys/bus/i2c/devices/*-0071")] + ["24"]
+fd = os.open("/dev/i2c-" + bus[0], os.O_RDWR)
 def xfer(msgs):
     arr = (Msg * len(msgs))(*msgs)
     fcntl.ioctl(fd, I2C_RDWR, Rd(arr, len(msgs)))

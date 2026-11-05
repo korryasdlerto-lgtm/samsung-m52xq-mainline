@@ -2,3 +2,6 @@
 # (default power/control=on keeps the PHY regulators pm7325_l2, pm8350c_l1 and refgen enabled; Lineage has them off)
 ACTION=="add", SUBSYSTEM=="platform", KERNEL=="a600000.ssusb", ATTR{power/control}="auto"
 ACTION=="add", SUBSYSTEM=="platform", KERNEL=="88e3000.hsphy", ATTR{power/control}="auto"
+# upstream-style DT (v47): the same devices are a600000.usb and 88e3000.phy
+ACTION=="add", SUBSYSTEM=="platform", KERNEL=="a600000.usb", ATTR{power/control}="auto"
+ACTION=="add", SUBSYSTEM=="platform", KERNEL=="88e3000.phy", ATTR{power/control}="auto"

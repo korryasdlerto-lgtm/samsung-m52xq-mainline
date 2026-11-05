@@ -99,9 +99,8 @@ abort() {
 }
 
 ui_print "======================================"
-ui_print " postmarketOS mainline plasma v1 — m52xq"
-ui_print " boot + vendor_boot + system(rootfs-plasma_6.7.5)"
-ui_print " UFS, Touch, GPU, Brightness, Audio(earpiece, speaker, mic), WiFi, BT"
+ui_print " postmarketOS mainline plasma v2 — m52xq"
+ui_print " boot+vendor_boot+dtbo+system(rootfs-plasma_6.7.5)"
 ui_print " Build by Asdlerto Korry"
 ui_print " korryasdlerto@gmail.com"
 ui_print " https://github.com/korryasdlerto-lgtm/samsung-m52xq-mainline"
@@ -125,8 +124,21 @@ done
 ui_print "- boot partition: $BOOT_PART"
 ui_print "- vendor_boot partition: $VBOOT_PART"
 
-BOOT_IMG_NAME="firmware/boot_v249_noipa.img"
-VBOOT_IMG_NAME="firmware/vendor_boot_v238_nfc_se9.img"
+# v2 (в47): kernel 7.1.13 (boot v254: SM5714 fuel gauge NTC, s3fwrn5 pvdd supply) + vendor_boot local-v34
+# (upstream-style DTS db35c2f3: touch/BT/NFC supplies, SD pinctrl). в46: boot v252 + vendor_boot local-v29 (DTB built from the upstream-style
+# sm7325-samsung-m52xq.dts plus the local nodes). This DTB is applied by ABL together with
+# dtbo-frag (a dtbo with one harmless fragment), so the dtbo partition is written too.
+BOOT_IMG_NAME="firmware/boot_v254_k7.1.13_nfc-pvdd.img"
+VBOOT_IMG_NAME="firmware/vendor_boot_m52xq-local-v34-nfc-pvdd.img"
+DTBO_IMG_NAME="firmware/dtbo-frag-m52xq.img"
+
+# --- Найти раздел dtbo ---
+DTBO_PART=""
+for p in /dev/block/by-name/dtbo /dev/block/bootdevice/by-name/dtbo /dev/block/platform/*/by-name/dtbo; do
+    [ -b "$p" ] && DTBO_PART="$p" && break
+done
+[ -z "$DTBO_PART" ] && abort "dtbo partition not found (by-name/dtbo missing)"
+ui_print "- dtbo partition: $DTBO_PART"
 
 # busybox/toybox unzip inside TWRP does not reliably return a non-zero
 # exit code for "name not found in archive" the way GNU unzip does (found
@@ -136,6 +148,7 @@ VBOOT_IMG_NAME="firmware/vendor_boot_v238_nfc_se9.img"
 # no-op'ing onto whatever was already flashed before.
 unzip -l "$ZIP" "$BOOT_IMG_NAME" | grep -q "$BOOT_IMG_NAME" || abort "$BOOT_IMG_NAME not found in zip"
 unzip -l "$ZIP" "$VBOOT_IMG_NAME" | grep -q "$VBOOT_IMG_NAME" || abort "$VBOOT_IMG_NAME not found in zip"
+unzip -l "$ZIP" "$DTBO_IMG_NAME" | grep -q "$DTBO_IMG_NAME" || abort "$DTBO_IMG_NAME not found in zip"
 
 # v1 (в45): the IPA firmware (yupik_ipa_fws.*, proprietary) is not in the zip. The kernel needs it in the initramfs
 # (IPA is built in and probes before the rootfs is mounted), so it is appended to the ramdisk of boot.img here, from
@@ -192,6 +205,13 @@ rm -f /tmp/m52xq-boot.img /tmp/m52xq-boot.img.new
 next_step 0.10 5
 ui_print "- Flashing vendor_boot.img..."
 unzip -p "$ZIP" "$VBOOT_IMG_NAME" > "$VBOOT_PART" || abort "failed to write $VBOOT_IMG_NAME"
+
+# v2 (в46): the stock Samsung dtbo targets the downstream DTB; with the local-v29 DTB ABL is
+# only tested with dtbo-frag. The old dtbo contents are not kept here -- back up dtbo in TWRP
+# before flashing if you want to go back to Android.
+next_step 0.02 1
+ui_print "- Flashing dtbo (dtbo-frag)..."
+unzip -p "$ZIP" "$DTBO_IMG_NAME" > "$DTBO_PART" || abort "failed to write $DTBO_IMG_NAME"
 
 # --- Найти раздел system -- сюда пишем ВЕСЬ samsung-m52xq.img ---
 SYSTEM_DEV=""
@@ -293,6 +313,7 @@ next_step 0.10 2
 ui_print "- Done."
 ui_print "  boot.img written to $BOOT_PART"
 ui_print "  vendor_boot.img written to $VBOOT_PART"
+ui_print "  dtbo (dtbo-frag) written to $DTBO_PART"
 ui_print "  samsung-m52xq.img written to $SYSTEM_DEV"
 ui_print ""
 ui_print "  userdata was NOT touched."
@@ -425,6 +446,18 @@ if [ -n "$SYSTEM_ROOT_PART" ]; then
                     ln -sf ../m52xq-password-backup.path \
                         "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/m52xq-password-backup.path"
                 fi
+                # v2 (в46): rebuild the module index for the running kernel once on the first boot
+                # (the shipped modules.dep may not match the injected .ko set)
+                if [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-depmod-firstboot.service" ]; then
+                    ln -sf ../m52xq-depmod-firstboot.service \
+                        "$ROOTFS_MNT/etc/systemd/system/sysinit.target.wants/m52xq-depmod-firstboot.service"
+                fi
+                # v2 (в46): GPS after a reboot = the state it had before (user unit)
+                if [ -f "$ROOTFS_MNT/etc/systemd/user/m52xq-gps-restore.service" ]; then
+                    mkdir -p "$ROOTFS_MNT/etc/systemd/user/default.target.wants"
+                    ln -sf ../m52xq-gps-restore.service \
+                        "$ROOTFS_MNT/etc/systemd/user/default.target.wants/m52xq-gps-restore.service"
+                fi
                 # v28: touch is on the real SE13 bus (i2c@a94000) now; the old
                 # i2c-gpio rebind workaround only fails, remove it if the
                 # rootfs image still carries it.
@@ -449,6 +482,11 @@ if [ -n "$SYSTEM_ROOT_PART" ]; then
                 if [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-bt-firmware.service" ]; then
                     ln -sf ../m52xq-bt-firmware.service \
                         "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/m52xq-bt-firmware.service"
+                fi
+                # в50: re-open the speaker when the TFA9878 setup fails (GPI DMA error at PCM start)
+                if [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-tfa-guard.service" ]; then
+                    ln -sf ../m52xq-tfa-guard.service \
+                        "$ROOTFS_MNT/etc/systemd/system/multi-user.target.wants/m52xq-tfa-guard.service"
                 fi
                 # v38: Venus video decoder (venus-core also releases sync_state of the interconnects)
                 if [ -f "$ROOTFS_MNT/etc/systemd/system/m52xq-venus.service" ]; then
@@ -508,7 +546,7 @@ if [ -n "$SYSTEM_ROOT_PART" ]; then
                         "$ROOTFS_MNT/etc/systemd/user/default.target.wants/m52xq-audio-unstick.service"
                 fi
                 # v43: sound of notifications (Telegram etc.; mobileshell ignores the sound hints) and the screen on a Telegram call (user units)
-                for u in m52xq-notify-sound m52xq-call-screen-wake; do
+                for u in m52xq-pulseaudio m52xq-notify-sound m52xq-call-screen-wake; do
                     if [ -f "$ROOTFS_MNT/etc/systemd/user/$u.service" ]; then
                         mkdir -p "$ROOTFS_MNT/etc/systemd/user/default.target.wants"
                         ln -sf ../$u.service "$ROOTFS_MNT/etc/systemd/user/default.target.wants/$u.service"

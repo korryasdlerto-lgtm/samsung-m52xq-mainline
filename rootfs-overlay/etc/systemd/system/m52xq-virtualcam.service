@@ -7,7 +7,7 @@ Type=simple
 User=user
 Group=user
 SupplementaryGroups=video
-ExecStartPre=+/bin/sh -c 'lsmod | grep -q "^v4l2loopback" || /sbin/insmod /lib/modules/7.1.2/extra/v4l2loopback.ko devices=2 video_nr=20,21 "card_label=Phone camera front,Phone camera rear" exclusive_caps=0,0 max_buffers=4 keep_format=1 ; for i in 1 2 3 4 5 6 7 8 9 10; do [ -e /dev/video21 ] && break; sleep 1; done; chmod 666 /dev/video20 /dev/video21'
+ExecStartPre=+/bin/sh -c 'lsmod | grep -q "^v4l2loopback" || /sbin/insmod /lib/modules/$$(uname -r)/extra/v4l2loopback.ko devices=2 video_nr=20,21 "card_label=Phone camera front,Phone camera rear" exclusive_caps=0,0 max_buffers=4 keep_format=1 ; for i in 1 2 3 4 5 6 7 8 9 10; do [ -e /dev/video21 ] && break; sleep 1; done; chmod 666 /dev/video20 /dev/video21'
 ExecStart=/usr/local/bin/m52xq-virtualcam
 Restart=always
 RestartSec=5

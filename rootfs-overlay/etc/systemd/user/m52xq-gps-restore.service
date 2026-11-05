@@ -1,0 +1,10 @@
+[Unit]
+Description=M52XQ: turn GPS back on after a boot when the Location switch is on
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/m52xq-gps-restore
+
+[Install]
+WantedBy=default.target

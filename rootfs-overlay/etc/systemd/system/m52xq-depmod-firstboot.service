@@ -1,0 +1,18 @@
+[Unit]
+Description=M52XQ: rebuild the kernel module index on the first boot
+DefaultDependencies=no
+# v47: only the root file system is needed (/usr/lib/modules, /var/lib are on it).
+# Do NOT order after local-fs.target: this unit runs before udev coldplug, and
+# local-fs.target waits for userdata, which udev only announces after coldplug --
+# that loop held every boot for the whole device timeout.
+After=systemd-remount-fs.service
+Before=systemd-modules-load.service systemd-udev-trigger.service sysinit.target
+ConditionPathExists=!/var/lib/m52xq-depmod.done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/depmod -a %v
+ExecStart=/bin/touch /var/lib/m52xq-depmod.done
+
+[Install]
+WantedBy=sysinit.target

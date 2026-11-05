@@ -12,9 +12,12 @@ on)
 	rfkill unblock nfc
 	nfctool -d $DEV -1 >/dev/null 2>&1
 	systemctl start neard.service
+	# v47: polling only while the display is on, started reliably (m52xq-nfc-poll)
+	systemctl start m52xq-nfc-poll.service
 	;;
 off)
 	mkdir -p "${STATE%/*}" && echo off > "$STATE"
+	systemctl stop m52xq-nfc-poll.service
 	systemctl stop neard.service
 	nfctool -d $DEV -0 >/dev/null 2>&1
 	rfkill block nfc

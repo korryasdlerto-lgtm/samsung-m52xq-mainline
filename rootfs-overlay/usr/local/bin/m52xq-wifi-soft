@@ -1,0 +1,26 @@
+#!/bin/sh
+# m52xq: Wi-Fi switch for the quick-settings tile (runs as the session user).
+# The radio is never rfkill-blocked here: with rfkill the WPSS firmware never sleeps (~110 mA overnight).
+# off: real power off - unload ath11k_ahb, WPSS shut down (sudo -n m52xq-wifi-hw off)
+# on:  WCN6750 re-init + load ath11k_ahb + autoconnect (sudo -n m52xq-wifi-hw on, ~15-20 s, in the background)
+# status: "off" if ath11k_ahb is not loaded, the radio is blocked or wlan0 autoconnect is disabled, else "on".
+HW=/usr/local/sbin/m52xq-wifi-hw
+case "$1" in
+off)
+	sudo -n "$HW" off >/dev/null 2>&1
+	;;
+on)
+	( sudo -n "$HW" on >/dev/null 2>&1 ) &
+	;;
+status)
+	if [ ! -d /sys/module/ath11k_ahb ] || [ "$(nmcli radio wifi)" != enabled ] ||
+	   [ "$(nmcli -g GENERAL.AUTOCONNECT dev show wlan0 2>/dev/null)" = no ]; then
+		echo off
+	else
+		echo on
+	fi
+	;;
+*)
+	echo "usage: $0 on|off|status" >&2; exit 2
+	;;
+esac

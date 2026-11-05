@@ -1,0 +1,2 @@
+# m52xq: the Wi-Fi quick-settings tile (plasmashell, user "user") powers WPSS off/on through this one helper.
+user ALL=(root) NOPASSWD: /usr/local/sbin/m52xq-wifi-hw

@@ -7,7 +7,7 @@
 L=/var/log/m52xq-sleep.log
 # platform state counters (read-only): cluster idle states, cpu0 cpuidle usage, GPU/display runtime state
 state() {
-	echo "$1-state cl=$(awk 'NR>2{printf "%s:%s/%s ", $1, $3, $4}' /sys/kernel/debug/pm_genpd/power-domain-cluster/idle_states 2>/dev/null) cpu0=$(for s in /sys/devices/system/cpu/cpu0/cpuidle/state*; do printf '%s ' $(cat $s/usage); done) gpu=$(cat /sys/devices/platform/soc/3d00000.qcom,kgsl-3d0/power/runtime_status 2>/dev/null) mdss=$(cat /sys/devices/platform/soc/ae00000.display-subsystem/power/runtime_status 2>/dev/null) usb=$(cat /sys/devices/platform/soc/a600000.ssusb/power/runtime_status 2>/dev/null)" >> $L
+	echo "$1-state cl=$(awk 'NR>2{printf "%s:%s/%s ", $1, $3, $4}' /sys/kernel/debug/pm_genpd/power-domain-cluster/idle_states 2>/dev/null) cpu0=$(for s in /sys/devices/system/cpu/cpu0/cpuidle/state*; do printf '%s ' $(cat $s/usage); done) gpu=$(cat $(ls -d /sys/devices/platform/soc*/3d00000.* 2>/dev/null | head -n 1)/power/runtime_status 2>/dev/null) mdss=$(cat /sys/devices/platform/soc*/ae00000.display-subsystem/power/runtime_status 2>/dev/null) usb=$(cat $(ls -d /sys/devices/platform/soc*/a600000.* 2>/dev/null | head -n 1)/power/runtime_status 2>/dev/null)" >> $L
 	# interconnect votes held at this moment (consumer lines with a non-zero average or peak)
 	echo "$1-icc $(awk 'NF>=4 && $1 !~ /@/ && ($3+0>0 || $4+0>0) {printf "%s/%s/%s ", $1, $3, $4}' /sys/kernel/debug/interconnect/interconnect_summary 2>/dev/null | cut -c1-900)" >> $L
 	# devices whose runtime PM state is "active" (candidates for the remaining current)
@@ -32,7 +32,7 @@ state() {
 		done
 		echo "$1-gps $(timeout 2 mmcli -m $GM --location-status --output-keyvalue 2>/dev/null | sed -n 's/.*location.enabled.value\[[0-9]*\] *: *//p' | tr '\n' ' ')" >> $L
 	fi
-	echo "$1-active $(for d in /sys/devices/platform/soc/*/ /sys/bus/i2c/devices/* /sys/bus/spi/devices/*; do [ "$(cat $d/power/runtime_status 2>/dev/null)" = active ] && printf '%s ' $(basename $d); done 2>/dev/null)" >> $L
+	echo "$1-active $(for d in /sys/devices/platform/soc*/*/ /sys/bus/i2c/devices/* /sys/bus/spi/devices/*; do [ "$(cat $d/power/runtime_status 2>/dev/null)" = active ] && printf '%s ' $(basename $d); done 2>/dev/null)" >> $L
 }
 # interrupts that fired during the sleep (snapshot at pre, diff at post) + the IRQ that woke the system
 IRQ=/run/m52xq-irq-pre

@@ -1,0 +1,116 @@
+--- a/kcms/mobile/wifi/ui/main.qml
++++ b/kcms/mobile/wifi/ui/main.qml
+@@ -10,6 +10,7 @@
+ import org.kde.kirigami as Kirigami
+ import org.kde.kcmutils
+ import org.kde.kirigamiaddons.formcard 1 as FormCard
++import org.kde.plasma.plasma5support as P5Support
+ 
+ SimpleKCM {
+     id: root
+@@ -34,6 +35,46 @@
+         id: handler
+     }
+ 
++    // m52xq (в49): the Wi-Fi switch works like the quick-settings tile: real power off/on through m52xq-wifi-soft
++    // (off: unload ath11k_ahb, WPSS shut down; on: WCN6750 re-init + ath11k_ahb, ~15-20 s), state from "m52xq-wifi-soft status".
++    // Upstream used onCheckedChanged + handler.enableWireless(): every NM/rfkill state change re-sent the command -> endless
++    // on/off loop on this phone (hundreds of radio-control calls). Now only a user toggle (onToggled) acts.
++    property bool wifiSoftOff: false
++    property double wifiHoldUntil: 0
++    readonly property bool wifiOn: enabledConnections.wirelessEnabled && !wifiSoftOff
++    property int wifiRunId: 0
++
++    P5Support.DataSource {
++        id: wifiExec
++        engine: "executable"
++        connectedSources: []
++        onNewData: (source, data) => {
++            if (source.indexOf("/usr/local/bin/m52xq-wifi-soft status") === 0 && Date.now() > root.wifiHoldUntil) {
++                root.wifiSoftOff = (data["stdout"] || "").trim() === "off";
++            }
++            disconnectSource(source);
++        }
++    }
++
++    function wifiRun(arg) {
++        wifiRunId++;
++        wifiExec.connectSource("/usr/local/bin/m52xq-wifi-soft " + arg + " # " + wifiRunId);
++    }
++
++    Timer {
++        interval: 15000
++        running: true
++        repeat: true
++        triggeredOnStart: true
++        onTriggered: root.wifiRun("status")
++    }
++
++    Timer {
++        id: wifiRefresh
++        interval: 1500
++        onTriggered: root.wifiRun("status")
++    }
++
+     PlasmaNM.EnabledConnections {
+         id: enabledConnections
+     }
+@@ -85,10 +126,20 @@
+             FormCard.FormSwitchDelegate {
+                 id: wifiSwitch
+                 text: i18n("Wi-Fi")
+-                checked: enabledConnections.wirelessEnabled
+-                onCheckedChanged: {
+-                    handler.enableWireless(checked);
+-                    checked = Qt.binding(() => enabledConnections.wirelessEnabled);
++                checked: root.wifiOn
++                onToggled: {
++                    if (checked) {
++                        root.wifiSoftOff = false;
++                        root.wifiHoldUntil = Date.now() + 40000;
++                        root.wifiRun("on");
++                        wifiRefresh.interval = 41000;
++                    } else {
++                        root.wifiSoftOff = true;
++                        root.wifiRun("off");
++                        wifiRefresh.interval = 2000;
++                    }
++                    wifiRefresh.restart();
++                    checked = Qt.binding(() => root.wifiOn);
+                 }
+             }
+ 
+@@ -109,7 +160,7 @@
+ 
+         FormCard.FormCard {
+             id: savedCard
+-            visible: enabledConnections.wirelessEnabled && count > 0
++            visible: root.wifiOn && count > 0
+ 
+             // number of visible entries
+             property int count: 0
+@@ -140,13 +191,13 @@
+         }
+ 
+         FormCard.FormHeader {
+-            visible: enabledConnections.wirelessEnabled
++            visible: root.wifiOn
+             title: i18n("Available Networks")
+         }
+ 
+         FormCard.FormCard {
+             id: availableCard
+-            visible: enabledConnections.wirelessEnabled && count > 0
++            visible: root.wifiOn && count > 0
+ 
+             // number of visible entries
+             property int count: 0
+@@ -176,7 +227,7 @@
+             FormCard.FormButtonDelegate {
+                 icon.name: 'list-add'
+                 text: i18n("Add Custom Connection")
+-                visible: enabledConnections.wirelessEnabled
++                visible: root.wifiOn
+                 onClicked: kcm.push("NetworkSettings.qml")
+             }
+         }

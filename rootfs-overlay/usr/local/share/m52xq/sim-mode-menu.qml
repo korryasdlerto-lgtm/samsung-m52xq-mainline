@@ -21,6 +21,10 @@ Window {
 	property bool flight: false
 	property bool busy: true
 	property string message: ""
+	// в48: texts in the system language (Qt.locale(); qmlscene gets LANG of the session): ru ko ja zh (simplified) hi ar, else English
+	readonly property string lang: Qt.locale().name.substring(0, 2)
+	readonly property var texts: {"SIM cards manager": {"ru": "Менеджер SIM-карт", "ko": "SIM 카드 관리자", "ja": "SIMカードマネージャー", "zh": "SIM 卡管理器", "hi": "सिम कार्ड प्रबंधक", "ar": "مدير بطاقات SIM"}, "SIM cards are OFF (flight mode)": {"ru": "SIM-карты выключены (режим полёта)", "ko": "SIM 카드 꺼짐 (비행기 모드)", "ja": "SIMカードはオフです（機内モード）", "zh": "SIM 卡已关闭（飞行模式）", "hi": "सिम कार्ड बंद हैं (फ़्लाइट मोड)", "ar": "بطاقات SIM متوقفة (وضع الطيران)"}, "Only SIM%1 is inserted": {"ru": "Вставлена только SIM%1", "ko": "SIM%1만 삽입됨", "ja": "SIM%1のみ挿入されています", "zh": "仅插入了 SIM%1", "hi": "केवल SIM%1 लगा है", "ar": "SIM%1 فقط مُدخلة"}, "Only SIM1": {"ru": "Только SIM1", "ko": "SIM1 전용", "ja": "SIM1のみ", "zh": "仅 SIM1", "hi": "केवल SIM1", "ar": "SIM1 فقط"}, "Only SIM2": {"ru": "Только SIM2", "ko": "SIM2 전용", "ja": "SIM2のみ", "zh": "仅 SIM2", "hi": "केवल SIM2", "ar": "SIM2 فقط"}, "Both SIMs": {"ru": "Обе SIM", "ko": "두 SIM 모두", "ja": "両方のSIM", "zh": "双 SIM", "hi": "दोनों सिम", "ar": "كلتا الشريحتين"}, " · data: SIM%1": {"ru": " · данные: SIM%1", "ko": " · 데이터: SIM%1", "ja": " ・データ: SIM%1", "zh": " · 数据：SIM%1", "hi": " · डेटा: SIM%1", "ar": " · البيانات: SIM%1"}, "Close": {"ru": "Закрыть", "ko": "닫기", "ja": "閉じる", "zh": "关闭", "hi": "बंद करें", "ar": "إغلاق"}, "Mode (one SIM inserted)": {"ru": "Режим (вставлена одна SIM)", "ko": "모드 (SIM 1개 삽입됨)", "ja": "モード（SIMが1枚）", "zh": "模式（插入了一张 SIM）", "hi": "मोड (एक सिम लगा है)", "ar": "الوضع (شريحة واحدة مُدخلة)"}, "Mode": {"ru": "Режим", "ko": "모드", "ja": "モード", "zh": "模式", "hi": "मोड", "ar": "الوضع"}, "Both\nSIMs": {"ru": "Обе\nSIM", "ko": "두 SIM\n모두", "ja": "両方の\nSIM", "zh": "双\nSIM", "hi": "दोनों\nसिम", "ar": "كلتا\nالشريحتين"}, "Only\nSIM1": {"ru": "Только\nSIM1", "ko": "SIM1\n전용", "ja": "SIM1\nのみ", "zh": "仅\nSIM1", "hi": "केवल\nSIM1", "ar": "SIM1\nفقط"}, "Only\nSIM2": {"ru": "Только\nSIM2", "ko": "SIM2\n전용", "ja": "SIM2\nのみ", "zh": "仅\nSIM2", "hi": "केवल\nSIM2", "ar": "SIM2\nفقط"}, "Mobile data": {"ru": "Мобильные данные", "ko": "모바일 데이터", "ja": "モバイルデータ", "zh": "移动数据", "hi": "मोबाइल डेटा", "ar": "بيانات الجوال"}, "Mobile data (choose with both SIMs)": {"ru": "Мобильные данные (выбор при двух SIM)", "ko": "모바일 데이터 (두 SIM 사용 시 선택)", "ja": "モバイルデータ（SIM2枚のときに選択）", "zh": "移动数据（双 SIM 时可选）", "hi": "मोबाइल डेटा (दोनों सिम होने पर चुनें)", "ar": "بيانات الجوال (اختر عند وجود شريحتين)"}, "Data: SIM1": {"ru": "Данные: SIM1", "ko": "데이터: SIM1", "ja": "データ: SIM1", "zh": "数据：SIM1", "hi": "डेटा: SIM1", "ar": "البيانات: SIM1"}, "Data: SIM2": {"ru": "Данные: SIM2", "ko": "데이터: SIM2", "ja": "データ: SIM2", "zh": "数据：SIM2", "hi": "डेटा: SIM2", "ar": "البيانات: SIM2"}, "SIM cards power": {"ru": "Питание SIM-карт", "ko": "SIM 카드 전원", "ja": "SIMカードの電源", "zh": "SIM 卡电源", "hi": "सिम कार्ड पावर", "ar": "طاقة بطاقات SIM"}, "Turn SIM cards ON": {"ru": "Включить SIM-карты", "ko": "SIM 카드 켜기", "ja": "SIMカードをオンにする", "zh": "开启 SIM 卡", "hi": "सिम कार्ड चालू करें", "ar": "تشغيل بطاقات SIM"}, "Turn SIM cards OFF (flight mode)": {"ru": "Выключить SIM-карты (режим полёта)", "ko": "SIM 카드 끄기 (비행기 모드)", "ja": "SIMカードをオフにする（機内モード）", "zh": "关闭 SIM 卡（飞行模式）", "hi": "सिम कार्ड बंद करें (फ़्लाइट मोड)", "ar": "إيقاف بطاقات SIM (وضع الطيران)"}, "Switching…": {"ru": "Переключение…", "ko": "전환 중…", "ja": "切り替え中…", "zh": "正在切换…", "hi": "बदल रहा है…", "ar": "جارٍ التبديل…"}}
+	function t(s) { var d = texts[s]; return (d && d[lang] !== undefined) ? d[lang] : s }
 	property string cards: "12"
 	readonly property bool oneSim: cards.length === 1
 	// with one SIM inserted the phone runs on that SIM only: the (grey) buttons show it, whatever mode is saved for
@@ -37,7 +41,7 @@ Window {
 	function choose(a) {
 		busy = true
 		chosenAt = Date.now()
-		message = "Switching…"
+		message = t("Switching…")
 		console.log("m52xq-choice: " + a)
 	}
 
@@ -131,10 +135,10 @@ Window {
 			}
 			Label {
 				Layout.fillWidth: true
-				text: win.flight ? "SIM cards are OFF (flight mode)"
-					: win.oneSim ? "Only SIM" + win.cards + " is inserted"
-					: (win.mode === "sim1" ? "Only SIM1" : win.mode === "sim2" ? "Only SIM2" : "Both SIMs")
-					  + " · data: SIM" + win.effData
+				text: win.flight ? win.t("SIM cards are OFF (flight mode)")
+					: win.oneSim ? win.t("Only SIM%1 is inserted").arg(win.cards)
+					: (win.mode === "sim1" ? win.t("Only SIM1") : win.mode === "sim2" ? win.t("Only SIM2") : win.t("Both SIMs"))
+					  + win.t(" · data: SIM%1").arg(win.effData)
 				font.pixelSize: win.u * 0.9
 				color: win.flight ? "#ff9a5a" : "#8cc0ff"
 				horizontalAlignment: Text.AlignHCenter
@@ -154,7 +158,7 @@ Window {
 				visible: win.landscape
 				Layout.topMargin: win.u * 0.6
 				Layout.preferredHeight: win.u * 2.6
-				text: "Close"
+				text: win.t("Close")
 				enabled: true
 				onClicked: Qt.quit()
 			}
@@ -166,32 +170,32 @@ Window {
 			Layout.preferredWidth: win.landscape ? win.u * 30 : -1
 			spacing: win.u * 0.6
 
-			Caption { text: win.oneSim ? "Mode (one SIM inserted)" : "Mode"; Layout.topMargin: win.landscape ? 0 : win.u * 0.8 }
+			Caption { text: win.oneSim ? win.t("Mode (one SIM inserted)") : win.t("Mode"); Layout.topMargin: win.landscape ? 0 : win.u * 0.8 }
 			RowLayout {
 				spacing: win.u * 0.5
-				Big { text: "Both\nSIMs"; current: win.effMode === "dsds"; enabled: !win.busy && !win.oneSim; onClicked: win.choose("dsds") }
-				Big { text: "Only\nSIM1"; current: win.effMode === "sim1"; enabled: !win.busy && !win.oneSim; onClicked: win.choose("sim1") }
-				Big { text: "Only\nSIM2"; current: win.effMode === "sim2"; enabled: !win.busy && !win.oneSim; onClicked: win.choose("sim2") }
+				Big { text: win.t("Both\nSIMs"); current: win.effMode === "dsds"; enabled: !win.busy && !win.oneSim; onClicked: win.choose("dsds") }
+				Big { text: win.t("Only\nSIM1"); current: win.effMode === "sim1"; enabled: !win.busy && !win.oneSim; onClicked: win.choose("sim1") }
+				Big { text: win.t("Only\nSIM2"); current: win.effMode === "sim2"; enabled: !win.busy && !win.oneSim; onClicked: win.choose("sim2") }
 			}
 
-			Caption { text: win.mode === "dsds" && !win.oneSim ? "Mobile data" : "Mobile data (choose with both SIMs)" }
+			Caption { text: win.mode === "dsds" && !win.oneSim ? win.t("Mobile data") : win.t("Mobile data (choose with both SIMs)") }
 			RowLayout {
 				spacing: win.u * 0.5
 				Big {
-					text: "Data: SIM1"; enabled: !win.busy && !win.oneSim && win.mode === "dsds"
+					text: win.t("Data: SIM1"); enabled: !win.busy && !win.oneSim && win.mode === "dsds"
 					current: win.effData === "1"
 					onClicked: win.choose("data1")
 				}
 				Big {
-					text: "Data: SIM2"; enabled: !win.busy && !win.oneSim && win.mode === "dsds"
+					text: win.t("Data: SIM2"); enabled: !win.busy && !win.oneSim && win.mode === "dsds"
 					current: win.effData === "2"
 					onClicked: win.choose("data2")
 				}
 			}
 
-			Caption { text: "SIM cards power" }
+			Caption { text: win.t("SIM cards power") }
 			Big {
-				text: win.flight ? "Turn SIM cards ON" : "Turn SIM cards OFF (flight mode)"
+				text: win.flight ? win.t("Turn SIM cards ON") : win.t("Turn SIM cards OFF (flight mode)")
 				current: win.flight
 				onClicked: win.choose("flight")
 			}
@@ -200,7 +204,7 @@ Window {
 				visible: !win.landscape
 				Layout.topMargin: win.u * 1.2
 				Layout.preferredHeight: win.u * 2.6
-				text: "Close"
+				text: win.t("Close")
 				enabled: true
 				onClicked: Qt.quit()
 			}
