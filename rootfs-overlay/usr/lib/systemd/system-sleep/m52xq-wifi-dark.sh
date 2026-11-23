@@ -25,7 +25,7 @@ case "$irq" in
 "$ipa") wake="mobile data" ;;
 *) wake= ;;
 esac
-# в44 (01.11, user): an SMS wake-up is dark too (only the notification sound); m52xq-wifi-dark turns the display on for a call
+# an SMS wake-up is dark too (only the notification sound); m52xq-wifi-dark turns the display on for a call
 if [ -z "$wake" ] && [ "$(qrtr_events)" != "$(cat $QS 2>/dev/null)" ]; then
 	wake=modem
 fi

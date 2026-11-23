@@ -28,7 +28,7 @@ dbus-monitor --session "interface='org.freedesktop.Notifications',member='Notify
 		continue
 		;;
 	esac
-	# в44 (01.11, user): a message (SMS, Telegram, ...) in sleep / with the display off gives only the sound
+	# a message (SMS, Telegram, ...) in sleep / with the display off gives only the sound
 	# (m52xq-notify-sound), the display stays off; calls still turn it on (m52xq-call-screen-wake, plasma-dialer)
 	echo "notification from \"$app\": display kept off"
 done

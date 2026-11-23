@@ -102,7 +102,7 @@ def real_pipeline(camera, conf, orient='normal'):
     if method in ANGLE and orient != 'normal':
         angle = (ANGLE[method] + ORIENT_ADD.get(orient, 0)) % 360
         if camera == 'front' and conf.get('front_landscape_flip') == '1':
-            angle = (angle + 180) % 360	# 31.10: the front camera was upside down in landscape (user): turn it by another 180 degrees
+            angle = (angle + 180) % 360	# the front camera was upside down in landscape: turn it by another 180 degrees
         method = METHOD[angle]
         landscape = angle in (0, 180)	# the 1280x960 sensor frame is upright as it is: a landscape picture
     flip = 'videoflip method=%s ! ' % method if method not in ('', 'none') else ''
